@@ -1,10 +1,9 @@
-import React, { useEffect, useState } from "react";
-import { BrowserRouter, Routes, Route, Link, Navigate } from "react-router-dom";
+import React, { useEffect, useMemo, useState } from "react";
+import { BrowserRouter, Routes, Route, Link, Navigate, useLocation } from "react-router-dom";
 import api from "./api/client";
 import { ENDPOINTS } from "./api/endpoints";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
-
 
 type Me = {
   id: number;
@@ -35,23 +34,64 @@ async function fetchMe(): Promise<Me | null> {
   }
 }
 
-function Header({ me, onLogout }: { me: Me | null; onLogout: () => void }) {
+function RequireAuth({ me, children }: { me: Me | null; children: React.ReactNode }) {
+  const loc = useLocation();
+  if (!me) return <Navigate to="/login" replace state={{ from: loc.pathname }} />;
+  return <>{children}</>;
+}
+
+function RequireAdmin({ me, children }: { me: Me | null; children: React.ReactNode }) {
+  const loc = useLocation();
+  if (!me) return <Navigate to="/login" replace state={{ from: loc.pathname }} />;
+  if (!me.is_staff) return <Navigate to="/" replace />;
+  return <>{children}</>;
+}
+
+function Header({
+  me,
+  onLogout,
+  backendAdminUrl,
+}: {
+  me: Me | null;
+  onLogout: () => void;
+  backendAdminUrl: string;
+}) {
   return (
     <header style={S.header}>
       <div style={S.headerInner}>
-        <Link to="/" style={S.brand}>LEGO Inventory</Link>
+        <Link to="/" style={S.brand}>
+          LEGO Inventory
+        </Link>
 
         <nav style={S.nav}>
-          <Link to="/" style={S.navLink}>Home</Link>
+          <Link to="/" style={S.navLink}>
+            Home
+          </Link>
+
+          {me?.is_staff ? (
+            <a href={backendAdminUrl} style={S.navLink}>
+              Admin
+            </a>
+          ) : null}
+
           {me ? (
             <>
-              <span style={S.userPill}>@{me.username}{me.is_staff ? " • Admin" : ""}</span>
-              <button style={S.ghostBtn} onClick={onLogout}>Log out</button>
+              <span style={S.userPill}>
+                @{me.username}
+                {me.is_staff ? " • Admin" : ""}
+              </span>
+              <button style={S.ghostBtn} onClick={onLogout}>
+                Log out
+              </button>
             </>
           ) : (
             <>
-              <Link to="/login" style={S.ghostLink}>Log in</Link>
-              <Link to="/register" style={S.primaryLink}>Create account</Link>
+              <Link to="/login" style={S.ghostLink}>
+                Log in
+              </Link>
+              <Link to="/register" style={S.primaryLink}>
+                Create account
+              </Link>
             </>
           )}
         </nav>
@@ -60,7 +100,7 @@ function Header({ me, onLogout }: { me: Me | null; onLogout: () => void }) {
   );
 }
 
-function Home({ me }: { me: Me | null }) {
+function Home({ me, backendAdminUrl }: { me: Me | null; backendAdminUrl: string }) {
   return (
     <div style={S.wrap}>
       <div style={S.hero}>
@@ -74,13 +114,29 @@ function Home({ me }: { me: Me | null }) {
         <div style={S.ctaRow}>
           {me ? (
             <>
-              <a href="/admin" style={S.primaryBtn}>Go to Admin</a>
-              <Link to="/sets" style={S.secondaryBtn}>Browse Sets</Link>
+              {me.is_staff ? (
+                <a href={backendAdminUrl} style={S.primaryBtn}>
+                  Open Admin
+                </a>
+              ) : (
+                <Link to="/account" style={S.primaryBtn}>
+                  My Account
+                </Link>
+              )}
+
+              {/* Placeholder link for future pages */}
+              <Link to="/browse" style={S.secondaryBtn}>
+                Browse
+              </Link>
             </>
           ) : (
             <>
-              <Link to="/register" style={S.primaryBtn}>Create account</Link>
-              <Link to="/login" style={S.secondaryBtn}>Log in</Link>
+              <Link to="/register" style={S.primaryBtn}>
+                Create account
+              </Link>
+              <Link to="/login" style={S.secondaryBtn}>
+                Log in
+              </Link>
             </>
           )}
         </div>
@@ -99,22 +155,58 @@ function Home({ me }: { me: Me | null }) {
             <div style={S.cardBody}>Staff-only editing. Regular users can browse safely.</div>
           </div>
         </div>
+
+        <div style={S.footer}>
+          <span style={{ color: "#64748b" }}>
+            API:{" "}
+            <span style={{ fontWeight: 800, color: "#0f172a" }}>
+              {import.meta.env.VITE_API_BASE_URL || "(not set)"}
+            </span>
+          </span>
+        </div>
       </div>
     </div>
   );
 }
 
-// placeholders for now (we’ll wire real forms next)
-function Login() {
-  return <div style={{ padding: 24 }}>Login page next.</div>;
+function AccountPage({ me }: { me: Me }) {
+  return (
+    <div style={S.wrap}>
+      <div style={S.hero}>
+        <div style={S.badge}>Account</div>
+        <h2 style={{ margin: "14px 0 8px", fontSize: 28, color: "#0f172a" }}>
+          Welcome, @{me.username}
+        </h2>
+        <div style={{ color: "#475569", lineHeight: 1.6 }}>
+          <div>Email: {me.email}</div>
+          <div>Role: {me.is_staff ? "Admin" : "User"}</div>
+        </div>
+      </div>
+    </div>
+  );
 }
-function Register() {
-  return <div style={{ padding: 24 }}>Register page next.</div>;
+
+function BrowsePlaceholder() {
+  return (
+    <div style={S.wrap}>
+      <div style={S.hero}>
+        <div style={S.badge}>Browse</div>
+        <h2 style={{ margin: "14px 0 8px", fontSize: 28, color: "#0f172a" }}>Coming soon</h2>
+        <p style={S.p}>Next we’ll wire your real admin/browse pages into this router.</p>
+      </div>
+    </div>
+  );
 }
 
 export default function App() {
   const [me, setMe] = useState<Me | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const backendAdminUrl = useMemo(() => {
+    const base = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+    // If env is missing during dev, fallback to relative admin (works if same origin)
+    return base ? `${base}/admin/` : "/admin/";
+  }, []);
 
   async function loadMe() {
     setLoading(true);
@@ -133,7 +225,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <Header me={me} onLogout={logout} />
+      <Header me={me} onLogout={logout} backendAdminUrl={backendAdminUrl} />
 
       {loading ? (
         <div style={{ padding: 24, maxWidth: 1100, margin: "0 auto", color: "#475569" }}>
@@ -141,13 +233,33 @@ export default function App() {
         </div>
       ) : (
         <Routes>
-          <Route path="/" element={<Home me={me} />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="/" element={<Home me={me} backendAdminUrl={backendAdminUrl} />} />
+
+          {/* Auth */}
           <Route path="/login" element={<LoginPage onLogin={loadMe} />} />
           <Route path="/register" element={<RegisterPage />} />
 
+          {/* Protected user page */}
+          <Route
+            path="/account"
+            element={
+              <RequireAuth me={me}>
+                <AccountPage me={me as Me} />
+              </RequireAuth>
+            }
+          />
+
+          {/* Example protected admin page (placeholder) */}
+          <Route
+            path="/browse"
+            element={
+              <RequireAdmin me={me}>
+                <BrowsePlaceholder />
+              </RequireAdmin>
+            }
+          />
+
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       )}
     </BrowserRouter>
@@ -278,4 +390,5 @@ const S: Record<string, React.CSSProperties> = {
   card: { border: "1px solid #e5e7eb", borderRadius: 18, padding: 16, background: "white" },
   cardTitle: { fontWeight: 900, color: "#0f172a", marginBottom: 6 },
   cardBody: { color: "#475569", lineHeight: 1.5 },
+  footer: { marginTop: 22, paddingTop: 14, borderTop: "1px solid #e5e7eb" },
 };
