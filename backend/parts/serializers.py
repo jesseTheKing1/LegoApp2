@@ -14,7 +14,6 @@ class ColorSerializer(serializers.ModelSerializer):
             "is_metallic",
         ]
 
-
 class PartSerializer(serializers.ModelSerializer):
     class Meta:
         model = Part
@@ -27,7 +26,6 @@ class PartSerializer(serializers.ModelSerializer):
             "actual_category",
             "image_url",
         ]
-
 
 class PartColorSerializer(serializers.ModelSerializer):
     # read-only nested objects (nice for frontend rendering)
@@ -45,6 +43,7 @@ class PartColorSerializer(serializers.ModelSerializer):
         source="color",
         write_only=True,
     )
+    variant = serializers.CharField(required=False, allow_blank=True)
 
     # catalog_item is in another app; keep it optional + ID-based
     catalog_item_id = serializers.IntegerField(required=False, allow_null=True)
