@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Routes, Route, Link, Navigate, useLocation } from "react-router-dom";
 import api from "./api/client";
 import { ENDPOINTS } from "./api/endpoints";
@@ -6,13 +6,12 @@ import { ENDPOINTS } from "./api/endpoints";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 
-// ✅ Admin layout + pages
 import AdminLayout from "./pages/admin/AdminLayout";
 import ColorsAdminPage from "./pages/admin/page/ColorsAdminPage";
-// ⚠️ Make sure your file name matches this import.
-// If your file is actually PartsAdinPage.tsx, rename the file or revert this import.
 import PartColorsPage from "./pages/admin/page/PartColorsPage";
 import PartsAdminPage from "./pages/admin/page/PartsAdinPage";
+
+import "./App.css";
 
 type Me = {
   id: number;
@@ -45,60 +44,106 @@ async function fetchMe(): Promise<Me | null> {
   }
 }
 
-function RequireAuth({
-  me,
-  children,
-}: {
-  me: Me | null;
-  children: React.ReactNode;
-}) {
+function RequireAuth({ me, children }: { me: Me | null; children: React.ReactNode }) {
   const loc = useLocation();
   if (!me) return <Navigate to="/login" replace state={{ from: loc.pathname }} />;
   return <>{children}</>;
 }
 
-function RequireAdmin({
-  me,
-  children,
-}: {
-  me: Me | null;
-  children: React.ReactNode;
-}) {
+function RequireAdmin({ me, children }: { me: Me | null; children: React.ReactNode }) {
   const loc = useLocation();
   if (!me) return <Navigate to="/login" replace state={{ from: loc.pathname }} />;
   if (!me.is_staff) return <Navigate to="/" replace />;
   return <>{children}</>;
 }
 
-/** ---------- Admin dropdown ---------- **/
-function AdminMenu() {
+/** Close-on-outside-click helper */
+function useOutsideClick<T extends HTMLElement>(onOutside: () => void) {
+  const ref = useRef<T | null>(null);
+
+  useEffect(() => {
+    function onDown(e: MouseEvent | TouchEvent) {
+      const el = ref.current;
+      if (!el) return;
+      if (e.target && el.contains(e.target as Node)) return;
+      onOutside();
+    }
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("touchstart", onDown);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("touchstart", onDown);
+    };
+  }, [onOutside]);
+
+  return ref;
+}
+
+/** ---------- Admin dropdown ---------- */
+function AdminMenu({ onNavigate }: { onNavigate: () => void }) {
   const [open, setOpen] = useState(false);
+  const close = () => setOpen(false);
+  const menuRef = useOutsideClick<HTMLDivElement>(() => setOpen(false));
 
   return (
-    <div style={{ position: "relative" }}>
-      <button onClick={() => setOpen((v) => !v)} style={S.adminBtn} type="button">
-        Admin ▾
+    <div className="menuWrap" ref={menuRef}>
+      <button
+        type="button"
+        className="btn btnPrimary btnSm"
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+      >
+        Admin <span className="chev">▾</span>
       </button>
 
       {open ? (
-        <div style={S.adminMenu} onMouseLeave={() => setOpen(false)}>
-          <Link to="/admin/parts" style={S.menuItem} onClick={() => setOpen(false)}>
+        <div className="menu" role="menu">
+          <Link
+            to="/admin/parts"
+            className="menuItem"
+            role="menuitem"
+            onClick={() => {
+              close();
+              onNavigate();
+            }}
+          >
             Parts
           </Link>
-          <Link to="/admin/colors" style={S.menuItem} onClick={() => setOpen(false)}>
+          <Link
+            to="/admin/colors"
+            className="menuItem"
+            role="menuitem"
+            onClick={() => {
+              close();
+              onNavigate();
+            }}
+          >
             Colors
           </Link>
           <Link
             to="/admin/part-colors"
-            style={S.menuItem}
-            onClick={() => setOpen(false)}
+            className="menuItem"
+            role="menuitem"
+            onClick={() => {
+              close();
+              onNavigate();
+            }}
           >
             Part Colors
           </Link>
 
-          <div style={S.menuDivider} />
+          <div className="menuDivider" />
 
-          <a href="/dj-admin/" style={S.menuItem} onClick={() => setOpen(false)}>
+          <a
+            href="/dj-admin/"
+            className="menuItem"
+            role="menuitem"
+            onClick={() => {
+              close();
+              onNavigate();
+            }}
+          >
             Django admin
           </a>
         </div>
@@ -108,118 +153,222 @@ function AdminMenu() {
 }
 
 function Header({ me, onLogout }: { me: Me | null; onLogout: () => void }) {
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const mobileRef = useOutsideClick<HTMLDivElement>(() => setMobileOpen(false));
+
+  // Close mobile drawer on route changes (best-effort)
+  const loc = useLocation();
+  useEffect(() => setMobileOpen(false), [loc.pathname]);
+
+  const userLabel = useMemo(() => {
+    if (!me) return "";
+    return `@${me.username}${me.is_staff ? " • Admin" : ""}`;
+  }, [me]);
+
   return (
-    <header style={S.header}>
-      <div style={S.headerInner}>
-        <Link to="/" style={S.brand}>
+    <header className="header">
+      <div className="container headerInner">
+        <Link to="/" className="brand" onClick={() => setMobileOpen(false)}>
           LEGO Inventory
         </Link>
 
-        <nav style={S.nav}>
-          <Link to="/" style={S.navLink}>
+        {/* Desktop nav */}
+        <nav className="navDesktop" aria-label="Primary">
+          <Link to="/" className="navLink">
             Home
           </Link>
 
-          {me?.is_staff ? <AdminMenu /> : null}
+          {me?.is_staff ? <AdminMenu onNavigate={() => setMobileOpen(false)} /> : null}
 
           {me ? (
             <>
-              <span style={S.userPill}>
-                @{me.username}
-                {me.is_staff ? " • Admin" : ""}
-              </span>
-              <button style={S.ghostBtn} onClick={onLogout} type="button">
+              <span className="pill">{userLabel}</span>
+              <button className="btn btnGhost" type="button" onClick={onLogout}>
                 Log out
               </button>
             </>
           ) : (
             <>
-              <Link to="/login" style={S.ghostLink}>
+              <Link to="/login" className="btn btnGhostLink">
                 Log in
               </Link>
-              <Link to="/register" style={S.primaryLink}>
+              <Link to="/register" className="btn btnPrimaryLink">
                 Create account
               </Link>
             </>
           )}
         </nav>
+
+        {/* Mobile button */}
+        <div className="navMobile" ref={mobileRef}>
+          <button
+            className="iconBtn"
+            type="button"
+            onClick={() => setMobileOpen((v) => !v)}
+            aria-label="Open menu"
+            aria-expanded={mobileOpen}
+          >
+            <span className="iconBtnBars" />
+          </button>
+
+          {mobileOpen ? (
+            <div className="mobilePanel" role="dialog" aria-label="Menu">
+              <div className="mobileTop">
+                <div className="mobileTitle">Menu</div>
+                <button
+                  className="iconBtn"
+                  type="button"
+                  onClick={() => setMobileOpen(false)}
+                  aria-label="Close menu"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="mobileLinks">
+                <Link to="/" className="mobileLink">
+                  Home
+                </Link>
+
+                {me?.is_staff ? (
+                  <div className="mobileGroup">
+                    <div className="mobileGroupLabel">Admin</div>
+                    <Link to="/admin/parts" className="mobileLink">
+                      Parts
+                    </Link>
+                    <Link to="/admin/colors" className="mobileLink">
+                      Colors
+                    </Link>
+                    <Link to="/admin/part-colors" className="mobileLink">
+                      Part Colors
+                    </Link>
+                    <a href="/dj-admin/" className="mobileLink">
+                      Django admin
+                    </a>
+                  </div>
+                ) : null}
+
+                <div className="mobileDivider" />
+
+                {me ? (
+                  <>
+                    <div className="pill pillFull">{userLabel}</div>
+                    <button className="btn btnGhost btnFull" type="button" onClick={onLogout}>
+                      Log out
+                    </button>
+                  </>
+                ) : (
+                  <div className="mobileAuth">
+                    <Link to="/login" className="btn btnGhostLink btnFull">
+                      Log in
+                    </Link>
+                    <Link to="/register" className="btn btnPrimaryLink btnFull">
+                      Create account
+                    </Link>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : null}
+        </div>
       </div>
     </header>
   );
 }
 
+function PageShell({ children }: { children: React.ReactNode }) {
+  return (
+    <main className="container page">
+      <div className="card">{children}</div>
+    </main>
+  );
+}
+
 function Home({ me }: { me: Me | null }) {
   return (
-    <div style={S.wrap}>
-      <div style={S.hero}>
-        <div style={S.badge}>Inventory • Pricing • Sets • Minifigs</div>
-        <h1 style={S.h1}>Track LEGO parts like a pro.</h1>
-        <p style={S.p}>
-          Keep your catalog clean, price parts accurately, and build sets with confidence.
-          {me ? " You're signed in — jump back in." : " Create an account to get started."}
-        </p>
+    <PageShell>
+      <div className="badge">Inventory • Pricing • Sets • Minifigs</div>
 
-        <div style={S.ctaRow}>
-          {me ? (
-            <>
-              {me.is_staff ? (
-                <Link to="/admin/parts" style={S.primaryBtn}>
-                  Open Admin
-                </Link>
-              ) : (
-                <Link to="/account" style={S.primaryBtn}>
-                  My Account
-                </Link>
-              )}
+      <h1 className="h1">Track LEGO parts like a pro.</h1>
+      <p className="p">
+        Keep your catalog clean, price parts accurately, and build sets with confidence.
+        {me ? " You’re signed in — jump back in." : " Create an account to get started."}
+      </p>
 
-              <Link to="/browse" style={S.secondaryBtn}>
-                Browse
+      <div className="ctaRow">
+        {me ? (
+          <>
+            {me.is_staff ? (
+              <Link to="/admin/parts" className="btn btnPrimary btnLg">
+                Open Admin
               </Link>
-            </>
-          ) : (
-            <>
-              <Link to="/register" style={S.primaryBtn}>
-                Create account
+            ) : (
+              <Link to="/account" className="btn btnPrimary btnLg">
+                My Account
               </Link>
-              <Link to="/login" style={S.secondaryBtn}>
-                Log in
-              </Link>
-            </>
-          )}
+            )}
+            <Link to="/browse" className="btn btnSecondary btnLg">
+              Browse
+            </Link>
+          </>
+        ) : (
+          <>
+            <Link to="/register" className="btn btnPrimary btnLg">
+              Create account
+            </Link>
+            <Link to="/login" className="btn btnSecondary btnLg">
+              Log in
+            </Link>
+          </>
+        )}
+      </div>
+
+      <div className="featureGrid">
+        <div className="featureCard">
+          <div className="featureTitle">Accurate pricing</div>
+          <div className="featureText">Weighted averages + overrides so your numbers stay sane.</div>
+        </div>
+        <div className="featureCard">
+          <div className="featureTitle">Fast cataloging</div>
+          <div className="featureText">Clean admin flows that work on phone or desktop.</div>
+        </div>
+        <div className="featureCard">
+          <div className="featureTitle">Built to scale</div>
+          <div className="featureText">Parts → Part Colors → Sets → Minifigs, all consistent.</div>
         </div>
       </div>
-    </div>
+    </PageShell>
   );
 }
 
 function AccountPage({ me }: { me: Me }) {
   return (
-    <div style={S.wrap}>
-      <div style={S.hero}>
-        <div style={S.badge}>Account</div>
-        <h2 style={{ margin: "14px 0 8px", fontSize: 28, color: "#0f172a" }}>
-          Welcome, @{me.username}
-        </h2>
-        <div style={{ color: "#475569", lineHeight: 1.6 }}>
-          <div>Email: {me.email}</div>
-          <div>Role: {me.is_staff ? "Admin" : "User"}</div>
+    <PageShell>
+      <div className="badge">Account</div>
+      <h2 className="h2">Welcome, @{me.username}</h2>
+      <div className="meta">
+        <div>
+          <span className="metaLabel">Email</span>
+          <div className="metaValue">{me.email}</div>
+        </div>
+        <div>
+          <span className="metaLabel">Role</span>
+          <div className="metaValue">{me.is_staff ? "Admin" : "User"}</div>
         </div>
       </div>
-    </div>
+    </PageShell>
   );
 }
 
 function BrowsePlaceholder() {
   return (
-    <div style={S.wrap}>
-      <div style={S.hero}>
-        <div style={S.badge}>Browse</div>
-        <h2 style={{ margin: "14px 0 8px", fontSize: 28, color: "#0f172a" }}>
-          Coming soon
-        </h2>
-        <p style={S.p}>This will be public browsing later. Admin pages are under /admin/*.</p>
-      </div>
-    </div>
+    <PageShell>
+      <div className="badge">Browse</div>
+      <h2 className="h2">Coming soon</h2>
+      <p className="p">
+        This will be public browsing later. Admin pages are under <span className="code">/admin/*</span>.
+      </p>
+    </PageShell>
   );
 }
 
@@ -247,9 +396,9 @@ export default function App() {
       <Header me={me} onLogout={logout} />
 
       {loading ? (
-        <div style={{ padding: 24, maxWidth: 1100, margin: "0 auto", color: "#475569" }}>
-          Loading…
-        </div>
+        <main className="container page">
+          <div className="loading">Loading…</div>
+        </main>
       ) : (
         <Routes>
           <Route path="/" element={<Home me={me} />} />
@@ -268,7 +417,7 @@ export default function App() {
 
           <Route path="/browse" element={<BrowsePlaceholder />} />
 
-          {/* ✅ Admin (dashboard layout) */}
+          {/* Admin */}
           <Route
             path="/admin"
             element={
@@ -289,155 +438,3 @@ export default function App() {
     </>
   );
 }
-
-const S: Record<string, React.CSSProperties> = {
-  header: {
-    position: "sticky",
-    top: 0,
-    zIndex: 50,
-    background: "rgba(255,255,255,0.85)",
-    backdropFilter: "blur(10px)",
-    borderBottom: "1px solid #e5e7eb",
-  },
-  headerInner: {
-    maxWidth: 1100,
-    margin: "0 auto",
-    padding: "14px 18px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 16,
-  },
-  brand: {
-    fontSize: 18,
-    fontWeight: 800,
-    letterSpacing: "-0.02em",
-    color: "#0f172a",
-    textDecoration: "none",
-  },
-  nav: { display: "flex", alignItems: "center", gap: 10 },
-  navLink: {
-    textDecoration: "none",
-    color: "#0f172a",
-    fontWeight: 600,
-    padding: "8px 10px",
-    borderRadius: 10,
-  },
-  ghostLink: {
-    textDecoration: "none",
-    color: "#0f172a",
-    fontWeight: 700,
-    padding: "10px 12px",
-    borderRadius: 12,
-    border: "1px solid #e5e7eb",
-    background: "white",
-  },
-  primaryLink: {
-    textDecoration: "none",
-    color: "white",
-    fontWeight: 800,
-    padding: "10px 12px",
-    borderRadius: 12,
-    background: "#0f172a",
-    border: "1px solid #0f172a",
-  },
-  userPill: {
-    padding: "8px 10px",
-    borderRadius: 999,
-    background: "#f1f5f9",
-    border: "1px solid #e2e8f0",
-    color: "#0f172a",
-    fontWeight: 700,
-  },
-  ghostBtn: {
-    padding: "10px 12px",
-    borderRadius: 12,
-    border: "1px solid #e5e7eb",
-    background: "white",
-    fontWeight: 800,
-    cursor: "pointer",
-  },
-
-  adminBtn: {
-    padding: "10px 12px",
-    borderRadius: 12,
-    border: "1px solid #0f172a",
-    background: "#0f172a",
-    color: "white",
-    fontWeight: 900,
-    cursor: "pointer",
-  },
-  adminMenu: {
-    position: "absolute",
-    top: "calc(100% + 8px)",
-    right: 0,
-    width: 200,
-    borderRadius: 14,
-    border: "1px solid #e5e7eb",
-    background: "white",
-    boxShadow: "0 16px 40px rgba(2,6,23,0.12)",
-    padding: 8,
-    display: "grid",
-    gap: 6,
-    zIndex: 100,
-  },
-  menuItem: {
-    textDecoration: "none",
-    color: "#0f172a",
-    fontWeight: 800,
-    padding: "10px 10px",
-    borderRadius: 12,
-    border: "1px solid #f1f5f9",
-    background: "#fff",
-  },
-  menuDivider: { height: 1, background: "#e5e7eb", margin: "4px 2px" },
-
-  wrap: { maxWidth: 1100, margin: "0 auto", padding: "34px 18px" },
-  hero: {
-    border: "1px solid #e5e7eb",
-    borderRadius: 24,
-    background:
-      "radial-gradient(1200px 600px at 10% 0%, rgba(15,23,42,0.06), transparent), white",
-    padding: "34px 28px",
-    boxShadow: "0 12px 30px rgba(2,6,23,0.06)",
-  },
-  badge: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 8,
-    padding: "8px 12px",
-    borderRadius: 999,
-    border: "1px solid #e2e8f0",
-    background: "#f8fafc",
-    color: "#0f172a",
-    fontWeight: 800,
-    fontSize: 12,
-  },
-  h1: {
-    margin: "14px 0 10px",
-    fontSize: 48,
-    letterSpacing: "-0.03em",
-    lineHeight: 1.05,
-    color: "#0f172a",
-  },
-  p: { margin: 0, maxWidth: 720, fontSize: 16, lineHeight: 1.55, color: "#334155" },
-  ctaRow: { display: "flex", gap: 10, marginTop: 18, flexWrap: "wrap" },
-  primaryBtn: {
-    textDecoration: "none",
-    background: "#0f172a",
-    color: "white",
-    fontWeight: 900,
-    padding: "12px 14px",
-    borderRadius: 14,
-    border: "1px solid #0f172a",
-  },
-  secondaryBtn: {
-    textDecoration: "none",
-    background: "white",
-    color: "#0f172a",
-    fontWeight: 900,
-    padding: "12px 14px",
-    borderRadius: 14,
-    border: "1px solid #e5e7eb",
-  },
-};
