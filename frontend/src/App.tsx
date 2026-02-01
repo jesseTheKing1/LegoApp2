@@ -1,9 +1,18 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { BrowserRouter, Routes, Route, Link, Navigate, useLocation } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { Routes, Route, Link, Navigate, useLocation } from "react-router-dom";
 import api from "./api/client";
 import { ENDPOINTS } from "./api/endpoints";
+
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
+
+// ✅ Admin layout + pages
+import AdminLayout from "./pages/admin/AdminLayout";
+import ColorsAdminPage from "./pages/admin/page/ColorsAdminPage";
+// ⚠️ Make sure your file name matches this import.
+// If your file is actually PartsAdinPage.tsx, rename the file or revert this import.
+import PartColorsPage from "./pages/admin/page/PartColorsPage";
+import PartsAdminPage from "./pages/admin/page/PartsAdinPage";
 
 type Me = {
   id: number;
@@ -16,6 +25,7 @@ type Me = {
 function getAccessToken() {
   return localStorage.getItem("access_token") || "";
 }
+
 function clearTokens() {
   localStorage.removeItem("access_token");
   localStorage.removeItem("refresh_token");
@@ -24,6 +34,7 @@ function clearTokens() {
 async function fetchMe(): Promise<Me | null> {
   const token = getAccessToken();
   if (!token) return null;
+
   try {
     const res = await api.get(ENDPOINTS.me, {
       headers: { Authorization: `Bearer ${token}` },
@@ -34,28 +45,69 @@ async function fetchMe(): Promise<Me | null> {
   }
 }
 
-function RequireAuth({ me, children }: { me: Me | null; children: React.ReactNode }) {
+function RequireAuth({
+  me,
+  children,
+}: {
+  me: Me | null;
+  children: React.ReactNode;
+}) {
   const loc = useLocation();
   if (!me) return <Navigate to="/login" replace state={{ from: loc.pathname }} />;
   return <>{children}</>;
 }
 
-function RequireAdmin({ me, children }: { me: Me | null; children: React.ReactNode }) {
+function RequireAdmin({
+  me,
+  children,
+}: {
+  me: Me | null;
+  children: React.ReactNode;
+}) {
   const loc = useLocation();
   if (!me) return <Navigate to="/login" replace state={{ from: loc.pathname }} />;
   if (!me.is_staff) return <Navigate to="/" replace />;
   return <>{children}</>;
 }
 
-function Header({
-  me,
-  onLogout,
-  backendAdminUrl,
-}: {
-  me: Me | null;
-  onLogout: () => void;
-  backendAdminUrl: string;
-}) {
+/** ---------- Admin dropdown ---------- **/
+function AdminMenu() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div style={{ position: "relative" }}>
+      <button onClick={() => setOpen((v) => !v)} style={S.adminBtn} type="button">
+        Admin ▾
+      </button>
+
+      {open ? (
+        <div style={S.adminMenu} onMouseLeave={() => setOpen(false)}>
+          <Link to="/admin/parts" style={S.menuItem} onClick={() => setOpen(false)}>
+            Parts
+          </Link>
+          <Link to="/admin/colors" style={S.menuItem} onClick={() => setOpen(false)}>
+            Colors
+          </Link>
+          <Link
+            to="/admin/part-colors"
+            style={S.menuItem}
+            onClick={() => setOpen(false)}
+          >
+            Part Colors
+          </Link>
+
+          <div style={S.menuDivider} />
+
+          <a href="/dj-admin/" style={S.menuItem} onClick={() => setOpen(false)}>
+            Django admin
+          </a>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function Header({ me, onLogout }: { me: Me | null; onLogout: () => void }) {
   return (
     <header style={S.header}>
       <div style={S.headerInner}>
@@ -68,11 +120,7 @@ function Header({
             Home
           </Link>
 
-          {me?.is_staff ? (
-            <a href={backendAdminUrl} style={S.navLink}>
-              Admin
-            </a>
-          ) : null}
+          {me?.is_staff ? <AdminMenu /> : null}
 
           {me ? (
             <>
@@ -80,7 +128,7 @@ function Header({
                 @{me.username}
                 {me.is_staff ? " • Admin" : ""}
               </span>
-              <button style={S.ghostBtn} onClick={onLogout}>
+              <button style={S.ghostBtn} onClick={onLogout} type="button">
                 Log out
               </button>
             </>
@@ -100,7 +148,7 @@ function Header({
   );
 }
 
-function Home({ me, backendAdminUrl }: { me: Me | null; backendAdminUrl: string }) {
+function Home({ me }: { me: Me | null }) {
   return (
     <div style={S.wrap}>
       <div style={S.hero}>
@@ -115,16 +163,15 @@ function Home({ me, backendAdminUrl }: { me: Me | null; backendAdminUrl: string 
           {me ? (
             <>
               {me.is_staff ? (
-                <a href={backendAdminUrl} style={S.primaryBtn}>
+                <Link to="/admin/parts" style={S.primaryBtn}>
                   Open Admin
-                </a>
+                </Link>
               ) : (
                 <Link to="/account" style={S.primaryBtn}>
                   My Account
                 </Link>
               )}
 
-              {/* Placeholder link for future pages */}
               <Link to="/browse" style={S.secondaryBtn}>
                 Browse
               </Link>
@@ -139,30 +186,6 @@ function Home({ me, backendAdminUrl }: { me: Me | null; backendAdminUrl: string 
               </Link>
             </>
           )}
-        </div>
-
-        <div style={S.cardRow}>
-          <div style={S.card}>
-            <div style={S.cardTitle}>Accurate pricing</div>
-            <div style={S.cardBody}>Weighted averages + overrides so you always know real cost.</div>
-          </div>
-          <div style={S.card}>
-            <div style={S.cardTitle}>Fast cataloging</div>
-            <div style={S.cardBody}>Parts, colors, part-colors, themes, sets — organized and searchable.</div>
-          </div>
-          <div style={S.card}>
-            <div style={S.cardTitle}>Admin-friendly</div>
-            <div style={S.cardBody}>Staff-only editing. Regular users can browse safely.</div>
-          </div>
-        </div>
-
-        <div style={S.footer}>
-          <span style={{ color: "#64748b" }}>
-            API:{" "}
-            <span style={{ fontWeight: 800, color: "#0f172a" }}>
-              {import.meta.env.VITE_API_BASE_URL || "(not set)"}
-            </span>
-          </span>
         </div>
       </div>
     </div>
@@ -191,8 +214,10 @@ function BrowsePlaceholder() {
     <div style={S.wrap}>
       <div style={S.hero}>
         <div style={S.badge}>Browse</div>
-        <h2 style={{ margin: "14px 0 8px", fontSize: 28, color: "#0f172a" }}>Coming soon</h2>
-        <p style={S.p}>Next we’ll wire your real admin/browse pages into this router.</p>
+        <h2 style={{ margin: "14px 0 8px", fontSize: 28, color: "#0f172a" }}>
+          Coming soon
+        </h2>
+        <p style={S.p}>This will be public browsing later. Admin pages are under /admin/*.</p>
       </div>
     </div>
   );
@@ -201,12 +226,6 @@ function BrowsePlaceholder() {
 export default function App() {
   const [me, setMe] = useState<Me | null>(null);
   const [loading, setLoading] = useState(true);
-
-  const backendAdminUrl = useMemo(() => {
-    const base = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
-    // If env is missing during dev, fallback to relative admin (works if same origin)
-    return base ? `${base}/admin/` : "/admin/";
-  }, []);
 
   async function loadMe() {
     setLoading(true);
@@ -224,8 +243,8 @@ export default function App() {
   }
 
   return (
-    <BrowserRouter>
-      <Header me={me} onLogout={logout} backendAdminUrl={backendAdminUrl} />
+    <>
+      <Header me={me} onLogout={logout} />
 
       {loading ? (
         <div style={{ padding: 24, maxWidth: 1100, margin: "0 auto", color: "#475569" }}>
@@ -233,13 +252,11 @@ export default function App() {
         </div>
       ) : (
         <Routes>
-          <Route path="/" element={<Home me={me} backendAdminUrl={backendAdminUrl} />} />
+          <Route path="/" element={<Home me={me} />} />
 
-          {/* Auth */}
           <Route path="/login" element={<LoginPage onLogin={loadMe} />} />
           <Route path="/register" element={<RegisterPage />} />
 
-          {/* Protected user page */}
           <Route
             path="/account"
             element={
@@ -249,20 +266,27 @@ export default function App() {
             }
           />
 
-          {/* Example protected admin page (placeholder) */}
+          <Route path="/browse" element={<BrowsePlaceholder />} />
+
+          {/* ✅ Admin (dashboard layout) */}
           <Route
-            path="/browse"
+            path="/admin"
             element={
               <RequireAdmin me={me}>
-                <BrowsePlaceholder />
+                <AdminLayout />
               </RequireAdmin>
             }
-          />
+          >
+            <Route index element={<Navigate to="/admin/parts" replace />} />
+            <Route path="parts" element={<PartsAdminPage />} />
+            <Route path="colors" element={<ColorsAdminPage />} />
+            <Route path="part-colors" element={<PartColorsPage />} />
+          </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       )}
-    </BrowserRouter>
+    </>
   );
 }
 
@@ -333,6 +357,41 @@ const S: Record<string, React.CSSProperties> = {
     fontWeight: 800,
     cursor: "pointer",
   },
+
+  adminBtn: {
+    padding: "10px 12px",
+    borderRadius: 12,
+    border: "1px solid #0f172a",
+    background: "#0f172a",
+    color: "white",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+  adminMenu: {
+    position: "absolute",
+    top: "calc(100% + 8px)",
+    right: 0,
+    width: 200,
+    borderRadius: 14,
+    border: "1px solid #e5e7eb",
+    background: "white",
+    boxShadow: "0 16px 40px rgba(2,6,23,0.12)",
+    padding: 8,
+    display: "grid",
+    gap: 6,
+    zIndex: 100,
+  },
+  menuItem: {
+    textDecoration: "none",
+    color: "#0f172a",
+    fontWeight: 800,
+    padding: "10px 10px",
+    borderRadius: 12,
+    border: "1px solid #f1f5f9",
+    background: "#fff",
+  },
+  menuDivider: { height: 1, background: "#e5e7eb", margin: "4px 2px" },
+
   wrap: { maxWidth: 1100, margin: "0 auto", padding: "34px 18px" },
   hero: {
     border: "1px solid #e5e7eb",
@@ -381,14 +440,4 @@ const S: Record<string, React.CSSProperties> = {
     borderRadius: 14,
     border: "1px solid #e5e7eb",
   },
-  cardRow: {
-    display: "grid",
-    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-    gap: 12,
-    marginTop: 22,
-  },
-  card: { border: "1px solid #e5e7eb", borderRadius: 18, padding: 16, background: "white" },
-  cardTitle: { fontWeight: 900, color: "#0f172a", marginBottom: 6 },
-  cardBody: { color: "#475569", lineHeight: 1.5 },
-  footer: { marginTop: 22, paddingTop: 14, borderTop: "1px solid #e5e7eb" },
 };
