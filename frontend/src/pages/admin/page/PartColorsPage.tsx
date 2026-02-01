@@ -32,17 +32,6 @@ function sx(...styles: Array<React.CSSProperties | false | null | undefined>) {
   return Object.assign({}, ...styles.filter(Boolean));
 }
 
-function norm(s: any) {
-  return String(s ?? "").trim().toLowerCase();
-}
-
-function getActualCategory(part: Part | undefined | null) {
-  // If Part type doesn't include actual_category yet, we still support it.
-  const raw = (part as any)?.actual_category ?? (part as any)?.actualCategory ?? "";
-  const v = String(raw ?? "").trim();
-  return v || "Uncategorized";
-}
-
 /** ---------------- UI bits ---------------- */
 
 function DrawerShell({
@@ -81,7 +70,7 @@ function DrawerShell({
 
 function RowThumb({ src }: { src?: string | null }) {
   return (
-    <div style={S.thumb} title={src || "No image"}>
+    <div style={S.thumb}>
       {src ? (
         <img
           src={src}
@@ -100,7 +89,7 @@ function RowThumb({ src }: { src?: string | null }) {
 
 function MiniThumb({ src }: { src?: string | null }) {
   return (
-    <div style={S.miniThumb} title={src || "No image"}>
+    <div style={S.miniThumb}>
       {src ? (
         <img
           src={src}
@@ -285,12 +274,22 @@ function PartColorDetailDrawer({
               {(selected.image_url_1 || selected.image_url_2) ? (
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                   {selected.image_url_1 ? (
-                    <a href={selected.image_url_1} target="_blank" rel="noreferrer" style={S.link}>
+                    <a
+                      href={selected.image_url_1}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={S.link}
+                    >
                       Open image 1
                     </a>
                   ) : null}
                   {selected.image_url_2 ? (
-                    <a href={selected.image_url_2} target="_blank" rel="noreferrer" style={S.link}>
+                    <a
+                      href={selected.image_url_2}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={S.link}
+                    >
                       Open image 2
                     </a>
                   ) : null}
@@ -335,7 +334,9 @@ function PartColorDetailDrawer({
                       />
                       <span style={{ whiteSpace: "nowrap" }}>{s.name}</span>
                       {s.count > 1 ? (
-                        <span style={{ fontSize: 11, opacity: 0.8, marginLeft: 2 }}>+{s.count - 1}</span>
+                        <span style={{ fontSize: 11, opacity: 0.8, marginLeft: 2 }}>
+                          +{s.count - 1}
+                        </span>
                       ) : null}
                     </button>
                   );
@@ -364,9 +365,7 @@ function PartColorDetailDrawer({
 
 /** ---------------- Page ---------------- */
 
-// 1) category -> 2) part -> rows
-type PartGroup = { part: Part; rows: PartColorRow[] };
-type CategoryGroup = { category: string; parts: PartGroup[]; rowCount: number };
+type Group = { part: Part; rows: PartColorRow[] };
 
 export default function PartColorsPage() {
   const [items, setItems] = useState<PartColorRow[]>([]);
@@ -374,10 +373,7 @@ export default function PartColorsPage() {
   const [colors, setColors] = useState<Color[]>([]);
   const [q, setQ] = useState("");
 
-  // expanded state
-  const [expandedCat, setExpandedCat] = useState<Record<string, boolean>>({});
-  const [expandedPart, setExpandedPart] = useState<Record<number, boolean>>({});
-
+  const [expanded, setExpanded] = useState<Record<number, boolean>>({});
   const [createOpen, setCreateOpen] = useState(false);
 
   const [detailOpen, setDetailOpen] = useState(false);
@@ -405,113 +401,68 @@ export default function PartColorsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const grouped: CategoryGroup[] = useMemo(() => {
-    // build category -> part.id -> group
-    const catMap = new Map<string, Map<number, PartGroup>>();
+  const grouped: Group[] = useMemo(() => {
+    const map = new Map<number, Group>();
 
     for (const pc of items) {
-      const p = pc.part;
-      const partId = p?.id;
-      if (!p || !partId) continue;
-
-      const cat = getActualCategory(p);
-      if (!catMap.has(cat)) catMap.set(cat, new Map());
-
-      const partMap = catMap.get(cat)!;
-      if (!partMap.has(partId)) partMap.set(partId, { part: p, rows: [] });
-      partMap.get(partId)!.rows.push(pc);
+      const key = pc.part?.id;
+      if (!key || !pc.part) continue;
+      if (!map.has(key)) map.set(key, { part: pc.part, rows: [] });
+      map.get(key)!.rows.push(pc);
     }
 
-    // sort rows inside each part group (matches old)
-    const categories: CategoryGroup[] = [];
-    for (const [category, partMap] of catMap.entries()) {
-      const partsArr = Array.from(partMap.values());
+    for (const g of map.values()) {
+      g.rows.sort((a, b) => {
+        const ac = (a.part_color_code ?? "").toLowerCase();
+        const bc = (b.part_color_code ?? "").toLowerCase();
+        if (ac !== bc) return ac.localeCompare(bc);
 
-      for (const g of partsArr) {
-        g.rows.sort((a, b) => {
-          const ac = norm(a.part_color_code);
-          const bc = norm(b.part_color_code);
-          if (ac !== bc) return ac.localeCompare(bc);
+        const an = (a.color?.name ?? "").toLowerCase();
+        const bn = (b.color?.name ?? "").toLowerCase();
+        if (an !== bn) return an.localeCompare(bn);
 
-          const an = norm(a.color?.name);
-          const bn = norm(b.color?.name);
-          if (an !== bn) return an.localeCompare(bn);
-
-          return String(a.variant ?? "").localeCompare(String(b.variant ?? ""));
-        });
-      }
-
-      partsArr.sort((a, b) => norm(a.part.part_id).localeCompare(norm(b.part.part_id)));
-
-      const rowCount = partsArr.reduce((sum, pg) => sum + pg.rows.length, 0);
-      categories.push({ category, parts: partsArr, rowCount });
+        return (a.variant ?? "").localeCompare(b.variant ?? "");
+      });
     }
 
-    // sort categories (keep Uncategorized last)
-    categories.sort((a, b) => {
-      const au = a.category === "Uncategorized";
-      const bu = b.category === "Uncategorized";
-      if (au && !bu) return 1;
-      if (!au && bu) return -1;
-      return a.category.localeCompare(b.category);
-    });
+    let arr = Array.from(map.values()).sort((a, b) =>
+      (a.part.part_id ?? "").localeCompare(b.part.part_id ?? "")
+    );
 
-    // apply search filter (but keep structure)
-    const qq = norm(q);
-    if (!qq) return categories;
+    const qq = q.trim().toLowerCase();
+    if (qq) {
+      arr = arr
+        .map((g) => {
+          const partHit = `${g.part.part_id ?? ""} ${g.part.name ?? ""}`.toLowerCase().includes(qq);
 
-    const out: CategoryGroup[] = [];
-    for (const cat of categories) {
-      const catHit = norm(cat.category).includes(qq);
+          const rows = partHit
+            ? g.rows
+            : g.rows.filter((pc) =>
+                `${pc.part_color_code ?? ""} ${pc.color?.name ?? ""} ${pc.variant ?? ""}`
+                  .toLowerCase()
+                  .includes(qq)
+              );
 
-      const filteredParts: PartGroup[] = [];
-      for (const pg of cat.parts) {
-        const partHit = `${pg.part.part_id ?? ""} ${pg.part.name ?? ""}`.toLowerCase().includes(qq);
-        const rows = catHit || partHit
-          ? pg.rows
-          : pg.rows.filter((pc) =>
-              `${pc.part_color_code ?? ""} ${pc.color?.name ?? ""} ${pc.variant ?? ""}`
-                .toLowerCase()
-                .includes(qq)
-            );
-
-        if (rows.length > 0) filteredParts.push({ ...pg, rows });
-      }
-
-      if (filteredParts.length > 0) {
-        out.push({
-          category: cat.category,
-          parts: filteredParts,
-          rowCount: filteredParts.reduce((s, pg) => s + pg.rows.length, 0),
-        });
-      }
+          return { ...g, rows };
+        })
+        .filter((g) => g.rows.length > 0);
     }
 
-    return out;
+    return arr;
   }, [items, q]);
 
-  function toggleCategory(category: string) {
-    setExpandedCat((prev) => ({ ...prev, [category]: !prev[category] }));
-  }
-
-  function togglePart(partPk: number) {
-    setExpandedPart((prev) => ({ ...prev, [partPk]: !prev[partPk] }));
+  function toggle(partPk: number) {
+    setExpanded((prev) => ({ ...prev, [partPk]: !prev[partPk] }));
   }
 
   function expandAll() {
-    const nextCats: Record<string, boolean> = {};
-    const nextParts: Record<number, boolean> = {};
-    grouped.forEach((cg) => {
-      nextCats[cg.category] = true;
-      cg.parts.forEach((pg) => (nextParts[pg.part.id] = true));
-    });
-    setExpandedCat(nextCats);
-    setExpandedPart(nextParts);
+    const all: Record<number, boolean> = {};
+    grouped.forEach((g) => (all[g.part.id] = true));
+    setExpanded(all);
   }
 
   function collapseAll() {
-    setExpandedCat({});
-    setExpandedPart({});
+    setExpanded({});
   }
 
   function openDetail(pc: PartColorRow) {
@@ -519,11 +470,6 @@ export default function PartColorsPage() {
     setDetailOpen(true);
     setEditing(false);
     setErr(null);
-
-    // helpful: auto-open its category + part in the list
-    const cat = getActualCategory(pc.part);
-    if (cat) setExpandedCat((prev) => ({ ...prev, [cat]: true }));
-    if (pc.part?.id) setExpandedPart((prev) => ({ ...prev, [pc.part.id]: true }));
   }
 
   async function create(payload: any) {
@@ -573,18 +519,6 @@ export default function PartColorsPage() {
     }
   }
 
-  const totalShapes = useMemo(() => {
-    let n = 0;
-    grouped.forEach((cg) => (n += cg.parts.length));
-    return n;
-  }, [grouped]);
-
-  const totalRows = useMemo(() => {
-    let n = 0;
-    grouped.forEach((cg) => (n += cg.rowCount));
-    return n;
-  }, [grouped]);
-
   return (
     <div style={{ display: "grid", gap: 10 }}>
       {/* top bar */}
@@ -592,7 +526,7 @@ export default function PartColorsPage() {
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Search category, shape, color, variant, or your ID..."
+          placeholder="Search shape, color, variant, or your ID..."
           style={S.search}
         />
         <PillButton onClick={() => setCreateOpen(true)} tone="dark">
@@ -600,9 +534,8 @@ export default function PartColorsPage() {
         </PillButton>
         <PillButton onClick={expandAll}>Expand all</PillButton>
         <PillButton onClick={collapseAll}>Collapse all</PillButton>
-
         <div style={{ fontSize: 12, color: "#6b7280" }}>
-          {grouped.length} categories • {totalShapes} shapes • {totalRows} rows
+          {grouped.length} shapes • {items.length} rows
         </div>
       </div>
 
@@ -613,100 +546,59 @@ export default function PartColorsPage() {
         {grouped.length === 0 ? (
           <div style={{ padding: 12, color: "#6b7280", fontSize: 12 }}>No results.</div>
         ) : (
-          grouped.map((cg, catIdx) => {
-            const catOpen = !!expandedCat[cg.category];
+          grouped.map((g, idx) => {
+            const isOpen = !!expanded[g.part.id];
+            const thumbs = g.rows
+              .map((r) => r.thumb_url || r.image_url_1 || r.image_url_2 || null)
+              .filter(Boolean)
+              .slice(0, 4) as string[];
+
+            const showPlaceholders = Math.max(0, 4 - thumbs.length);
 
             return (
-              <div key={cg.category} style={{ borderTop: catIdx === 0 ? "none" : "1px solid #f1f5f9" }}>
-                {/* CATEGORY HEADER (new) */}
-                <button
-                  type="button"
-                  onClick={() => toggleCategory(cg.category)}
-                  style={sx(S.groupBtn, S.catBtn)}
-                  title="Expand / collapse category"
-                >
-                  <div style={S.chev}>{catOpen ? "▾" : "▸"}</div>
+              <div key={g.part.id} style={{ borderTop: idx === 0 ? "none" : "1px solid #f1f5f9" }}>
+                <button onClick={() => toggle(g.part.id)} style={S.groupBtn} type="button">
+                  <div style={S.chev}>{isOpen ? "▾" : "▸"}</div>
+
                   <div style={{ minWidth: 0 }}>
-                    <div style={sx(S.groupTitle, S.catTitle)}>
-                      {cg.category}{" "}
-                      <span style={{ fontSize: 12, color: "#9ca3af" }}>
-                        ({cg.parts.length} shapes • {cg.rowCount} rows)
-                      </span>
+                    <div style={S.groupTitle}>
+                      {g.part.part_id} — {g.part.name}{" "}
+                      <span style={{ fontSize: 12, color: "#9ca3af" }}>({g.rows.length})</span>
+                    </div>
+
+                    <div style={S.previewRow}>
+                      {thumbs.map((t, i) => (
+                        <MiniThumb key={`${g.part.id}-t-${i}`} src={t} />
+                      ))}
+                      {Array.from({ length: showPlaceholders }).map((_, i) => (
+                        <MiniThumb key={`${g.part.id}-p-${i}`} src={null} />
+                      ))}
+                      <div style={S.previewLabel}>{thumbs.length > 0 ? "preview" : "no images yet"}</div>
                     </div>
                   </div>
-                  <div style={S.showHide}>{catOpen ? "hide" : "show"}</div>
+
+                  <div style={S.showHide}>{isOpen ? "hide" : "show"}</div>
                 </button>
 
-                {/* CATEGORY BODY: PART GROUPS */}
-                {catOpen ? (
-                  <div style={S.catBody}>
-                    {cg.parts.map((g, partIdx) => {
-                      const isOpen = !!expandedPart[g.part.id];
-
-                      const thumbs = g.rows
-                        .map((r) => r.thumb_url || r.image_url_1 || r.image_url_2 || null)
-                        .filter(Boolean)
-                        .slice(0, 4) as string[];
-
-                      const showPlaceholders = Math.max(0, 4 - thumbs.length);
-
-                      return (
-                        <div
-                          key={g.part.id}
-                          style={{
-                            borderTop: partIdx === 0 ? "none" : "1px solid #f1f5f9",
-                            background: "white",
-                          }}
-                        >
-                          {/* PART (shape) HEADER (same as old) */}
-                          <button onClick={() => togglePart(g.part.id)} style={S.groupBtn} type="button">
-                            <div style={S.chev}>{isOpen ? "▾" : "▸"}</div>
-
-                            <div style={{ minWidth: 0 }}>
-                              <div style={S.groupTitle}>
-                                {g.part.part_id} — {g.part.name}{" "}
-                                <span style={{ fontSize: 12, color: "#9ca3af" }}>({g.rows.length})</span>
-                              </div>
-
-                              <div style={S.previewRow}>
-                                {thumbs.map((t, i) => (
-                                  <MiniThumb key={`${g.part.id}-t-${i}`} src={t} />
-                                ))}
-                                {Array.from({ length: showPlaceholders }).map((_, i) => (
-                                  <MiniThumb key={`${g.part.id}-p-${i}`} src={null} />
-                                ))}
-                                <div style={S.previewLabel}>{thumbs.length > 0 ? "preview" : "no images yet"}</div>
-                              </div>
-                            </div>
-
-                            <div style={S.showHide}>{isOpen ? "hide" : "show"}</div>
-                          </button>
-
-                          {/* PART ROWS */}
-                          {isOpen ? (
-                            <div style={S.groupBody}>
-                              {g.rows.map((pc, pcIdx) => (
-                                <button
-                                  key={pc.id}
-                                  onClick={() => openDetail(pc)}
-                                  type="button"
-                                  style={sx(S.pcRowBtn, pcIdx !== 0 && S.pcRowTopBorder)}
-                                >
-                                  <RowThumb src={pc.thumb_url || pc.image_url_1 || pc.image_url_2 || null} />
-                                  <div style={S.pcId}>
-                                    {pc.part_color_code ? `ID: ${pc.part_color_code}` : "ID: —"}
-                                  </div>
-                                  <div style={S.pcName}>
-                                    {pc.color?.name ?? "—"}
-                                    {pc.variant ? <span style={{ color: "#6b7280" }}> • {pc.variant}</span> : null}
-                                  </div>
-                                </button>
-                              ))}
-                            </div>
-                          ) : null}
+                {isOpen ? (
+                  <div style={S.groupBody}>
+                    {g.rows.map((pc, pcIdx) => (
+                      <button
+                        key={pc.id}
+                        onClick={() => openDetail(pc)}
+                        type="button"
+                        style={sx(S.pcRowBtn, pcIdx !== 0 && S.pcRowTopBorder)}
+                      >
+                        <RowThumb src={pc.thumb_url || pc.image_url_1 || pc.image_url_2 || null} />
+                        <div style={S.pcId}>
+                          {pc.part_color_code ? `ID: ${pc.part_color_code}` : "ID: —"}
                         </div>
-                      );
-                    })}
+                        <div style={S.pcName}>
+                          {pc.color?.name ?? "—"}
+                          {pc.variant ? <span style={{ color: "#6b7280" }}> • {pc.variant}</span> : null}
+                        </div>
+                      </button>
+                    ))}
                   </div>
                 ) : null}
               </div>
@@ -788,18 +680,6 @@ const S: Record<string, React.CSSProperties> = {
     gridTemplateColumns: "18px 1fr auto",
     gap: 8,
     alignItems: "center",
-  },
-
-  // category styling (subtle but still “old style”)
-  catBtn: {
-    background: "#fbfbfb",
-  },
-  catTitle: {
-    fontSize: 13,
-  },
-  catBody: {
-    background: "#ffffff",
-    borderTop: "1px solid #f1f5f9",
   },
 
   chev: { fontSize: 12, color: "#6b7280", width: 18, textAlign: "center" },
