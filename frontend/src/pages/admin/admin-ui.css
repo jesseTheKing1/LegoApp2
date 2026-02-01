@@ -1,0 +1,700 @@
+/* =========================
+   Shared form/layout helpers
+   ========================= */
+
+.adminForm { display: grid; gap: 12px; }
+
+.adminFormCard{
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: var(--r-lg);
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.adminField { display: grid; gap: 6px; min-width: 0; }
+
+.adminLabel{
+  font-size: 12px;
+  font-weight: 950;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+
+.adminHelp{
+  font-size: 11px;
+  color: var(--muted2);
+  line-height: 1.25;
+  margin-top: -2px;
+}
+
+.adminStack { display: grid; gap: 10px; }
+
+/* 2-col grid that collapses */
+.adminGrid2{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* Top/bottom grids used by ColorForm */
+.adminGridTop{
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 12px;
+  align-items: end;
+}
+.adminGridBottom{
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 12px;
+  align-items: end;
+}
+
+/* Row inline (image URL + buttons) */
+.adminRowInline{
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+.adminRowInline > * { min-width: 0; }
+.adminRowInline .adminInput { flex: 1; }
+
+/* Error text */
+.adminErr{
+  color: #b91c1c;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+/* =========================
+   Swatch + summary
+   ========================= */
+
+.adminSummaryRow{
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #fff;
+}
+
+.adminSwatchMini{
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  border: 1px solid rgba(0,0,0,.12);
+}
+
+.adminSummaryText{ display: grid; gap: 2px; min-width: 0; }
+
+.adminSummaryStrong{
+  font-size: 12px;
+  font-weight: 950;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.adminSummaryMuted{
+  font-size: 12px;
+  font-weight: 850;
+  color: var(--muted2);
+}
+
+/* =========================
+   ColorForm specifics
+   ========================= */
+
+.adminInputMono{
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+  letter-spacing: 0.4px;
+}
+
+.adminHexRow{
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+}
+
+.adminColorPicker{
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.adminSwatchWrap{
+  height: 44px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: center;
+  overflow: hidden;
+  min-width: 0;
+  background: #fff;
+}
+
+.adminSwatch{ width: 100%; height: 100%; }
+
+.adminSwatchText{
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 950;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.adminCheckRow{ display: flex; gap: 10px; flex-wrap: wrap; }
+
+.adminCheckPill{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--border);
+  background: var(--soft);
+  font-weight: 950;
+  color: var(--text);
+}
+.adminCheckPill input{ width: 16px; height: 16px; }
+
+/* =========================
+   Images / previews
+   ========================= */
+
+.adminImageField{ display: grid; gap: 8px; min-width: 0; }
+
+.adminThumbBox{
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--soft);
+  overflow: hidden;
+}
+
+.adminThumbEmpty{
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 14px;
+  border: 1px dashed #cbd5e1;
+  background: var(--soft);
+  display: grid;
+  place-items: center;
+  color: var(--muted2);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.adminHero{
+  width: min(360px, 100%);
+  aspect-ratio: 1 / 1;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--soft);
+  overflow: hidden;
+}
+
+/* =========================
+   Actions row
+   ========================= */
+
+.adminFormActions{
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+/* =========================
+   Responsive
+   ========================= */
+
+@media (max-width: 900px){
+  .adminGrid2{ grid-template-columns: 1fr; }
+  .adminGridTop{ grid-template-columns: 1fr; align-items: stretch; }
+  .adminGridBottom{ grid-template-columns: 1fr; align-items: stretch; }
+
+  .adminRowInline{
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .adminRowInline .adminBtn{ width: 100%; }
+
+  .adminFormActions{ justify-content: stretch; }
+  .adminBtn.adminBtnFullOnMobile{ width: 100%; }
+}
+
+@media (max-width: 420px){
+  .adminFormCard{ padding: 12px; }
+}
+
+/* =========================
+   Admin page shell
+   ========================= */
+
+.adminPage {
+  display: grid;
+  gap: 12px;
+}
+
+.adminToolbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.adminSearch {
+  width: min(520px, 100%);
+}
+
+.adminCountText {
+  font-size: 12px;
+  color: var(--muted2);
+}
+
+/* Card + list rows */
+.adminCard {
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: #fff;
+  overflow: hidden;
+}
+
+.adminEmpty {
+  padding: 12px;
+  color: var(--muted2);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.adminRowBtn {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: #fff;
+  cursor: pointer;
+  padding: 10px 12px;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.adminRowBtn:hover {
+  background: rgba(2, 6, 23, 0.02);
+}
+
+.adminRowTopBorder {
+  border-top: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.adminDot {
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+.adminRowName {
+  font-weight: 950;
+  font-size: 13px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.adminRowMeta {
+  font-size: 12px;
+  color: var(--muted2);
+  white-space: nowrap;
+  font-weight: 800;
+}
+
+.adminRowHex {
+  font-size: 12px;
+  color: #94a3b8;
+  white-space: nowrap;
+  font-weight: 800;
+}
+
+/* Mobile: collapse columns into a second line */
+@media (max-width: 700px) {
+  .adminRowBtn {
+    grid-template-columns: 18px minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .adminRowMeta,
+  .adminRowHex {
+    display: none;
+  }
+
+  .adminRowSubline {
+    margin-top: 4px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    color: var(--muted2);
+    font-size: 12px;
+    font-weight: 850;
+  }
+}
+
+/* =========================
+   Drawer
+   ========================= */
+
+.adminOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: grid;
+  justify-items: end;
+  z-index: 50;
+}
+
+.adminDrawer {
+  height: 100%;
+  background: #fff;
+  padding: 14px;
+  overflow: auto;
+  border-left: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.adminDrawerHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+  position: sticky;
+  top: 0;
+  background: #fff;
+  padding-bottom: 10px;
+  z-index: 2;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.adminDrawerTitle {
+  font-weight: 950;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.adminCloseBtn {
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 12px;
+  padding: 8px 10px;
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.adminDetailGrid {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 900px) {
+  .adminDetailGrid {
+    grid-template-columns: 1fr;
+  }
+}
+/* =========================
+   Grouped/accordion list (PartColors)
+   ========================= */
+
+.adminListCard {
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  background: #fff;
+}
+
+.adminGroupBtn {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: #fff;
+  cursor: pointer;
+  padding: 10px 12px;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.adminGroupBtn:hover {
+  background: rgba(2, 6, 23, 0.02);
+}
+
+.adminChev {
+  font-size: 12px;
+  color: var(--muted2);
+  width: 18px;
+  text-align: center;
+}
+
+.adminGroupTitle {
+  font-weight: 950;
+  font-size: 13px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.adminGroupCount {
+  font-size: 12px;
+  color: #9ca3af;
+  font-weight: 900;
+}
+
+.adminShowHide {
+  font-size: 12px;
+  color: #9ca3af;
+  white-space: nowrap;
+  font-weight: 900;
+}
+
+.adminPreviewRow {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.adminPreviewLabel {
+  font-size: 11px;
+  color: #9ca3af;
+  font-weight: 900;
+}
+
+/* thumbs */
+.adminThumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: #f3f4f6;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.adminMiniThumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  background: #f3f4f6;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.adminGroupBody {
+  background: #fafafa;
+  border-top: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+/* PartColor row inside expanded group */
+.adminPcRowBtn {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 8px 12px;
+  display: grid;
+  grid-template-columns: 22px 220px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.adminPcRowBtn:hover {
+  background: rgba(2, 6, 23, 0.03);
+}
+
+.adminPcRowTopBorder {
+  border-top: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.adminPcId {
+  font-weight: 900;
+  font-size: 12px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.adminPcName {
+  font-size: 12px;
+  color: var(--text);
+  font-weight: 900;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.adminPcNameMuted {
+  color: var(--muted2);
+  font-weight: 900;
+}
+
+/* Mobile: make inner rows stack nicer */
+@media (max-width: 700px) {
+  .adminPcRowBtn {
+    grid-template-columns: 22px minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+  }
+
+  .adminPcId {
+    display: none;
+  }
+
+  .adminPcSubline {
+    margin-top: 3px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    color: var(--muted2);
+    font-size: 12px;
+    font-weight: 900;
+  }
+}
+
+/* =========================
+   Swatch switcher card
+   ========================= */
+
+.adminSwitchCard {
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 10px;
+  background: #fff;
+}
+
+.adminSwitchLabel {
+  font-size: 11px;
+  color: var(--muted2);
+  font-weight: 950;
+  margin-bottom: 8px;
+}
+
+.adminSwatchBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text);
+  border-radius: var(--r-pill);
+  padding: 6px 10px;
+  cursor: pointer;
+  font-weight: 900;
+  font-size: 12px;
+}
+
+.adminSwatchBtnActive {
+  border: 1px solid #111827;
+  background: #111827;
+  color: #fff;
+}
+
+/* =========================
+   Parts list rows
+   ========================= */
+
+.adminRowTopBorder {
+  border-top: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.adminPartsRowBtn {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: #fff;
+  cursor: pointer;
+  padding: 10px 12px;
+  display: grid;
+  grid-template-columns: 22px 120px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.adminPartsRowBtn:hover {
+  background: rgba(2, 6, 23, 0.02);
+}
+
+.adminPartsId {
+  font-weight: 950;
+  font-size: 12px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.adminRowTitle {
+  font-weight: 950;
+  font-size: 12px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.adminRowSub {
+  font-size: 11px;
+  color: var(--muted2);
+  font-weight: 900;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 700px) {
+  .adminPartsRowBtn {
+    grid-template-columns: 22px minmax(0, 1fr);
+  }
+  .adminPartsId {
+    display: none;
+  }
+  .adminPartsSubline {
+    margin-top: 3px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    color: var(--muted2);
+    font-size: 12px;
+    font-weight: 900;
+  }
+}

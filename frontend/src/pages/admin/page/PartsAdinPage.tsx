@@ -2,13 +2,14 @@ import React, { useEffect, useMemo, useState } from "react";
 import api from "../../../api/client";
 import { ENDPOINTS } from "../../../api/endpoints";
 import { Part, PartForm } from "../form/PartForm";
+import "../admin-ui.css";
 
 /** ---------------- helpers ---------------- */
 
 function getListData<T = any>(resData: any): T[] {
   if (!resData) return [];
   if (Array.isArray(resData)) return resData as T[];
-  if (Array.isArray(resData.results)) return resData.results as T[];
+  if (Array.isArray((resData as any).results)) return (resData as any).results as T[];
   return [];
 }
 
@@ -20,12 +21,7 @@ function formatApiError(e: any): string {
   return "Request failed";
 }
 
-/** merge style objects safely (like cx but for styles) */
-function sx(...styles: Array<React.CSSProperties | false | null | undefined>) {
-  return Object.assign({}, ...styles.filter(Boolean));
-}
-
-/** ---------------- UI bits ---------------- */
+/** ---------------- Drawer shell ---------------- */
 
 function DrawerShell({
   open,
@@ -44,15 +40,15 @@ function DrawerShell({
 
   return (
     <div
-      style={S.overlay}
+      className="adminOverlay"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div style={sx(S.drawer, { width: `min(${width}px, 100%)` })}>
-        <div style={S.drawerHeader}>
-          <div style={S.drawerTitle}>{title}</div>
-          <button onClick={onClose} style={S.ghostBtn} type="button">
+      <div className="adminDrawer" style={{ width: `min(${width}px, 100%)` }}>
+        <div className="adminDrawerHeader">
+          <div className="adminDrawerTitle">{title}</div>
+          <button type="button" className="adminCloseBtn" onClick={onClose}>
             Close
           </button>
         </div>
@@ -62,21 +58,22 @@ function DrawerShell({
   );
 }
 
+/** ---------------- thumbs ---------------- */
+
 function RowThumb({ src }: { src?: string | null }) {
   return (
-    <div style={S.thumb} title={src || "No image"}>
+    <div className="adminThumb" title={src || "No image"}>
       {src ? (
         <img
           src={src}
           alt=""
           style={{ width: "100%", height: "100%", objectFit: "cover" }}
           onError={(e) => {
-            // hide broken images
             e.currentTarget.style.display = "none";
           }}
         />
       ) : (
-        <span style={{ fontSize: 10, color: "#9ca3af" }}>—</span>
+        <span style={{ fontSize: 10, color: "#9ca3af", fontWeight: 900 }}>—</span>
       )}
     </div>
   );
@@ -176,48 +173,57 @@ export default function PartsAdminPage() {
   const detailTitle = selected ? `${selected.part_id} — ${selected.name}` : "Part";
 
   return (
-    <div style={{ display: "grid", gap: 10 }}>
+    <div className="adminPage">
       {/* top bar */}
-      <div style={S.topbar}>
+      <div className="adminToolbar">
         <input
+          className="adminInput adminSearch"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search part id, name, category..."
-          style={S.search}
+          autoComplete="off"
         />
 
-        <button onClick={() => setCreateOpen(true)} style={S.darkBtn} type="button">
+        <button type="button" className="adminBtn adminBtnPrimary" onClick={() => setCreateOpen(true)}>
           + New Part
         </button>
 
-        <div style={{ fontSize: 12, color: "#6b7280" }}>{filtered.length} parts</div>
+        <div className="adminCountText">{filtered.length} parts</div>
       </div>
 
-      {err ? <div style={S.errBox}>{err}</div> : null}
+      {err ? <div className="adminErr">{err}</div> : null}
 
       {/* list */}
-      <div style={S.listCard}>
+      <div className="adminListCard">
         {filtered.length === 0 ? (
-          <div style={{ padding: 12, color: "#6b7280", fontSize: 12 }}>No results.</div>
+          <div className="adminEmpty">No results.</div>
         ) : (
           filtered.map((p, idx) => (
             <button
               key={p.id}
-              onClick={() => openDetail(p)}
-              style={sx(S.rowBtn, idx !== 0 && S.rowTopBorder)}
-              title="Open"
               type="button"
+              className={`adminPartsRowBtn ${idx === 0 ? "" : "adminRowTopBorder"}`}
+              onClick={() => openDetail(p)}
+              title="Open"
             >
               <RowThumb src={p.image_url || null} />
 
-              <div style={{ fontWeight: 950, fontSize: 12, width: 120 }}>{p.part_id}</div>
+              <div className="adminPartsId">{p.part_id}</div>
 
               <div style={{ minWidth: 0 }}>
-                <div style={S.rowTitle}>{p.name}</div>
-                <div style={S.rowSub}>
+                <div className="adminRowTitle" title={p.name}>
+                  {p.name}
+                </div>
+
+                <div className="adminRowSub" title={`${p.actual_category || ""} ${p.general_category || ""} ${p.specific_category || ""}`}>
                   {p.actual_category || "—"}
                   {p.general_category ? ` • ${p.general_category}` : ""}
                   {p.specific_category ? ` • ${p.specific_category}` : ""}
+                </div>
+
+                {/* mobile-only extra line for part_id */}
+                <div className="adminPartsSubline">
+                  <span>{p.part_id}</span>
                 </div>
               </div>
             </button>
@@ -243,13 +249,13 @@ export default function PartsAdminPage() {
         width={900}
       >
         {!selected ? (
-          <div style={{ padding: 12, color: "#6b7280", fontSize: 12 }}>No selection.</div>
+          <div className="adminEmpty">No selection.</div>
         ) : (
-          <div style={{ display: "grid", gap: 12 }}>
-            {err ? <div style={S.errBox}>{err}</div> : null}
+          <div className="adminStack">
+            {err ? <div className="adminErr">{err}</div> : null}
 
-            <div style={{ display: "grid", gridTemplateColumns: "minmax(240px, 360px) 1fr", gap: 12 }}>
-              <div style={S.hero}>
+            <div className="adminDetailGrid">
+              <div className="adminHero">
                 {selected.image_url ? (
                   <img
                     src={selected.image_url}
@@ -260,16 +266,20 @@ export default function PartsAdminPage() {
                     }}
                   />
                 ) : (
-                  <div style={{ fontSize: 12, color: "#94a3b8", fontWeight: 800 }}>No image</div>
+                  <div style={{ fontSize: 12, color: "#94a3b8", fontWeight: 900 }}>No image</div>
                 )}
               </div>
 
-              <div style={S.detailCard}>
-                <div style={S.label}>Shape family</div>
-                <div style={S.valueLg}>{selected.actual_category || "—"}</div>
+              <div className="adminFormCard">
+                <div className="adminLabel">Shape family</div>
+                <div style={{ fontSize: 13, fontWeight: 950, color: "var(--text)" }}>
+                  {selected.actual_category || "—"}
+                </div>
 
-                <div style={S.label}>Categories</div>
-                <div style={S.value}>
+                <div className="adminLabel" style={{ marginTop: 6 }}>
+                  Categories
+                </div>
+                <div style={{ fontSize: 12, fontWeight: 900, color: "var(--text)" }}>
                   {selected.general_category || "—"} / {selected.specific_category || "—"}
                 </div>
 
@@ -278,23 +288,35 @@ export default function PartsAdminPage() {
                     href={selected.image_url}
                     target="_blank"
                     rel="noreferrer"
-                    style={{ fontSize: 12, color: "#2563eb", fontWeight: 900, marginTop: 10, display: "inline-block" }}
+                    style={{ fontSize: 12, color: "#2563eb", fontWeight: 950, textDecoration: "none" }}
                   >
                     Open image
                   </a>
                 )}
 
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
+                <div className="adminFormActions" style={{ marginTop: 4 }}>
                   <button
+                    type="button"
+                    className="adminBtn adminBtnPrimary"
                     onClick={() => setEditing((v) => !v)}
                     disabled={saving}
-                    style={S.darkBtn}
-                    type="button"
+                    style={{ opacity: saving ? 0.6 : 1 }}
                   >
                     {editing ? "Stop editing" : "Edit"}
                   </button>
 
-                  <button onClick={removeSelected} disabled={saving} style={S.dangerBtn} type="button">
+                  <button
+                    type="button"
+                    className="adminBtn"
+                    onClick={removeSelected}
+                    disabled={saving}
+                    style={{
+                      opacity: saving ? 0.6 : 1,
+                      borderColor: "#fecaca",
+                      background: "#fee2e2",
+                      color: "#991b1b",
+                    }}
+                  >
                     Delete
                   </button>
                 </div>
@@ -302,8 +324,10 @@ export default function PartsAdminPage() {
             </div>
 
             {editing ? (
-              <div style={S.editWrap}>
-                <div style={{ fontSize: 12, fontWeight: 950, marginBottom: 10 }}>Edit this Part</div>
+              <div className="adminFormCard">
+                <div className="adminLabel" style={{ marginBottom: 10 }}>
+                  Edit this Part
+                </div>
                 <PartForm submitting={saving} initialValues={selected} onSubmit={saveEdit} />
               </div>
             ) : null}
@@ -313,149 +337,3 @@ export default function PartsAdminPage() {
     </div>
   );
 }
-
-/** ---------------- styles ---------------- */
-
-const S: Record<string, React.CSSProperties> = {
-  topbar: { display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" },
-
-  search: {
-    width: "min(520px, 100%)",
-    border: "1px solid #e5e7eb",
-    borderRadius: 10,
-    padding: "8px 10px",
-  },
-
-  listCard: { border: "1px solid #e5e7eb", borderRadius: 12, overflow: "hidden", background: "white" },
-
-  rowBtn: {
-    width: "100%",
-    textAlign: "left",
-    border: "none",
-    background: "white",
-    cursor: "pointer",
-    padding: "8px 10px",
-    display: "grid",
-    gridTemplateColumns: "22px 120px 1fr",
-    gap: 10,
-    alignItems: "center",
-  },
-  rowTopBorder: { borderTop: "1px solid #f1f5f9" },
-
-  rowTitle: {
-    fontWeight: 900,
-    fontSize: 12,
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-  },
-
-  rowSub: {
-    fontSize: 11,
-    color: "#6b7280",
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-  },
-
-  errBox: {
-    color: "crimson",
-    border: "1px solid rgba(220,38,38,.25)",
-    background: "rgba(220,38,38,.06)",
-    borderRadius: 10,
-    padding: "8px 10px",
-    fontSize: 12,
-  },
-
-  darkBtn: {
-    borderRadius: 12,
-    padding: "10px 12px",
-    fontWeight: 900,
-    cursor: "pointer",
-    border: "1px solid #0f172a",
-    background: "#0f172a",
-    color: "white",
-  },
-
-  dangerBtn: {
-    borderRadius: 12,
-    padding: "10px 12px",
-    fontWeight: 900,
-    cursor: "pointer",
-    border: "1px solid #fecaca",
-    background: "#fee2e2",
-    color: "#991b1b",
-  },
-
-  overlay: {
-    position: "fixed",
-    inset: 0,
-    background: "rgba(0,0,0,.35)",
-    display: "grid",
-    justifyItems: "end",
-    zIndex: 50,
-  },
-
-  drawer: {
-    height: "100%",
-    background: "white",
-    padding: 14,
-    overflow: "auto",
-  },
-
-  drawerHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "center",
-    marginBottom: 10,
-    position: "sticky",
-    top: 0,
-    background: "white",
-    paddingBottom: 10,
-    zIndex: 1,
-    borderBottom: "1px solid #f1f5f9",
-  },
-
-  drawerTitle: { fontWeight: 950, fontSize: 13 },
-
-  ghostBtn: {
-    border: "1px solid #e5e7eb",
-    background: "white",
-    borderRadius: 10,
-    padding: "6px 10px",
-    cursor: "pointer",
-    fontWeight: 800,
-  },
-
-  thumb: {
-    width: 22,
-    height: 22,
-    borderRadius: 7,
-    background: "#f3f4f6",
-    overflow: "hidden",
-    border: "1px solid #e5e7eb",
-    display: "grid",
-    placeItems: "center",
-    flexShrink: 0,
-  },
-
-  hero: {
-    width: "100%",
-    aspectRatio: "1 / 1",
-    borderRadius: 16,
-    border: "1px solid #e5e7eb",
-    background: "#f8fafc",
-    overflow: "hidden",
-    display: "grid",
-    placeItems: "center",
-  },
-
-  detailCard: { border: "1px solid #e5e7eb", borderRadius: 16, padding: 14, background: "white" },
-
-  label: { fontSize: 12, color: "#6b7280", fontWeight: 900 },
-  valueLg: { fontSize: 13, fontWeight: 950, marginBottom: 8 },
-  value: { fontSize: 12, color: "#111827" },
-
-  editWrap: { border: "1px solid #e5e7eb", borderRadius: 16, padding: 12, background: "white" },
-};

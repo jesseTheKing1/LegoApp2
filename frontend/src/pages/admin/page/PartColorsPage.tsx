@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import api from "../../../api/client";
 import { ENDPOINTS } from "../../../api/endpoints";
 import { PartColorForm, Part, Color, PartColorRow } from "../form/PartColorForm";
+import "../admin-ui.css";
 
 /** ---------------- helpers ---------------- */
 
@@ -27,12 +28,7 @@ function safeHex(hex?: string | null) {
   return h.startsWith("#") ? h : `#${h}`;
 }
 
-/** merge style objects safely */
-function sx(...styles: Array<React.CSSProperties | false | null | undefined>) {
-  return Object.assign({}, ...styles.filter(Boolean));
-}
-
-/** ---------------- UI bits ---------------- */
+/** ---------------- Drawer shell ---------------- */
 
 function DrawerShell({
   open,
@@ -48,17 +44,18 @@ function DrawerShell({
   width?: number;
 }) {
   if (!open) return null;
+
   return (
     <div
-      style={S.overlay}
+      className="adminOverlay"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div style={sx(S.drawer, { width: `min(${width}px, 100%)` })}>
-        <div style={S.drawerHeader}>
-          <div style={S.drawerTitle}>{title}</div>
-          <button onClick={onClose} style={S.ghostBtn} type="button">
+      <div className="adminDrawer" style={{ width: `min(${width}px, 100%)` }}>
+        <div className="adminDrawerHeader">
+          <div className="adminDrawerTitle">{title}</div>
+          <button type="button" className="adminCloseBtn" onClick={onClose}>
             Close
           </button>
         </div>
@@ -68,9 +65,11 @@ function DrawerShell({
   );
 }
 
+/** ---------------- thumbs ---------------- */
+
 function RowThumb({ src }: { src?: string | null }) {
   return (
-    <div style={S.thumb}>
+    <div className="adminThumb">
       {src ? (
         <img
           src={src}
@@ -81,7 +80,7 @@ function RowThumb({ src }: { src?: string | null }) {
           }}
         />
       ) : (
-        <span style={{ fontSize: 10, color: "#9ca3af" }}>—</span>
+        <span style={{ fontSize: 10, color: "#9ca3af", fontWeight: 900 }}>—</span>
       )}
     </div>
   );
@@ -89,7 +88,7 @@ function RowThumb({ src }: { src?: string | null }) {
 
 function MiniThumb({ src }: { src?: string | null }) {
   return (
-    <div style={S.miniThumb}>
+    <div className="adminMiniThumb">
       {src ? (
         <img
           src={src}
@@ -100,50 +99,13 @@ function MiniThumb({ src }: { src?: string | null }) {
           }}
         />
       ) : (
-        <span style={{ fontSize: 9, color: "#cbd5e1" }}>•</span>
+        <span style={{ fontSize: 9, color: "#cbd5e1", fontWeight: 900 }}>•</span>
       )}
     </div>
   );
 }
 
-function PillButton({
-  children,
-  onClick,
-  tone = "white",
-  disabled,
-  type = "button",
-}: {
-  children: React.ReactNode;
-  onClick?: () => void;
-  tone?: "white" | "dark" | "danger";
-  disabled?: boolean;
-  type?: "button" | "submit";
-}) {
-  const base: React.CSSProperties = {
-    borderRadius: 10,
-    padding: "8px 10px",
-    fontWeight: 850,
-    cursor: disabled ? "not-allowed" : "pointer",
-    opacity: disabled ? 0.5 : 1,
-    border: "1px solid #e5e7eb",
-    background: "white",
-    color: "#111827",
-  };
-
-  const styles: Record<string, React.CSSProperties> = {
-    white: base,
-    dark: { ...base, background: "#111827", color: "white", border: "1px solid #111827" },
-    danger: { ...base, background: "#fee2e2", color: "#991b1b", border: "1px solid #fecaca" },
-  };
-
-  return (
-    <button type={type} onClick={disabled ? undefined : onClick} style={styles[tone]} disabled={disabled}>
-      {children}
-    </button>
-  );
-}
-
-/** ---------------- Detail Drawer ---------------- */
+/** ---------------- Detail drawer ---------------- */
 
 function PartColorDetailDrawer({
   open,
@@ -228,13 +190,13 @@ function PartColorDetailDrawer({
       width={900}
     >
       {!selected ? (
-        <div style={{ padding: 12, color: "#6b7280", fontSize: 12 }}>No selection.</div>
+        <div className="adminEmpty">No selection.</div>
       ) : (
-        <div style={{ display: "grid", gap: 12 }}>
-          {err ? <div style={S.errBox}>{err}</div> : null}
+        <div className="adminStack">
+          {err ? <div className="adminErr">{err}</div> : null}
 
-          <div style={S.detailGrid}>
-            <div style={S.hero}>
+          <div className="adminDetailGrid">
+            <div className="adminHero">
               {heroSrc ? (
                 <img
                   src={heroSrc}
@@ -245,51 +207,46 @@ function PartColorDetailDrawer({
                   }}
                 />
               ) : (
-                <div style={{ fontSize: 12, color: "#94a3b8", fontWeight: 800 }}>No image</div>
+                <div style={{ fontSize: 12, color: "#94a3b8", fontWeight: 900 }}>No image</div>
               )}
             </div>
 
-            <div style={S.detailCard}>
+            <div className="adminFormCard">
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <RowThumb src={selected.thumb_url || selected.image_url_1 || selected.image_url_2 || null} />
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 14, fontWeight: 950, color: "#111827" }}>
+                  <div style={{ fontSize: 14, fontWeight: 950, color: "var(--text)" }}>
                     {selected.color?.name ?? "—"}
                     {selected.variant ? (
-                      <span style={{ color: "#6b7280", fontWeight: 900 }}> • {selected.variant}</span>
+                      <span className="adminPcNameMuted"> • {selected.variant}</span>
                     ) : null}
                   </div>
-                  <div style={{ fontSize: 12, color: "#6b7280" }}>
-                    <span style={{ fontWeight: 900, color: "#111827" }}>{selected.part?.part_id}</span> —{" "}
-                    {selected.part?.name}
+
+                  <div style={{ fontSize: 12, color: "var(--muted2)", fontWeight: 900 }}>
+                    <span style={{ color: "var(--text)" }}>
+                      {selected.part?.part_id ?? "—"}
+                    </span>{" "}
+                    — {selected.part?.name ?? "—"}
                   </div>
                 </div>
               </div>
 
-              <div style={S.idBox}>
-                <div style={S.idLabel}>Your PartColor ID</div>
-                <div style={S.idValue}>{selected.part_color_code ?? "—"}</div>
+              <div style={{ border: "1px solid rgba(15,23,42,.06)", borderRadius: 12, padding: 10, background: "#fafafa" }}>
+                <div style={{ fontSize: 11, color: "var(--muted2)", fontWeight: 950 }}>Your PartColor ID</div>
+                <div style={{ fontSize: 13, fontWeight: 950, color: "var(--text)" }}>
+                  {selected.part_color_code ?? "—"}
+                </div>
               </div>
 
-              {(selected.image_url_1 || selected.image_url_2) ? (
+              {selected.image_url_1 || selected.image_url_2 ? (
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                   {selected.image_url_1 ? (
-                    <a
-                      href={selected.image_url_1}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={S.link}
-                    >
+                    <a href={selected.image_url_1} target="_blank" rel="noreferrer" style={{ fontSize: 12, fontWeight: 950, color: "#2563eb", textDecoration: "none" }}>
                       Open image 1
                     </a>
                   ) : null}
                   {selected.image_url_2 ? (
-                    <a
-                      href={selected.image_url_2}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={S.link}
-                    >
+                    <a href={selected.image_url_2} target="_blank" rel="noreferrer" style={{ fontSize: 12, fontWeight: 950, color: "#2563eb", textDecoration: "none" }}>
                       Open image 2
                     </a>
                   ) : null}
@@ -297,13 +254,32 @@ function PartColorDetailDrawer({
               ) : null}
 
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                <PillButton onClick={onToggleEdit} disabled={saving} tone="dark">
+                <button
+                  type="button"
+                  className="adminBtn adminBtnPrimary"
+                  onClick={onToggleEdit}
+                  disabled={saving}
+                  style={{ opacity: saving ? 0.6 : 1 }}
+                >
                   {editing ? "Stop editing" : "Edit"}
-                </PillButton>
-                <PillButton onClick={onDelete} disabled={saving} tone="danger">
+                </button>
+
+                <button
+                  type="button"
+                  className="adminBtn"
+                  onClick={onDelete}
+                  disabled={saving}
+                  style={{
+                    opacity: saving ? 0.6 : 1,
+                    borderColor: "#fecaca",
+                    background: "#fee2e2",
+                    color: "#991b1b",
+                  }}
+                >
                   Delete
-                </PillButton>
-                <div style={{ fontSize: 12, color: "#6b7280", alignSelf: "center" }}>
+                </button>
+
+                <div className="adminCountText" style={{ alignSelf: "center" }}>
                   {siblings.length} variants for this shape
                 </div>
               </div>
@@ -311,8 +287,8 @@ function PartColorDetailDrawer({
           </div>
 
           {swatches.length > 0 ? (
-            <div style={S.switchCard}>
-              <div style={S.switchLabel}>Switch color</div>
+            <div className="adminSwitchCard">
+              <div className="adminSwitchLabel">Switch color</div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 {swatches.map((s) => {
                   const active = selected.color?.id === s.colorId;
@@ -320,8 +296,8 @@ function PartColorDetailDrawer({
                     <button
                       key={s.colorId}
                       type="button"
+                      className={active ? "adminSwatchBtn adminSwatchBtnActive" : "adminSwatchBtn"}
                       onClick={() => onSelect(s.row)}
-                      style={sx(S.swatchBtn, active && S.swatchBtnActive)}
                     >
                       <span
                         style={{
@@ -334,7 +310,7 @@ function PartColorDetailDrawer({
                       />
                       <span style={{ whiteSpace: "nowrap" }}>{s.name}</span>
                       {s.count > 1 ? (
-                        <span style={{ fontSize: 11, opacity: 0.8, marginLeft: 2 }}>
+                        <span style={{ fontSize: 11, opacity: 0.85, marginLeft: 2 }}>
                           +{s.count - 1}
                         </span>
                       ) : null}
@@ -346,8 +322,10 @@ function PartColorDetailDrawer({
           ) : null}
 
           {editing ? (
-            <div style={S.editWrap}>
-              <div style={{ fontSize: 12, fontWeight: 950, marginBottom: 10 }}>Edit this PartColor</div>
+            <div className="adminFormCard">
+              <div className="adminLabel" style={{ marginBottom: 10 }}>
+                Edit this PartColor
+              </div>
               <PartColorForm
                 parts={parts}
                 colors={colors}
@@ -520,31 +498,40 @@ export default function PartColorsPage() {
   }
 
   return (
-    <div style={{ display: "grid", gap: 10 }}>
+    <div className="adminPage">
       {/* top bar */}
-      <div style={S.topbar}>
+      <div className="adminToolbar">
         <input
+          className="adminInput adminSearch"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search shape, color, variant, or your ID..."
-          style={S.search}
+          autoComplete="off"
         />
-        <PillButton onClick={() => setCreateOpen(true)} tone="dark">
+
+        <button type="button" className="adminBtn adminBtnPrimary" onClick={() => setCreateOpen(true)}>
           + New PartColor
-        </PillButton>
-        <PillButton onClick={expandAll}>Expand all</PillButton>
-        <PillButton onClick={collapseAll}>Collapse all</PillButton>
-        <div style={{ fontSize: 12, color: "#6b7280" }}>
+        </button>
+
+        <button type="button" className="adminBtn" onClick={expandAll}>
+          Expand all
+        </button>
+
+        <button type="button" className="adminBtn" onClick={collapseAll}>
+          Collapse all
+        </button>
+
+        <div className="adminCountText">
           {grouped.length} shapes • {items.length} rows
         </div>
       </div>
 
-      {err ? <div style={S.errBox}>{err}</div> : null}
+      {err ? <div className="adminErr">{err}</div> : null}
 
       {/* grouped list */}
-      <div style={S.listCard}>
+      <div className="adminListCard">
         {grouped.length === 0 ? (
-          <div style={{ padding: 12, color: "#6b7280", fontSize: 12 }}>No results.</div>
+          <div className="adminEmpty">No results.</div>
         ) : (
           grouped.map((g, idx) => {
             const isOpen = !!expanded[g.part.id];
@@ -556,49 +543,64 @@ export default function PartColorsPage() {
             const showPlaceholders = Math.max(0, 4 - thumbs.length);
 
             return (
-              <div key={g.part.id} style={{ borderTop: idx === 0 ? "none" : "1px solid #f1f5f9" }}>
-                <button onClick={() => toggle(g.part.id)} style={S.groupBtn} type="button">
-                  <div style={S.chev}>{isOpen ? "▾" : "▸"}</div>
+              <div key={g.part.id} className={idx === 0 ? "" : "adminRowTopBorder"}>
+                <button type="button" className="adminGroupBtn" onClick={() => toggle(g.part.id)}>
+                  <div className="adminChev">{isOpen ? "▾" : "▸"}</div>
 
                   <div style={{ minWidth: 0 }}>
-                    <div style={S.groupTitle}>
+                    <div className="adminGroupTitle" title={`${g.part.part_id} — ${g.part.name}`}>
                       {g.part.part_id} — {g.part.name}{" "}
-                      <span style={{ fontSize: 12, color: "#9ca3af" }}>({g.rows.length})</span>
+                      <span className="adminGroupCount">({g.rows.length})</span>
                     </div>
 
-                    <div style={S.previewRow}>
+                    <div className="adminPreviewRow">
                       {thumbs.map((t, i) => (
                         <MiniThumb key={`${g.part.id}-t-${i}`} src={t} />
                       ))}
                       {Array.from({ length: showPlaceholders }).map((_, i) => (
                         <MiniThumb key={`${g.part.id}-p-${i}`} src={null} />
                       ))}
-                      <div style={S.previewLabel}>{thumbs.length > 0 ? "preview" : "no images yet"}</div>
+                      <div className="adminPreviewLabel">{thumbs.length > 0 ? "preview" : "no images yet"}</div>
                     </div>
                   </div>
 
-                  <div style={S.showHide}>{isOpen ? "hide" : "show"}</div>
+                  <div className="adminShowHide">{isOpen ? "hide" : "show"}</div>
                 </button>
 
                 {isOpen ? (
-                  <div style={S.groupBody}>
-                    {g.rows.map((pc, pcIdx) => (
-                      <button
-                        key={pc.id}
-                        onClick={() => openDetail(pc)}
-                        type="button"
-                        style={sx(S.pcRowBtn, pcIdx !== 0 && S.pcRowTopBorder)}
-                      >
-                        <RowThumb src={pc.thumb_url || pc.image_url_1 || pc.image_url_2 || null} />
-                        <div style={S.pcId}>
-                          {pc.part_color_code ? `ID: ${pc.part_color_code}` : "ID: —"}
-                        </div>
-                        <div style={S.pcName}>
-                          {pc.color?.name ?? "—"}
-                          {pc.variant ? <span style={{ color: "#6b7280" }}> • {pc.variant}</span> : null}
-                        </div>
-                      </button>
-                    ))}
+                  <div className="adminGroupBody">
+                    {g.rows.map((pc, pcIdx) => {
+                      const img = pc.thumb_url || pc.image_url_1 || pc.image_url_2 || null;
+                      const idText = pc.part_color_code ? `ID: ${pc.part_color_code}` : "ID: —";
+                      const nameText = pc.color?.name ?? "—";
+                      const variantText = pc.variant ? `• ${pc.variant}` : "";
+
+                      return (
+                        <button
+                          key={pc.id}
+                          type="button"
+                          className={`adminPcRowBtn ${pcIdx === 0 ? "" : "adminPcRowTopBorder"}`}
+                          onClick={() => openDetail(pc)}
+                        >
+                          <RowThumb src={img} />
+
+                          <div className="adminPcId" title={idText}>
+                            {idText}
+                          </div>
+
+                          <div style={{ minWidth: 0 }}>
+                            <div className="adminPcName" title={`${nameText} ${variantText}`}>
+                              {nameText} {pc.variant ? <span className="adminPcNameMuted">• {pc.variant}</span> : null}
+                            </div>
+
+                            {/* Mobile subline */}
+                            <div className="adminPcSubline">
+                              <span>{idText}</span>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 ) : null}
               </div>
@@ -640,211 +642,3 @@ export default function PartColorsPage() {
     </div>
   );
 }
-
-/** ---------------- styles ---------------- */
-
-const S: Record<string, React.CSSProperties> = {
-  topbar: { display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" },
-
-  search: {
-    width: "min(520px, 100%)",
-    border: "1px solid #e5e7eb",
-    borderRadius: 10,
-    padding: "8px 10px",
-  },
-
-  errBox: {
-    color: "crimson",
-    border: "1px solid rgba(220,38,38,.25)",
-    background: "rgba(220,38,38,.06)",
-    borderRadius: 10,
-    padding: "8px 10px",
-    fontSize: 12,
-  },
-
-  listCard: {
-    border: "1px solid #e5e7eb",
-    borderRadius: 12,
-    overflow: "hidden",
-    background: "white",
-  },
-
-  groupBtn: {
-    width: "100%",
-    textAlign: "left",
-    border: "none",
-    background: "white",
-    cursor: "pointer",
-    padding: "8px 10px",
-    display: "grid",
-    gridTemplateColumns: "18px 1fr auto",
-    gap: 8,
-    alignItems: "center",
-  },
-
-  chev: { fontSize: 12, color: "#6b7280", width: 18, textAlign: "center" },
-
-  groupTitle: {
-    fontWeight: 950,
-    fontSize: 13,
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-  },
-
-  previewRow: { display: "flex", gap: 6, marginTop: 6, alignItems: "center" },
-  previewLabel: { fontSize: 11, color: "#9ca3af" },
-
-  showHide: { fontSize: 12, color: "#9ca3af", whiteSpace: "nowrap" },
-
-  groupBody: { background: "#fafafa", borderTop: "1px solid #f1f5f9" },
-
-  pcRowBtn: {
-    width: "100%",
-    textAlign: "left",
-    border: "none",
-    background: "transparent",
-    cursor: "pointer",
-    padding: "6px 10px",
-    display: "grid",
-    gridTemplateColumns: "22px 200px 1fr",
-    gap: 8,
-    alignItems: "center",
-  },
-  pcRowTopBorder: { borderTop: "1px solid #edf2f7" },
-
-  pcId: {
-    fontWeight: 850,
-    fontSize: 12,
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-  },
-
-  pcName: {
-    fontSize: 12,
-    color: "#111827",
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    minWidth: 0,
-  },
-
-  overlay: {
-    position: "fixed",
-    inset: 0,
-    background: "rgba(0,0,0,.35)",
-    display: "grid",
-    justifyItems: "end",
-    zIndex: 50,
-  },
-
-  drawer: {
-    height: "100%",
-    background: "white",
-    padding: 14,
-    overflow: "auto",
-  },
-
-  drawerHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "center",
-    marginBottom: 10,
-    position: "sticky",
-    top: 0,
-    background: "white",
-    paddingBottom: 10,
-    zIndex: 1,
-    borderBottom: "1px solid #f1f5f9",
-  },
-
-  drawerTitle: { fontWeight: 950, fontSize: 13 },
-
-  ghostBtn: {
-    border: "1px solid #e5e7eb",
-    background: "white",
-    borderRadius: 10,
-    padding: "6px 10px",
-    cursor: "pointer",
-    fontWeight: 800,
-  },
-
-  thumb: {
-    width: 22,
-    height: 22,
-    borderRadius: 7,
-    background: "#f3f4f6",
-    overflow: "hidden",
-    border: "1px solid #e5e7eb",
-    display: "grid",
-    placeItems: "center",
-    flexShrink: 0,
-  },
-
-  miniThumb: {
-    width: 18,
-    height: 18,
-    borderRadius: 6,
-    background: "#f3f4f6",
-    overflow: "hidden",
-    border: "1px solid #e5e7eb",
-    display: "grid",
-    placeItems: "center",
-    flexShrink: 0,
-  },
-
-  detailGrid: { display: "grid", gap: 12, gridTemplateColumns: "minmax(240px, 360px) 1fr" },
-
-  hero: {
-    width: "100%",
-    aspectRatio: "1 / 1",
-    borderRadius: 16,
-    border: "1px solid #e5e7eb",
-    background: "#f8fafc",
-    overflow: "hidden",
-    display: "grid",
-    placeItems: "center",
-  },
-
-  detailCard: {
-    border: "1px solid #e5e7eb",
-    borderRadius: 16,
-    padding: 14,
-    background: "white",
-    display: "grid",
-    gap: 12,
-  },
-
-  idBox: { border: "1px solid #f1f5f9", borderRadius: 12, padding: 10, background: "#fafafa" },
-  idLabel: { fontSize: 11, color: "#6b7280", fontWeight: 900 },
-  idValue: { fontSize: 13, fontWeight: 950, color: "#111827" },
-
-  link: { fontSize: 12, color: "#2563eb", fontWeight: 900, textDecoration: "none" },
-
-  switchCard: { border: "1px solid #e5e7eb", borderRadius: 16, padding: 10, background: "white" },
-  switchLabel: { fontSize: 11, color: "#6b7280", fontWeight: 950, marginBottom: 8 },
-
-  swatchBtn: {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    border: "1px solid #e5e7eb",
-    background: "white",
-    color: "#111827",
-    borderRadius: 999,
-    padding: "6px 10px",
-    cursor: "pointer",
-    fontWeight: 850,
-    fontSize: 12,
-  },
-
-  swatchBtnActive: {
-    border: "1px solid #111827",
-    background: "#111827",
-    color: "white",
-  },
-
-  editWrap: { border: "1px solid #e5e7eb", borderRadius: 16, padding: 12, background: "white" },
-};

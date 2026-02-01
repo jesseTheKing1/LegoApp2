@@ -1,5 +1,6 @@
 import React, { useMemo, useRef, useState } from "react";
 import { uploadImageToR2 } from "../../../lib/r2Uploads";
+import "../admin-ui.css"; // or import once globally in AdminLayout
 
 export type Color = {
   id: number;
@@ -35,10 +36,6 @@ function safeHex(hex?: string | null) {
   const h = String(hex).trim();
   if (!h) return null;
   return h.startsWith("#") ? h : `#${h}`;
-}
-
-function cx(...c: Array<string | false | null | undefined>) {
-  return c.filter(Boolean).join(" ");
 }
 
 function formatErr(e: any) {
@@ -125,14 +122,9 @@ export function PartColorForm({
   }
 
   function validateFile(file: File) {
-    if (!file.type?.startsWith("image/")) {
-      return "Please choose an image file.";
-    }
-    // Optional size cap (10 MB)
+    if (!file.type?.startsWith("image/")) return "Please choose an image file.";
     const maxBytes = 10 * 1024 * 1024;
-    if (file.size > maxBytes) {
-      return "Image is too large (max 10 MB).";
-    }
+    if (file.size > maxBytes) return "Image is too large (max 10 MB).";
     return null;
   }
 
@@ -185,15 +177,15 @@ export function PartColorForm({
   }
 
   return (
-    <form onSubmit={submit} style={S.form}>
+    <form onSubmit={submit} className="adminForm">
       {/* selectors */}
-      <div style={S.grid2}>
-        <label style={S.field}>
-          <div style={S.label}>Part</div>
+      <div className="adminGrid2">
+        <label className="adminField">
+          <div className="adminLabel">Part</div>
           <select
+            className="adminSelect"
             value={partId}
             onChange={(e) => setPartId(e.target.value ? Number(e.target.value) : "")}
-            style={S.input}
           >
             <option value="">Select part…</option>
             {parts.map((p) => (
@@ -204,12 +196,12 @@ export function PartColorForm({
           </select>
         </label>
 
-        <label style={S.field}>
-          <div style={S.label}>Color</div>
+        <label className="adminField">
+          <div className="adminLabel">Color</div>
           <select
+            className="adminSelect"
             value={colorId}
             onChange={(e) => setColorId(e.target.value ? Number(e.target.value) : "")}
-            style={S.input}
           >
             <option value="">Select color…</option>
             {colors.map((c) => (
@@ -222,49 +214,52 @@ export function PartColorForm({
       </div>
 
       {/* summary */}
-      <div style={S.summaryRow}>
-        <div style={{ ...S.swatch, background: swatchHex }} />
-        <div style={S.summaryText}>
-          <div style={S.summaryStrong}>
+      <div className="adminSummaryRow">
+        <div className="adminSwatchMini" style={{ background: swatchHex }} />
+        <div className="adminSummaryText">
+          <div className="adminSummaryStrong">
             {part ? `${part.part_id} — ${part.name}` : "No part selected"}
           </div>
-          <div style={S.summaryMuted}>{color ? color.name : "No color selected"}</div>
+          <div className="adminSummaryMuted">{color ? color.name : "No color selected"}</div>
         </div>
       </div>
 
       {/* text fields */}
-      <label style={S.field}>
-        <div style={S.label}>Your PartColor ID</div>
+      <label className="adminField">
+        <div className="adminLabel">Your PartColor ID</div>
         <input
+          className="adminInput"
           value={code}
           onChange={(e) => setCode(e.target.value)}
-          style={S.input}
           placeholder="3001-black-plain"
+          autoComplete="off"
         />
       </label>
 
-      <label style={S.field}>
-        <div style={S.label}>Variant</div>
+      <label className="adminField">
+        <div className="adminLabel">Variant</div>
         <input
+          className="adminInput"
           value={variant}
           onChange={(e) => setVariant(e.target.value)}
-          style={S.input}
           placeholder="printed / pearl / etc."
+          autoComplete="off"
         />
       </label>
 
-      <label style={S.field}>
-        <div style={S.label}>Description</div>
+      <label className="adminField">
+        <div className="adminLabel">Description</div>
         <input
+          className="adminInput"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          style={S.input}
           placeholder="optional notes"
+          autoComplete="off"
         />
       </label>
 
       {/* images */}
-      <div style={S.grid2}>
+      <div className="adminGrid2">
         <ImageField
           title="Image URL 1"
           url={img1}
@@ -309,8 +304,9 @@ export function PartColorForm({
       {/* save */}
       <button
         type="submit"
+        className="adminBtn adminBtnPrimary adminBtnFullOnMobile"
         disabled={!canSave}
-        style={{ ...S.primaryBtn, opacity: canSave ? 1 : 0.5 }}
+        style={{ opacity: canSave ? 1 : 0.55 }}
       >
         {submitting ? "Saving…" : "Save"}
       </button>
@@ -338,154 +334,53 @@ function ImageField({
   onClear: () => void;
 }) {
   return (
-    <div style={{ display: "grid", gap: 8 }}>
-      <div style={S.label}>{title}</div>
+    <div className="adminImageField">
+      <div className="adminLabel">{title}</div>
 
-      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+      <div className="adminRowInline">
         <input
+          className="adminInput"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
-          style={{ ...S.input, flex: 1 }}
           placeholder="https://..."
+          autoComplete="off"
         />
 
         <button
           type="button"
+          className="adminBtn adminBtnSoft"
           onClick={onPickClick}
           disabled={uploading}
-          style={cxBtn(S.smallBtn, uploading && S.disabledBtn)}
+          style={{ opacity: uploading ? 0.6 : 1 }}
         >
           {uploading ? "Uploading…" : "Upload"}
         </button>
 
         <button
           type="button"
+          className="adminBtn"
           onClick={onClear}
           disabled={!url || uploading}
-          style={cxBtn(S.smallBtn, (!url || uploading) && S.disabledBtn)}
+          style={{ opacity: !url || uploading ? 0.6 : 1 }}
         >
           Clear
         </button>
       </div>
 
-      {error ? <div style={S.err}>{error}</div> : null}
+      {error ? <div className="adminErr">{error}</div> : null}
 
       {url ? (
-        <div style={S.thumbBox}>
-          {/* If the URL is bad, show a broken image icon; user sees it immediately */}
+        <div className="adminThumbBox">
           <img
             src={url}
             alt=""
             style={{ width: "100%", height: "100%", objectFit: "contain" }}
-            onError={(e) => {
-              // keep it simple; the broken preview is already the signal
-              console.warn("Image preview failed to load:", url);
-            }}
+            onError={() => console.warn("Image preview failed to load:", url)}
           />
         </div>
       ) : (
-        <div style={S.thumbEmpty}>No image</div>
+        <div className="adminThumbEmpty">No image</div>
       )}
     </div>
   );
 }
-
-function cxBtn(...c: Array<React.CSSProperties | false | null | undefined>) {
-  return Object.assign({}, ...c.filter(Boolean));
-}
-
-/** ---------- styles ---------- */
-
-const S: Record<string, React.CSSProperties> = {
-  form: { display: "grid", gap: 12 },
-
-  grid2: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 },
-
-  field: { display: "grid", gap: 6 },
-
-  label: { fontSize: 12, fontWeight: 900, color: "#0f172a" },
-
-  input: {
-    border: "1px solid #e5e7eb",
-    borderRadius: 12,
-    padding: "10px 12px",
-    fontSize: 14,
-    outline: "none",
-  },
-
-  summaryRow: {
-    display: "flex",
-    gap: 10,
-    alignItems: "center",
-    flexWrap: "wrap",
-    padding: "10px 12px",
-    border: "1px solid #e5e7eb",
-    borderRadius: 14,
-    background: "#fff",
-  },
-
-  swatch: {
-    width: 18,
-    height: 18,
-    borderRadius: 6,
-    border: "1px solid rgba(0,0,0,.12)",
-  },
-
-  summaryText: { display: "grid", gap: 2 },
-
-  summaryStrong: { fontSize: 12, color: "#0f172a", fontWeight: 950 },
-  summaryMuted: { fontSize: 12, color: "#64748b", fontWeight: 800 },
-
-  primaryBtn: {
-    border: "1px solid #0f172a",
-    background: "#0f172a",
-    color: "white",
-    borderRadius: 14,
-    padding: "12px 14px",
-    fontWeight: 950,
-    cursor: "pointer",
-  },
-
-  smallBtn: {
-    border: "1px solid #e5e7eb",
-    background: "white",
-    borderRadius: 12,
-    padding: "10px 12px",
-    fontWeight: 900,
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-  },
-
-  disabledBtn: {
-    opacity: 0.6,
-    cursor: "not-allowed",
-  },
-
-  err: {
-    color: "#b91c1c",
-    fontSize: 12,
-    fontWeight: 900,
-  },
-
-  thumbBox: {
-    width: "100%",
-    aspectRatio: "1 / 1",
-    borderRadius: 14,
-    border: "1px solid #e5e7eb",
-    background: "#f8fafc",
-    overflow: "hidden",
-  },
-
-  thumbEmpty: {
-    width: "100%",
-    aspectRatio: "1 / 1",
-    borderRadius: 14,
-    border: "1px dashed #cbd5e1",
-    background: "#f8fafc",
-    display: "grid",
-    placeItems: "center",
-    color: "#64748b",
-    fontSize: 12,
-    fontWeight: 900,
-  },
-};

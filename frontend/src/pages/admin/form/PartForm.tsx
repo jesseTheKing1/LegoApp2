@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { uploadImageToR2 } from "../../../lib/r2Uploads";
+import "../admin-ui.css"; // ideally import once in AdminLayout instead
 
 export type Part = {
   id: number;
@@ -11,6 +12,22 @@ export type Part = {
   image_url?: string;
 };
 
+function formatErr(e: any) {
+  return (
+    e?.message ||
+    e?.response?.data?.detail ||
+    (typeof e?.response?.data === "string" ? e.response.data : null) ||
+    "Upload failed"
+  );
+}
+
+function validateFile(file: File) {
+  if (!file.type?.startsWith("image/")) return "Please choose an image file.";
+  const maxBytes = 10 * 1024 * 1024;
+  if (file.size > maxBytes) return "Image is too large (max 10 MB).";
+  return null;
+}
+
 export function PartForm({
   initialValues,
   submitting,
@@ -18,7 +35,14 @@ export function PartForm({
 }: {
   initialValues?: Partial<Part>;
   submitting?: boolean;
-  onSubmit: (payload: any) => Promise<void> | void;
+  onSubmit: (payload: {
+    part_id: string;
+    name: string;
+    general_category: string;
+    specific_category: string;
+    actual_category: string;
+    image_url?: string;
+  }) => Promise<void> | void;
 }) {
   const [partId, setPartId] = useState(initialValues?.part_id ?? "");
   const [name, setName] = useState(initialValues?.name ?? "");
@@ -33,16 +57,25 @@ export function PartForm({
     return !!partId.trim() && !!name.trim() && !!actual.trim() && !submitting && !uploading;
   }, [partId, name, actual, submitting, uploading]);
 
-  async function onPickFile(file: File) {
+  async function onPickFile(file: File, clearInput: () => void) {
     setErr(null);
+
+    const vErr = validateFile(file);
+    if (vErr) {
+      setErr(vErr);
+      clearInput();
+      return;
+    }
+
     setUploading(true);
     try {
       const res = await uploadImageToR2(file);
       setImageUrl(res.public_url);
     } catch (e: any) {
-      setErr(e?.message ?? "Upload failed");
+      setErr(formatErr(e));
     } finally {
       setUploading(false);
+      clearInput();
     }
   }
 
@@ -56,59 +89,89 @@ export function PartForm({
       general_category: general.trim(),
       specific_category: specific.trim(),
       actual_category: actual.trim(),
-      image_url: imageUrl.trim(),
+      image_url: imageUrl.trim() || undefined,
     };
 
     await onSubmit(payload);
   }
 
   return (
-    <form onSubmit={submit} style={{ display: "grid", gap: 10 }}>
-      {err ? (
-        <div style={{ color: "crimson", fontSize: 12, fontWeight: 800 }}>{err}</div>
-      ) : null}
+    <form onSubmit={submit} className="adminForm">
+      {err ? <div className="adminErr">{err}</div> : null}
 
-      <label style={{ display: "grid", gap: 6 }}>
-        <div style={{ fontSize: 12, fontWeight: 900 }}>Part ID</div>
+      <label className="adminField">
+        <div className="adminLabel">Part ID</div>
         <input
+          className="adminInput"
           value={partId}
           onChange={(e) => setPartId(e.target.value)}
           placeholder="3001"
-          style={I.input}
+          autoComplete="off"
         />
       </label>
 
-      <label style={{ display: "grid", gap: 6 }}>
-        <div style={{ fontSize: 12, fontWeight: 900 }}>Name</div>
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Brick 2 x 4" style={I.input} />
+      <label className="adminField">
+        <div className="adminLabel">Name</div>
+        <input
+          className="adminInput"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Brick 2 x 4"
+          autoComplete="off"
+        />
       </label>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        <label style={{ display: "grid", gap: 6 }}>
-          <div style={{ fontSize: 12, fontWeight: 900 }}>General category</div>
-          <input value={general} onChange={(e) => setGeneral(e.target.value)} style={I.input} />
+      <div className="adminGrid2">
+        <label className="adminField">
+          <div className="adminLabel">General category</div>
+          <input
+            className="adminInput"
+            value={general}
+            onChange={(e) => setGeneral(e.target.value)}
+            placeholder="e.g. Bricks"
+            autoComplete="off"
+          />
         </label>
-        <label style={{ display: "grid", gap: 6 }}>
-          <div style={{ fontSize: 12, fontWeight: 900 }}>Specific category</div>
-          <input value={specific} onChange={(e) => setSpecific(e.target.value)} style={I.input} />
+
+        <label className="adminField">
+          <div className="adminLabel">Specific category</div>
+          <input
+            className="adminInput"
+            value={specific}
+            onChange={(e) => setSpecific(e.target.value)}
+            placeholder="e.g. Rectangular"
+            autoComplete="off"
+          />
         </label>
       </div>
 
-      <label style={{ display: "grid", gap: 6 }}>
-        <div style={{ fontSize: 12, fontWeight: 900 }}>Actual category (shape family)</div>
-        <input value={actual} onChange={(e) => setActual(e.target.value)} placeholder="brick" style={I.input} />
+      <label className="adminField">
+        <div className="adminLabel">Actual category (shape family)</div>
+        <input
+          className="adminInput"
+          value={actual}
+          onChange={(e) => setActual(e.target.value)}
+          placeholder="brick"
+          autoComplete="off"
+        />
       </label>
 
-      <div style={{ display: "grid", gap: 8 }}>
-        <div style={{ fontSize: 12, fontWeight: 900 }}>Image</div>
-        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+      <div className="adminImageField">
+        <div className="adminLabel">Image</div>
+
+        <div className="adminRowInline">
           <input
+            className="adminInput"
             value={imageUrl}
             onChange={(e) => setImageUrl(e.target.value)}
             placeholder="https://..."
-            style={{ ...I.input, flex: 1, minWidth: 240 }}
+            autoComplete="off"
           />
-          <label style={I.button}>
+
+          <label
+            className="adminBtn adminBtnSoft"
+            style={{ opacity: uploading ? 0.6 : 1 }}
+          >
             {uploading ? "Uploading…" : "Upload"}
             <input
               type="file"
@@ -116,57 +179,44 @@ export function PartForm({
               hidden
               onChange={(e) => {
                 const f = e.target.files?.[0];
-                if (f) onPickFile(f);
-                e.currentTarget.value = "";
+                const clear = () => {
+                  e.currentTarget.value = "";
+                };
+                if (f) onPickFile(f, clear);
+                else clear();
               }}
             />
           </label>
+
+          {imageUrl ? (
+            <button type="button" className="adminBtn" onClick={() => setImageUrl("")} disabled={uploading}>
+              Clear
+            </button>
+          ) : null}
         </div>
 
         {imageUrl ? (
-          <div style={I.hero}>
-            <img src={imageUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+          <div className="adminHero">
+            <img
+              src={imageUrl}
+              alt=""
+              style={{ width: "100%", height: "100%", objectFit: "contain" }}
+              onError={() => setErr("Image preview failed to load. Check the URL.")}
+            />
           </div>
-        ) : null}
+        ) : (
+          <div className="adminThumbEmpty">No image</div>
+        )}
       </div>
 
-      <button disabled={!canSave} style={{ ...I.primaryBtn, opacity: canSave ? 1 : 0.5 }}>
+      <button
+        type="submit"
+        className="adminBtn adminBtnPrimary adminBtnFullOnMobile"
+        disabled={!canSave}
+        style={{ opacity: canSave ? 1 : 0.55 }}
+      >
         {submitting ? "Saving…" : "Save"}
       </button>
     </form>
   );
 }
-
-const I: Record<string, React.CSSProperties> = {
-  input: {
-    border: "1px solid #e5e7eb",
-    borderRadius: 12,
-    padding: "10px 12px",
-    fontSize: 14,
-  },
-  button: {
-    border: "1px solid #e5e7eb",
-    background: "white",
-    borderRadius: 12,
-    padding: "10px 12px",
-    fontWeight: 900,
-    cursor: "pointer",
-  },
-  primaryBtn: {
-    border: "1px solid #0f172a",
-    background: "#0f172a",
-    color: "white",
-    borderRadius: 14,
-    padding: "12px 14px",
-    fontWeight: 950,
-    cursor: "pointer",
-  },
-  hero: {
-    width: "min(360px, 100%)",
-    aspectRatio: "1 / 1",
-    border: "1px solid #e5e7eb",
-    borderRadius: 16,
-    background: "#f8fafc",
-    overflow: "hidden",
-  },
-};
