@@ -402,97 +402,94 @@ function PartColorDetailDrawer({
             </div>
           </div>
 
-         
-            {swatches.length > 0 ? (
-            <div className={cx(card, "p-4")}>
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div className="text-xs font-black text-slate-600">Choose a color</div>
+         {/* Compact color picker: tiny swatches + hard-truncate text */}
+        {swatches.length > 0 ? (
+        <div className={cx(card, "p-3 sm:p-4")}>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="text-xs font-black text-slate-600">Choose a color</div>
 
-                {/* Show filter when many options */}
-                {swatches.length >= 14 ? (
-                    <input
-                    className={cx(inputBase, "sm:w-[320px]")}
-                    value={colorQ}
-                    onChange={(e) => setColorQ(e.target.value)}
-                    placeholder="Search colors..."
-                    autoComplete="off"
-                    />
-                ) : null}
-                </div>
-
-                {/* Selected label (Amazon-style “Selected: …”) */}
-                <div className="mt-3 flex items-center gap-2 text-sm">
-                <span className="text-slate-500 font-semibold">Selected:</span>
-                <span className="font-extrabold text-slate-900">
-                    {selected.color?.name ?? "—"}
-                    {selected.variant ? (
-                    <span className="text-slate-300 font-semibold"> • {selected.variant}</span>
-                    ) : null}
-                </span>
-                </div>
-
-                {/* Responsive option tiles */}
-                <div className="mt-3 grid gap-2 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-                {swatchesFiltered.map((s) => {
-                    const active = selected.color?.id === s.colorId;
-
-                    return (
-                    <button
-                        key={s.colorId}
-                        type="button"
-                        onClick={() => onSelect(s.row)}
-                        className={cx(
-                        "group w-full rounded-2xl border p-2 text-left transition",
-                        active
-                            ? "border-slate-900 ring-2 ring-slate-900 ring-offset-2 ring-offset-white bg-slate-50"
-                            : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
-                        )}
-                        aria-label={`Select color ${s.name}`}
-                        title={s.name}
-                    >
-                        <div className="flex items-center gap-2">
-                        {/* big swatch */}
-                        <div
-                            className={cx(
-                            "h-10 w-10 rounded-xl border border-black/10 shadow-sm shrink-0",
-                            active ? "outline outline-2 outline-slate-900 outline-offset-2" : ""
-                            )}
-                            style={{ background: s.hex ?? "#e5e7eb" }}
-                        />
-
-                        {/* name + meta */}
-                        <div className="min-w-0 flex-1">
-                            <div className={cx("text-sm font-extrabold truncate", active ? "text-slate-900" : "text-slate-800")}>
-                            {s.name}
-                            </div>
-
-                            {/* optional “variants count” if multiple rows per color */}
-                            <div className="mt-0.5 text-xs text-slate-500 font-semibold truncate">
-                            {s.count > 1 ? `${s.count} options` : " "}
-                            </div>
-                        </div>
-
-                        {/* checkmark */}
-                        {active ? (
-                            <div className="shrink-0 h-6 w-6 rounded-full bg-slate-900 text-white flex items-center justify-center text-xs font-black shadow">
-                            ✓
-                            </div>
-                        ) : (
-                            <div className="shrink-0 h-6 w-6 rounded-full border border-slate-200 bg-white opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-[10px] text-slate-400 font-black">
-                            +
-                            </div>
-                        )}
-                        </div>
-                    </button>
-                    );
-                })}
-                </div>
-
-                {swatchesFiltered.length === 0 ? (
-                <div className="mt-3 text-sm text-slate-600">No matching colors.</div>
-                ) : null}
-            </div>
+            {swatches.length >= 16 ? (
+                <input
+                className={cx(inputBase, "sm:w-[280px]")}
+                value={colorQ}
+                onChange={(e) => setColorQ(e.target.value)}
+                placeholder="Search..."
+                autoComplete="off"
+                />
             ) : null}
+            </div>
+
+            {/* Selected label stays compact */}
+            <div className="mt-2 flex items-center gap-2 text-xs">
+            <span className="text-slate-500 font-semibold">Selected:</span>
+            <span className="font-extrabold text-slate-900 truncate max-w-[70%]">
+                {selected.color?.name ?? "—"}
+                {selected.variant ? <span className="text-slate-400 font-semibold"> • {selected.variant}</span> : null}
+            </span>
+            </div>
+
+            {/* Tighter grid: more columns, smaller gaps */}
+            <div className="mt-3 grid gap-1.5 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8">
+            {swatchesFiltered.map((s) => {
+                const active = selected.color?.id === s.colorId;
+
+                return (
+                <button
+                    key={s.colorId}
+                    type="button"
+                    onClick={() => onSelect(s.row)}
+                    title={s.name}
+                    aria-label={`Select color ${s.name}`}
+                    className={cx(
+                    "w-full rounded-xl border px-2 py-1.5 text-left transition",
+                    "min-h-[44px] flex items-center gap-2", // <- fixed tile height so text can't break layout
+                    active
+                        ? "border-slate-900 ring-2 ring-slate-900 ring-offset-1 ring-offset-white bg-slate-50"
+                        : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                    )}
+                >
+                    {/* Smallest practical swatch, still clickable */}
+                    <span
+                    className={cx(
+                        "h-5 w-5 rounded-md border border-black/10 shrink-0",
+                        active ? "outline outline-2 outline-slate-900 outline-offset-1" : ""
+                    )}
+                    style={{ background: s.hex ?? "#e5e7eb" }}
+                    />
+
+                    {/* Hard truncate so it NEVER spills */}
+                    <span className="min-w-0 flex-1">
+                    <span className={cx("block text-xs font-extrabold truncate", active ? "text-slate-900" : "text-slate-800")}>
+                        {s.name}
+                    </span>
+
+                    {/* optional tiny meta line, only if you want it; remove if you want ultra-minimal */}
+                    {s.count > 1 ? (
+                        <span className="block text-[10px] text-slate-500 font-semibold truncate">
+                        {s.count} opts
+                        </span>
+                    ) : (
+                        <span className="block text-[10px] text-transparent">.</span>
+                    )}
+                    </span>
+
+                    {/* tiny check */}
+                    {active ? (
+                    <span className="h-4 w-4 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-black shrink-0">
+                        ✓
+                    </span>
+                    ) : null}
+                </button>
+                );
+            })}
+            </div>
+
+            {swatchesFiltered.length === 0 ? (
+            <div className="mt-2 text-sm text-slate-600">No matching colors.</div>
+            ) : null}
+        </div>
+        ) : null}
+
 
 
           {/* Edit form */}
