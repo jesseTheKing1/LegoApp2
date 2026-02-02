@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import api from "../../../api/client";
 import { ENDPOINTS } from "../../../api/endpoints";
 import { PartColorForm, Part, Color, PartColorRow } from "../form/PartColorForm";
+import { createPortal } from "react-dom";
 
 /** ---------------- helpers ---------------- */
 
@@ -57,48 +58,70 @@ const btnDanger =
 const card = "rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden";
 
 /** ---------------- Drawer shell ----------------
- * FIX: remove header title entirely so nothing “floats”.
- * Header is only actions; the true title lives inside the content layout.
+ * Fix: eliminate the “box in front of everything” vibe:
+ * - Make the drawer a true right panel with its own layout.
+ * - Keep header compact and aligned left.
  */
 
 function DrawerShell({
   open,
+  title,
   onClose,
   children,
   width = 980,
 }: {
   open: boolean;
+  title: string;
   onClose: () => void;
   children: React.ReactNode;
   width?: number;
 }) {
+  // lock scroll when open (optional but feels pro)
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
+
   if (!open) return null;
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-50"
+      className="fixed inset-0 z-[9999]"
       role="dialog"
       aria-modal="true"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
+      {/* overlay */}
       <div className="absolute inset-0 bg-black/40" />
 
-      <div
-        className="absolute inset-y-0 right-0 w-full bg-white shadow-2xl flex flex-col"
-        style={{ width: `min(${width}px, 100%)` }}
-      >
-        {/* minimal top bar - no title */}
-        <div className="sticky top-0 z-10 border-b border-slate-200 bg-white/90 backdrop-blur px-4 py-3 flex items-center justify-end gap-2">
-          <button type="button" className={btnBase} onClick={onClose}>
-            Close
-          </button>
-        </div>
+      {/* panel wrapper (use flex so it's always right-aligned) */}
+      <div className="absolute inset-0 flex justify-end">
+        <div
+          className="h-full w-full bg-white shadow-2xl flex flex-col"
+          style={{ maxWidth: width }}
+        >
+          <div className="sticky top-0 z-10 border-b border-slate-200 bg-white/90 backdrop-blur px-4 py-3 flex items-center gap-3">
+            <div className="min-w-0 flex-1 text-left">
+              <div className="text-sm font-extrabold text-slate-900 truncate">
+                {title}
+              </div>
+            </div>
+            <button type="button" className={btnBase} onClick={onClose}>
+              Close
+            </button>
+          </div>
 
-        <div className="flex-1 overflow-auto p-4">{children}</div>
+          <div className="flex-1 overflow-auto p-4">{children}</div>
+        </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -142,7 +165,13 @@ function MiniThumb({ src }: { src?: string | null }) {
   );
 }
 
-/** ---------------- Swatch dots (pro, compact) ---------------- */
+/** ---------------- Pro swatches ----------------
+ * Goal: professional, compact, readable.
+ * - circles only (no ugly truncated text)
+ * - tooltip on hover
+ * - active ring + subtle check mark
+ * - optional filter when many
+ */
 
 function SwatchDot({
   hex,
@@ -156,12 +185,13 @@ function SwatchDot({
       className={cx(
         "relative inline-flex items-center justify-center",
         "h-8 w-8 rounded-full border border-slate-200 bg-white shadow-sm",
-        active
-          ? "ring-2 ring-slate-900 ring-offset-2 ring-offset-white"
-          : "hover:ring-2 hover:ring-slate-300 hover:ring-offset-2 hover:ring-offset-white"
+        active ? "ring-2 ring-slate-900 ring-offset-2 ring-offset-white" : "hover:ring-2 hover:ring-slate-300 hover:ring-offset-2 hover:ring-offset-white"
       )}
     >
-      <span className="h-6 w-6 rounded-full border border-black/10" style={{ background: hex ?? "#e5e7eb" }} />
+      <span
+        className="h-6 w-6 rounded-full border border-black/10"
+        style={{ background: hex ?? "#e5e7eb" }}
+      />
       {active ? (
         <span className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full bg-slate-900 text-white text-[10px] font-black flex items-center justify-center shadow">
           ✓
@@ -230,6 +260,7 @@ function PartColorDetailDrawer({
       { colorId: number; name: string; hex: string | null; row: PartColorRow; count: number }
     >();
 
+    // pick a “best” row for each color
     const score = (r: PartColorRow) => {
       let s = 0;
       if (r.thumb_url || r.image_url_1 || r.image_url_2) s += 10;
@@ -258,6 +289,7 @@ function PartColorDetailDrawer({
       }
     }
 
+    // sort by name
     return Array.from(map.values()).sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
   }, [siblings, colorHexById]);
 
@@ -269,34 +301,35 @@ function PartColorDetailDrawer({
 
   const heroSrc = selected?.image_url_1 || selected?.thumb_url || selected?.image_url_2 || null;
 
+  // Keep title short and professional (avoid giant centered-looking strings)
+  const drawerTitle = useMemo(() => {
+    if (!selected?.part) return "PartColor";
+    const pid = selected.part.part_id ?? "Part";
+    return `${pid} • PartColor Details`;
+  }, [selected]);
+
+  // Single-line display fields: no wrap, truncate
   const partLine = `${selected?.part?.part_id ?? "—"} — ${selected?.part?.name ?? "—"}`;
   const colorLine = `${selected?.color?.name ?? "—"}${selected?.variant ? ` • ${selected.variant}` : ""}`;
 
   return (
-    <DrawerShell open={open} onClose={onClose} width={980}>
+    <DrawerShell open={open} title={drawerTitle} onClose={onClose} width={980}>
       {!selected ? (
         <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
           No selection.
         </div>
       ) : (
         <div className="space-y-4">
-          {/* TRUE title block: inline with content, not floating */}
-          <div className="text-left">
-            <div className="text-xs font-black text-slate-500">PartColor</div>
-            <div className="mt-1 text-lg font-extrabold text-slate-900 truncate">{partLine}</div>
-            <div className="mt-1 text-sm font-bold text-slate-700 truncate">{colorLine}</div>
-          </div>
-
           {err ? (
             <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               {err}
             </div>
           ) : null}
 
-          {/* Top detail card */}
+          {/* Top section: looks like a real product detail page (not a “floating box”) */}
           <div className={cx(card, "p-4")}>
             <div className="flex flex-col gap-4 lg:flex-row">
-              {/* image */}
+              {/* left: image (smaller and tidy) */}
               <div className="w-full lg:w-[260px]">
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 overflow-hidden aspect-square flex items-center justify-center">
                   {heroSrc ? (
@@ -314,14 +347,14 @@ function PartColorDetailDrawer({
                 </div>
               </div>
 
-              {/* info */}
+              {/* right: primary info */}
               <div className="min-w-0 flex-1">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="text-sm font-extrabold text-slate-900 truncate">{partLine}</div>
+                <div className="flex items-start gap-3">
+                  <RowThumb src={selected.thumb_url || selected.image_url_1 || selected.image_url_2 || null} />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-base font-extrabold text-slate-900 truncate">{partLine}</div>
                     <div className="mt-1 text-sm font-bold text-slate-700 truncate">{colorLine}</div>
-
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
                       <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-bold text-slate-700">
                         {siblings.length} variants for this shape
                       </span>
@@ -336,34 +369,9 @@ function PartColorDetailDrawer({
                         </span>
                       )}
                     </div>
-
-                    {(selected.image_url_1 || selected.image_url_2) ? (
-                      <div className="mt-3 flex flex-wrap items-center gap-3">
-                        {selected.image_url_1 ? (
-                          <a
-                            href={selected.image_url_1}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-sm font-bold text-blue-600 hover:underline"
-                          >
-                            Open image 1
-                          </a>
-                        ) : null}
-                        {selected.image_url_2 ? (
-                          <a
-                            href={selected.image_url_2}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-sm font-bold text-blue-600 hover:underline"
-                          >
-                            Open image 2
-                          </a>
-                        ) : null}
-                      </div>
-                    ) : null}
                   </div>
 
-                  {/* actions */}
+                  {/* actions aligned top-right (pro layout) */}
                   <div className="shrink-0 flex items-center gap-2">
                     <button type="button" className={btnPrimary} onClick={onToggleEdit} disabled={saving}>
                       {editing ? "Stop editing" : "Edit"}
@@ -373,11 +381,37 @@ function PartColorDetailDrawer({
                     </button>
                   </div>
                 </div>
+
+                {/* links (small + clean) */}
+                {(selected.image_url_1 || selected.image_url_2) ? (
+                  <div className="mt-3 flex flex-wrap items-center gap-3">
+                    {selected.image_url_1 ? (
+                      <a
+                        href={selected.image_url_1}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-sm font-bold text-blue-600 hover:underline"
+                      >
+                        Open image 1
+                      </a>
+                    ) : null}
+                    {selected.image_url_2 ? (
+                      <a
+                        href={selected.image_url_2}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-sm font-bold text-blue-600 hover:underline"
+                      >
+                        Open image 2
+                      </a>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>
 
-          {/* swatches */}
+          {/* Color switching: professional swatch palette */}
           {swatches.length > 0 ? (
             <div className={cx(card, "p-4")}>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -394,6 +428,7 @@ function PartColorDetailDrawer({
                 ) : null}
               </div>
 
+              {/* compact, clean grid that uses space well */}
               <div className="mt-3 grid gap-2 grid-cols-[repeat(auto-fit,minmax(36px,1fr))] sm:grid-cols-[repeat(auto-fit,minmax(44px,1fr))]">
                 {swatchesFiltered.map((s) => {
                   const active = selected.color?.id === s.colorId;
@@ -404,7 +439,10 @@ function PartColorDetailDrawer({
                       onClick={() => onSelect(s.row)}
                       title={s.name}
                       aria-label={`Switch to ${s.name}`}
-                      className="p-0.5 rounded-full focus:outline-none focus:ring-2 focus:ring-slate-300 focus:ring-offset-2 focus:ring-offset-white"
+                      className={cx(
+                        "p-0.5 rounded-full",
+                        "focus:outline-none focus:ring-2 focus:ring-slate-300 focus:ring-offset-2 focus:ring-offset-white"
+                      )}
                     >
                       <SwatchDot hex={s.hex} active={active} />
                     </button>
@@ -412,6 +450,7 @@ function PartColorDetailDrawer({
                 })}
               </div>
 
+              {/* show current selection clearly (no wrapping, no mess) */}
               <div className="mt-3 flex items-center gap-2 text-sm">
                 <span className="text-slate-500 font-semibold">Selected:</span>
                 <span className="font-extrabold text-slate-900 truncate">
@@ -426,7 +465,7 @@ function PartColorDetailDrawer({
             </div>
           ) : null}
 
-          {/* edit form */}
+          {/* Edit form */}
           {editing ? (
             <div className={cx(card, "p-4")}>
               <div className="mb-3 text-xs font-black text-slate-600">Edit this PartColor</div>
@@ -732,8 +771,7 @@ export default function PartColorsPage() {
       </div>
 
       {/* create */}
-      <DrawerShell open={createOpen} onClose={() => setCreateOpen(false)} width={980}>
-        <div className="mb-3 text-xs font-black text-slate-600">New PartColor</div>
+      <DrawerShell open={createOpen} title="New PartColor" onClose={() => setCreateOpen(false)} width={980}>
         <PartColorForm parts={parts} colors={colors} submitting={saving} onSubmit={create} />
       </DrawerShell>
 

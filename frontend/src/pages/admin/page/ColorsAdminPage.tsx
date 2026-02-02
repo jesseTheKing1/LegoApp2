@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import api from "../../../api/client";
 import { ENDPOINTS } from "../../../api/endpoints";
 import { Color, ColorForm } from "../form/ColorForm";
+import { createPortal } from "react-dom";
 
 /** ---------------- helpers ---------------- */
 
@@ -126,26 +127,47 @@ function DrawerShell({
   children: React.ReactNode;
   width?: number;
 }) {
+  // Optional: lock scroll while drawer is open
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
+
   if (!open) return null;
 
-  return (
-    <div
-      className="fixed inset-0 z-50 bg-black/40 flex justify-end"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div className="h-full bg-white shadow-2xl w-full" style={{ width: `min(${width}px, 100%)` }}>
-        <div className="sticky top-0 z-10 border-b border-slate-200 bg-white/90 backdrop-blur px-4 py-3 flex items-center justify-between">
-          <div className="text-sm font-extrabold text-slate-900 truncate">{title}</div>
-          <button type="button" className={btnBase} onClick={onClose}>
-            Close
-          </button>
-        </div>
+  return createPortal(
+    <div className="fixed inset-0 z-[9999]" role="dialog" aria-modal="true">
+      {/* overlay */}
+      <div
+        className="absolute inset-0 bg-black/40"
+        onMouseDown={() => onClose()}
+      />
 
-        <div className="h-[calc(100%-56px)] overflow-auto p-4">{children}</div>
+      {/* right panel */}
+      <div className="absolute inset-0 flex justify-end">
+        <div
+          className="h-full w-full bg-white shadow-2xl flex flex-col"
+          style={{ maxWidth: width }}
+          onMouseDown={(e) => e.stopPropagation()} // keep clicks inside from closing
+        >
+          <div className="sticky top-0 z-10 border-b border-slate-200 bg-white/90 backdrop-blur px-4 py-3 flex items-center justify-between">
+            <div className="text-sm font-extrabold text-slate-900 truncate">
+              {title}
+            </div>
+            <button type="button" className={btnBase} onClick={onClose}>
+              Close
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-auto p-4">{children}</div>
+        </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
