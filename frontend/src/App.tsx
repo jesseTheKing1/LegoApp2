@@ -161,52 +161,80 @@ function Badge({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** ---------- Admin dropdown (desktop) ---------- */
-function AdminMenu() {
+/** ---------- Admin dropdown (desktop + admin mode) ---------- */
+function AdminMenu({ compact = false }: { compact?: boolean }) {
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
   const menuRef = useOutsideClick<HTMLDivElement>(() => setOpen(false));
 
+  const btnClass = compact
+    ? "inline-flex h-10 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-900 shadow-sm hover:bg-slate-50"
+    : "inline-flex h-10 items-center gap-2 rounded-2xl bg-slate-900 px-3.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-800";
+
   return (
     <div className="relative" ref={menuRef}>
-      <Button variant="primary" size="sm" onClick={() => setOpen((v) => !v)}>
-        Admin <span className="opacity-90">▾</span>
-      </Button>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={cx(
+          btnClass,
+          "outline-none focus-visible:ring-2 focus-visible:ring-slate-900/20 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+        )}
+        aria-haspopup="menu"
+        aria-expanded={open}
+      >
+        Admin
+        <span className={cx("opacity-80 transition-transform", open && "rotate-180")}>▾</span>
+      </button>
 
       {open ? (
-        <div className="absolute right-0 top-full z-50 mt-2 w-56 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
+        <div
+          className="absolute right-0 top-full z-50 mt-2 w-72 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl"
+          role="menu"
+        >
           <div className="p-2">
-            <Link
-              to="/admin/parts"
-              className="block rounded-xl px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-              onClick={close}
-            >
-              Parts
-            </Link>
-            <Link
-              to="/admin/colors"
-              className="block rounded-xl px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-              onClick={close}
-            >
-              Colors
-            </Link>
-            <Link
-              to="/admin/part-colors"
-              className="block rounded-xl px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-              onClick={close}
-            >
-              Part Colors
-            </Link>
+            <div className="px-3 pb-2 pt-2 text-[11px] font-black uppercase tracking-wider text-slate-400">
+              Catalog
+            </div>
+
+            <div className="grid gap-1">
+              <Link
+                to="/admin/parts"
+                className="flex items-center justify-between rounded-2xl px-3 py-2.5 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                onClick={close}
+              >
+                Parts <span className="text-slate-400">↗</span>
+              </Link>
+              <Link
+                to="/admin/colors"
+                className="flex items-center justify-between rounded-2xl px-3 py-2.5 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                onClick={close}
+              >
+                Colors <span className="text-slate-400">↗</span>
+              </Link>
+              <Link
+                to="/admin/part-colors"
+                className="flex items-center justify-between rounded-2xl px-3 py-2.5 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                onClick={close}
+              >
+                Part Colors <span className="text-slate-400">↗</span>
+              </Link>
+            </div>
 
             <div className="my-2 h-px bg-slate-200" />
 
-            <a
-              href="/dj-admin/"
-              className="block rounded-xl px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-              onClick={close}
-            >
-              Django admin
-            </a>
+            <div className="px-3 pb-2 pt-2 text-[11px] font-black uppercase tracking-wider text-slate-400">
+              System
+            </div>
+            <div className="grid gap-1">
+              <a
+                href="/dj-admin/"
+                className="flex items-center justify-between rounded-2xl px-3 py-2.5 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                onClick={close}
+              >
+                Django Admin <span className="text-slate-400">↗</span>
+              </a>
+            </div>
           </div>
         </div>
       ) : null}
@@ -222,6 +250,7 @@ function Header({ me, onLogout }: { me: Me | null; onLogout: () => void }) {
 
   useEffect(() => setMobileOpen(false), [loc.pathname]);
 
+  const isAdminRoute = loc.pathname === "/admin" || loc.pathname.startsWith("/admin/");
   const userLabel = useMemo(() => {
     if (!me) return "";
     return `@${me.username}${me.is_staff ? " • Admin" : ""}`;
@@ -230,31 +259,73 @@ function Header({ me, onLogout }: { me: Me | null; onLogout: () => void }) {
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
-        <Link to="/" className="flex items-center gap-2 text-sm font-black tracking-tight text-slate-900">
-          <span className="grid h-9 w-9 place-items-center rounded-xl bg-slate-900 text-white">
-            L
-          </span>
-          <span className="hidden sm:block">LEGO Inventory</span>
-          <span className="sm:hidden">LEGO</span>
-        </Link>
+        {/* Left: Brand / Admin mode */}
+        <div className="flex items-center gap-3">
+          <Link
+            to="/"
+            className="flex items-center gap-2 text-sm font-black tracking-tight text-slate-900"
+            title="Home"
+          >
+            <span className="grid h-9 w-9 place-items-center rounded-xl bg-slate-900 text-white">
+              L
+            </span>
+            <span className="hidden sm:block">LEGO Inventory</span>
+            <span className="sm:hidden">LEGO</span>
+          </Link>
+
+          {isAdminRoute ? (
+            <div className="hidden sm:flex items-center gap-2">
+              <span className="h-6 w-px bg-slate-200" />
+              {/* Pixel-ish admin title (no extra font install needed) */}
+              <div
+                className={cx(
+                  "rounded-xl border border-slate-200 bg-white px-3 py-1 text-xs",
+                  "font-black tracking-[0.25em] text-slate-900"
+                )}
+                style={{
+                  // gives a pixel/arcade vibe without needing a font file
+                  textRendering: "geometricPrecision",
+                  letterSpacing: "0.28em",
+                  textTransform: "uppercase",
+                }}
+                title="Admin mode"
+              >
+                ADMIN MODE
+              </div>
+            </div>
+          ) : null}
+        </div>
 
         {/* Desktop nav */}
         <nav className="hidden items-center gap-2 sm:flex" aria-label="Primary">
-          <Link
-            to="/"
-            className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-100"
-          >
-            Home
-          </Link>
+          {!isAdminRoute ? (
+            <>
+              <Link
+                to="/"
+                className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-100"
+              >
+                Home
+              </Link>
 
-          <Link
-            to="/browse"
-            className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-100"
-          >
-            Browse
-          </Link>
+              <Link
+                to="/browse"
+                className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-100"
+              >
+                Browse
+              </Link>
+            </>
+          ) : (
+            <>
+              {/* Admin mode: keep UI clean */}
+              <ButtonLink to="/" variant="secondary" size="sm">
+                ← Back to app
+              </ButtonLink>
 
-          {me?.is_staff ? <AdminMenu /> : null}
+              {me?.is_staff ? <AdminMenu compact /> : null}
+            </>
+          )}
+
+          {!isAdminRoute && me?.is_staff ? <AdminMenu /> : null}
 
           <div className="ml-2 flex items-center gap-2">
             {me ? (
@@ -296,7 +367,9 @@ function Header({ me, onLogout }: { me: Me | null; onLogout: () => void }) {
               <div className="absolute inset-0 bg-black/40" />
               <div className="absolute right-0 top-0 h-full w-[86vw] max-w-sm bg-white shadow-2xl">
                 <div className="flex items-center justify-between border-b border-slate-200 p-4">
-                  <div className="text-sm font-black text-slate-900">Menu</div>
+                  <div className="text-sm font-black text-slate-900">
+                    {isAdminRoute ? "Admin Menu" : "Menu"}
+                  </div>
                   <button
                     className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white hover:bg-slate-50"
                     onClick={() => setMobileOpen(false)}
@@ -307,48 +380,59 @@ function Header({ me, onLogout }: { me: Me | null; onLogout: () => void }) {
                 </div>
 
                 <div className="p-4">
-                  <div className="grid gap-2">
-                    <Link
-                      to="/"
-                      className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-                    >
-                      Home
-                    </Link>
-                    <Link
-                      to="/browse"
-                      className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-                    >
-                      Browse
-                    </Link>
-                  </div>
+                  {!isAdminRoute ? (
+                    <div className="grid gap-2">
+                      <Link
+                        to="/"
+                        className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                      >
+                        Home
+                      </Link>
+                      <Link
+                        to="/browse"
+                        className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                      >
+                        Browse
+                      </Link>
+                    </div>
+                  ) : (
+                    <div className="grid gap-2">
+                      <Link
+                        to="/"
+                        className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                      >
+                        ← Back to app
+                      </Link>
+                    </div>
+                  )}
 
                   {me?.is_staff ? (
-                    <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                    <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50 p-3">
                       <div className="mb-2 text-xs font-black uppercase tracking-wide text-slate-500">
                         Admin
                       </div>
                       <div className="grid gap-2">
                         <Link
                           to="/admin/parts"
-                          className="rounded-xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                          className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
                         >
                           Parts
                         </Link>
                         <Link
                           to="/admin/colors"
-                          className="rounded-xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                          className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
                         >
                           Colors
                         </Link>
                         <Link
                           to="/admin/part-colors"
-                          className="rounded-xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                          className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
                         >
                           Part Colors
                         </Link>
                         <a
                           href="/dj-admin/"
-                          className="rounded-xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                          className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
                         >
                           Django admin
                         </a>
@@ -388,6 +472,7 @@ function Header({ me, onLogout }: { me: Me | null; onLogout: () => void }) {
     </header>
   );
 }
+
 
 /** ---------- Layout ---------- */
 function PageShell({ children }: { children: React.ReactNode }) {
