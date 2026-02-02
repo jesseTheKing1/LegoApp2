@@ -125,8 +125,6 @@ function DrawerShell({
   );
 }
 
-/** ---------------- thumbs ---------------- */
-
 function RowThumb({ src }: { src?: string | null }) {
   return (
     <div className="h-10 w-10 rounded-xl border border-slate-200 bg-slate-50 overflow-hidden flex items-center justify-center shrink-0">
@@ -165,13 +163,6 @@ function MiniThumb({ src }: { src?: string | null }) {
   );
 }
 
-/** ---------------- Pro swatches ----------------
- * Goal: professional, compact, readable.
- * - circles only (no ugly truncated text)
- * - tooltip on hover
- * - active ring + subtle check mark
- * - optional filter when many
- */
 
 function SwatchDot({
   hex,
@@ -435,7 +426,7 @@ function PartColorDetailDrawer({
                 <span className="font-extrabold text-slate-900">
                     {selected.color?.name ?? "—"}
                     {selected.variant ? (
-                    <span className="text-slate-500 font-semibold"> • {selected.variant}</span>
+                    <span className="text-slate-300 font-semibold"> • {selected.variant}</span>
                     ) : null}
                 </span>
                 </div>
