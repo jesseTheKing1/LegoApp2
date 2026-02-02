@@ -17,6 +17,15 @@ function formatApiError(e: any): string {
   if (!data) return e?.message ?? "Request failed";
   if (typeof data === "string") return data;
   if (data.detail) return data.detail;
+  // DRF field errors
+  if (typeof data === "object") {
+    try {
+      const firstKey = Object.keys(data)[0];
+      const v = (data as any)[firstKey];
+      if (Array.isArray(v)) return `${firstKey}: ${v.join(", ")}`;
+      if (typeof v === "string") return `${firstKey}: ${v}`;
+    } catch {}
+  }
   return "Request failed";
 }
 
@@ -41,11 +50,7 @@ const btnPrimary =
   "rounded-xl px-3 py-2 text-sm font-semibold shadow-sm bg-slate-900 text-white " +
   "hover:bg-slate-800 active:bg-slate-950 disabled:opacity-60 disabled:cursor-not-allowed";
 
-const card =
-  "rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden";
-
-const muted = "text-slate-600";
-const muted2 = "text-slate-500";
+const card = "rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden";
 
 /** ---------------- Drawer shell ---------------- */
 
@@ -71,11 +76,8 @@ function DrawerShell({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div
-        className="h-full bg-white shadow-2xl w-full"
-        style={{ width: `min(${width}px, 100%)` }}
-      >
-        <div className="sticky top-0 z-10 border-b border-slate-200 bg-white/90 backdrop-blur px-4 py-3 flex items-center justify-between">
+      <div className="h-full bg-white shadow-2xl w-full" style={{ width: `min(${width}px, 100%)` }}>
+        <div className="sticky top-0 z-10 border-b border-slate-200 bg-white/90 backdrop-blur px-4 py-3 flex items-center justify-between gap-3">
           <div className="text-sm font-extrabold text-slate-900 truncate">{title}</div>
           <button type="button" className={btnBase} onClick={onClose}>
             Close
@@ -159,12 +161,28 @@ function PartColorDetailDrawer({
   onSubmitEdit: (payload: any) => void;
   onSelect: (pc: PartColorRow) => void;
 }) {
+  const [colorQ, setColorQ] = useState("");
+
+  // reset local filter when switching items / closing
+  useEffect(() => {
+    if (!open) setColorQ("");
+  }, [open]);
+
   const partPk = selected?.part?.id;
 
   const siblings = useMemo(() => {
     if (!partPk) return [];
     return allItems.filter((x) => x.part?.id === partPk);
   }, [allItems, partPk]);
+
+  const colorHexById = useMemo(() => {
+    const m = new Map<number, string | null>();
+    for (const c of colors) {
+      if (c?.id == null) continue;
+      m.set(c.id, safeHex((c as any).hex ?? null));
+    }
+    return m;
+  }, [colors]);
 
   const swatches = useMemo(() => {
     const map = new Map<
@@ -185,7 +203,7 @@ function PartColorDetailDrawer({
       if (!c?.id) continue;
 
       const fromRow = safeHex((c as any).hex ?? null);
-      const fromLookup = safeHex(colors.find((x) => x.id === c.id)?.hex ?? null);
+      const fromLookup = colorHexById.get(c.id) ?? null;
       const cHex = fromRow ?? fromLookup ?? null;
 
       const existing = map.get(c.id);
@@ -200,18 +218,26 @@ function PartColorDetailDrawer({
       }
     }
 
-    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
-  }, [siblings, colors]);
+    return Array.from(map.values()).sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
+  }, [siblings, colorHexById]);
+
+  const swatchesFiltered = useMemo(() => {
+    const qq = colorQ.trim().toLowerCase();
+    if (!qq) return swatches;
+    return swatches.filter((s) => (s.name ?? "").toLowerCase().includes(qq));
+  }, [swatches, colorQ]);
 
   const heroSrc = selected?.image_url_1 || selected?.thumb_url || selected?.image_url_2 || null;
 
+  const drawerTitle = useMemo(() => {
+    if (!selected?.part) return "PartColor";
+    const p = `${selected.part.part_id ?? ""} — ${selected.part.name ?? ""}`.trim();
+    const c = selected.color?.name ? ` • ${selected.color.name}` : "";
+    return (p + c).trim();
+  }, [selected]);
+
   return (
-    <DrawerShell
-      open={open}
-      title={selected?.part ? `${selected.part.part_id} — ${selected.part.name}` : "PartColor"}
-      onClose={onClose}
-      width={920}
-    >
+    <DrawerShell open={open} title={drawerTitle} onClose={onClose} width={980}>
       {!selected ? (
         <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
           No selection.
@@ -224,7 +250,8 @@ function PartColorDetailDrawer({
             </div>
           ) : null}
 
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[360px_1fr]">
+          {/* Top: Hero + Details */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[380px_1fr]">
             {/* hero */}
             <div className="rounded-2xl border border-slate-200 bg-slate-50 overflow-hidden flex items-center justify-center aspect-square">
               {heroSrc ? (
@@ -243,30 +270,50 @@ function PartColorDetailDrawer({
 
             {/* details */}
             <div className={cx(card, "p-4 space-y-3")}>
-              <div className="flex items-center gap-3">
+              {/* part identity row (never awkwardly “middle cut”) */}
+              <div className="grid grid-cols-[auto_1fr] gap-3 items-start">
                 <RowThumb src={selected.thumb_url || selected.image_url_1 || selected.image_url_2 || null} />
+
                 <div className="min-w-0">
-                  <div className="text-sm font-extrabold text-slate-900 truncate">
-                    {selected.color?.name ?? "—"}
-                    {selected.variant ? (
-                      <span className="text-slate-500 font-bold"> • {selected.variant}</span>
-                    ) : null}
+                  <div className="text-sm font-extrabold text-slate-900 leading-tight break-words">
+                    <span className="mr-2">{selected.part?.part_id ?? "—"}</span>
+                    <span className="text-slate-700 font-bold">—</span>{" "}
+                    <span>{selected.part?.name ?? "—"}</span>
                   </div>
 
-                  <div className="text-xs text-slate-500 font-semibold truncate">
-                    <span className="text-slate-900 font-bold">{selected.part?.part_id ?? "—"}</span>{" "}
-                    — {selected.part?.name ?? "—"}
+                  <div className="mt-1 text-sm font-bold text-slate-900 leading-tight break-words">
+                    {selected.color?.name ?? "—"}
+                    {selected.variant ? <span className="text-slate-500 font-bold"> • {selected.variant}</span> : null}
+                  </div>
+
+                  <div className="mt-1 text-xs text-slate-500 font-semibold">
+                    {siblings.length} variants for this shape
                   </div>
                 </div>
               </div>
 
+              {/* Your PartColor ID */}
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
                 <div className="text-[11px] text-slate-500 font-black">Your PartColor ID</div>
                 <div className="text-sm font-extrabold text-slate-900">{selected.part_color_code ?? "—"}</div>
               </div>
 
-              {selected.image_url_1 || selected.image_url_2 ? (
-                <div className="flex flex-wrap gap-3">
+              {/* Links + Actions */}
+              <div className="flex flex-wrap items-center gap-2">
+                <button type="button" className={btnPrimary} onClick={onToggleEdit} disabled={saving}>
+                  {editing ? "Stop editing" : "Edit"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={onDelete}
+                  disabled={saving}
+                  className="rounded-xl px-3 py-2 text-sm font-semibold shadow-sm border border-red-200 bg-red-50 text-red-800 hover:bg-red-100 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  Delete
+                </button>
+
+                <div className="ml-auto flex items-center gap-3">
                   {selected.image_url_1 ? (
                     <a
                       href={selected.image_url_1}
@@ -288,69 +335,72 @@ function PartColorDetailDrawer({
                     </a>
                   ) : null}
                 </div>
-              ) : null}
-
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  className={btnPrimary}
-                  onClick={onToggleEdit}
-                  disabled={saving}
-                >
-                  {editing ? "Stop editing" : "Edit"}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={onDelete}
-                  disabled={saving}
-                  className="rounded-xl px-3 py-2 text-sm font-semibold shadow-sm border border-red-200 bg-red-50 text-red-800 hover:bg-red-100 disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  Delete
-                </button>
-
-                <div className="text-xs text-slate-500 font-semibold self-center">
-                  {siblings.length} variants for this shape
-                </div>
               </div>
             </div>
           </div>
 
+          {/* Switch color — dense grid that uses the whole width */}
           {swatches.length > 0 ? (
-            <div className={cx(card, "p-4 space-y-2")}>
-              <div className="text-xs font-black text-slate-600">Switch color</div>
-              <div className="flex flex-wrap gap-2">
-                {swatches.map((s) => {
+            <div className={cx(card, "p-4 space-y-3")}>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="text-xs font-black text-slate-600">Switch color</div>
+
+                {swatches.length >= 18 ? (
+                  <input
+                    className={cx(inputBase, "sm:w-[320px]")}
+                    value={colorQ}
+                    onChange={(e) => setColorQ(e.target.value)}
+                    placeholder="Filter colors..."
+                    autoComplete="off"
+                  />
+                ) : null}
+              </div>
+
+              <div className="grid gap-2 grid-cols-[repeat(auto-fit,minmax(52px,1fr))]">
+                {swatchesFiltered.map((s) => {
                   const active = selected.color?.id === s.colorId;
+                  const dot = s.hex ?? "#e5e7eb";
+
                   return (
                     <button
                       key={s.colorId}
                       type="button"
                       onClick={() => onSelect(s.row)}
+                      title={s.name}
+                      aria-label={`Switch to ${s.name}`}
                       className={cx(
-                        "inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold shadow-sm",
-                        active
-                          ? "border-slate-900 bg-slate-900 text-white"
-                          : "border-slate-200 bg-white text-slate-900 hover:bg-slate-50"
+                        "rounded-xl border p-2 flex flex-col items-center justify-center gap-1 shadow-sm",
+                        "hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-300",
+                        active ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-900"
                       )}
                     >
                       <span
-                        className="h-3 w-3 rounded-md border border-black/10"
-                        style={{ background: s.hex ?? "#e5e7eb" }}
+                        className={cx("h-7 w-7 rounded-lg border border-black/10", active ? "ring-2 ring-white/80" : "")}
+                        style={{ background: dot }}
                       />
-                      <span className="whitespace-nowrap">{s.name}</span>
+                      <span className={cx("text-[11px] font-bold leading-tight text-center", active ? "text-white/90" : "text-slate-600")}>
+                        {(s.name ?? "—").slice(0, 9)}
+                      </span>
+
                       {s.count > 1 ? (
-                        <span className={cx("text-xs", active ? "text-white/80" : "text-slate-500")}>
+                        <span className={cx("text-[10px] font-extrabold", active ? "text-white/70" : "text-slate-400")}>
                           +{s.count - 1}
                         </span>
-                      ) : null}
+                      ) : (
+                        <span className="text-[10px] font-extrabold text-transparent">.</span>
+                      )}
                     </button>
                   );
                 })}
               </div>
+
+              {swatchesFiltered.length === 0 ? (
+                <div className="text-sm text-slate-600">No matching colors.</div>
+              ) : null}
             </div>
           ) : null}
 
+          {/* Edit form */}
           {editing ? (
             <div className={cx(card, "p-4")}>
               <div className="mb-3 text-xs font-black text-slate-600">Edit this PartColor</div>
@@ -444,9 +494,7 @@ export default function PartColorsPage() {
           const rows = partHit
             ? g.rows
             : g.rows.filter((pc) =>
-                `${pc.part_color_code ?? ""} ${pc.color?.name ?? ""} ${pc.variant ?? ""}`
-                  .toLowerCase()
-                  .includes(qq)
+                `${pc.part_color_code ?? ""} ${pc.color?.name ?? ""} ${pc.variant ?? ""}`.toLowerCase().includes(qq)
               );
 
           return { ...g, rows };
@@ -463,7 +511,9 @@ export default function PartColorsPage() {
 
   function expandAll() {
     const all: Record<number, boolean> = {};
-    grouped.forEach((g) => (all[g.part.id] = true));
+    grouped.forEach((g) => {
+      if (g.part?.id != null) all[g.part.id] = true;
+    });
     setExpanded(all);
   }
 
@@ -498,6 +548,8 @@ export default function PartColorsPage() {
     setErr(null);
     try {
       const res = await api.patch(`${ENDPOINTS.partColors}${selected.id}/`, payload);
+
+      // keep selected up to date + update list
       setSelected(res.data);
       setItems((prev) => prev.map((x) => (x.id === selected.id ? res.data : x)));
       setEditing(false);
@@ -511,12 +563,14 @@ export default function PartColorsPage() {
   async function removeSelected() {
     if (!selected?.id) return;
     if (!confirm("Delete this PartColor?")) return;
+
     setSaving(true);
     setErr(null);
     try {
       await api.delete(`${ENDPOINTS.partColors}${selected.id}/`);
       setDetailOpen(false);
       setSelected(null);
+      setEditing(false);
       await loadAll();
     } catch (e: any) {
       setErr(formatApiError(e));
@@ -586,12 +640,12 @@ export default function PartColorsPage() {
                   <div className="w-6 text-slate-500 font-black">{isOpen ? "▾" : "▸"}</div>
 
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm font-extrabold text-slate-900 truncate">
+                    <div className="text-sm font-extrabold text-slate-900 break-words">
                       {g.part.part_id} — {g.part.name}{" "}
                       <span className="text-slate-500 font-bold">({g.rows.length})</span>
                     </div>
 
-                    <div className="mt-2 flex items-center gap-2">
+                    <div className="mt-2 flex items-center gap-2 flex-wrap">
                       {thumbs.map((t, i) => (
                         <MiniThumb key={`${g.part.id}-t-${i}`} src={t} />
                       ))}
@@ -604,9 +658,7 @@ export default function PartColorsPage() {
                     </div>
                   </div>
 
-                  <div className="text-xs text-slate-500 font-semibold">
-                    {isOpen ? "hide" : "show"}
-                  </div>
+                  <div className="text-xs text-slate-500 font-semibold">{isOpen ? "hide" : "show"}</div>
                 </button>
 
                 {isOpen ? (
@@ -628,7 +680,7 @@ export default function PartColorsPage() {
                         >
                           <RowThumb src={img} />
 
-                          <div className="hidden sm:block w-[220px] text-xs font-semibold text-slate-600 truncate">
+                          <div className="hidden sm:block w-[240px] text-xs font-semibold text-slate-600 truncate">
                             {idText}
                           </div>
 
@@ -640,7 +692,6 @@ export default function PartColorsPage() {
                               ) : null}
                             </div>
 
-                            {/* Mobile subline */}
                             <div className="sm:hidden text-xs text-slate-500 font-semibold truncate">
                               {idText}
                             </div>
@@ -657,7 +708,7 @@ export default function PartColorsPage() {
       </div>
 
       {/* create */}
-      <DrawerShell open={createOpen} title="New PartColor" onClose={() => setCreateOpen(false)} width={820}>
+      <DrawerShell open={createOpen} title="New PartColor" onClose={() => setCreateOpen(false)} width={900}>
         <PartColorForm parts={parts} colors={colors} submitting={saving} onSubmit={create} />
       </DrawerShell>
 
