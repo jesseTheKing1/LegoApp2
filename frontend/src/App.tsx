@@ -7,9 +7,7 @@ import { ENDPOINTS } from "./api/endpoints";
 
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
-
-// ✅ this is your admin router file in src/pages/admin
-import AdminRoutes from "./pages/admin/AdminRoutes";
+import CatalogAdminRoutes from "./pages/admin/adminRoutes";
 
 type Me = {
   id: number;
@@ -635,7 +633,7 @@ export default function App() {
           path="/admin/*"
           element={
             <RequireAdmin me={me}>
-              <AdminRoutes />
+              <CatalogAdminRoutes />
             </RequireAdmin>
           }
         />
