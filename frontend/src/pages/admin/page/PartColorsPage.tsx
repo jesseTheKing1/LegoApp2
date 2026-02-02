@@ -17,12 +17,14 @@ function formatApiError(e: any): string {
   if (!data) return e?.message ?? "Request failed";
   if (typeof data === "string") return data;
   if (data.detail) return data.detail;
-  // DRF field errors (best-effort)
   if (typeof data === "object") {
-    const k = Object.keys(data)[0];
-    const v = (data as any)[k];
-    if (Array.isArray(v)) return `${k}: ${v.join(", ")}`;
-    if (typeof v === "string") return `${k}: ${v}`;
+    const keys = Object.keys(data);
+    if (keys.length) {
+      const k = keys[0];
+      const v = (data as any)[k];
+      if (Array.isArray(v)) return `${k}: ${v.join(", ")}`;
+      if (typeof v === "string") return `${k}: ${v}`;
+    }
   }
   return "Request failed";
 }
@@ -48,16 +50,24 @@ const btnPrimary =
   "rounded-xl px-3 py-2 text-sm font-semibold shadow-sm bg-slate-900 text-white " +
   "hover:bg-slate-800 active:bg-slate-950 disabled:opacity-60 disabled:cursor-not-allowed";
 
+const btnDanger =
+  "rounded-xl px-3 py-2 text-sm font-semibold shadow-sm border border-red-200 bg-red-50 text-red-800 " +
+  "hover:bg-red-100 disabled:opacity-60 disabled:cursor-not-allowed";
+
 const card = "rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden";
 
-/** ---------------- Drawer shell ---------------- */
+/** ---------------- Drawer shell ----------------
+ * Fix: eliminate the “box in front of everything” vibe:
+ * - Make the drawer a true right panel with its own layout.
+ * - Keep header compact and aligned left.
+ */
 
 function DrawerShell({
   open,
   title,
   onClose,
   children,
-  width = 780,
+  width = 980,
 }: {
   open: boolean;
   title: string;
@@ -69,13 +79,18 @@ function DrawerShell({
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/40 flex justify-end"
+      className="fixed inset-0 z-50"
+      role="dialog"
+      aria-modal="true"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="h-full bg-white shadow-2xl w-full" style={{ width: `min(${width}px, 100%)` }}>
-        {/* Header: force left alignment; never “looks centered” */}
+      {/* overlay */}
+      <div className="absolute inset-0 bg-black/40" />
+
+      {/* panel */}
+      <div className="absolute inset-y-0 right-0 w-full max-w-[980px] bg-white shadow-2xl flex flex-col">
         <div className="sticky top-0 z-10 border-b border-slate-200 bg-white/90 backdrop-blur px-4 py-3 flex items-center gap-3">
           <div className="min-w-0 flex-1 text-left">
             <div className="text-sm font-extrabold text-slate-900 truncate">{title}</div>
@@ -85,7 +100,8 @@ function DrawerShell({
           </button>
         </div>
 
-        <div className="h-[calc(100%-56px)] overflow-auto p-4">{children}</div>
+        {/* content */}
+        <div className="flex-1 overflow-auto p-4">{children}</div>
       </div>
     </div>
   );
@@ -128,6 +144,42 @@ function MiniThumb({ src }: { src?: string | null }) {
         <span className="text-[9px] text-slate-300 font-black">•</span>
       )}
     </div>
+  );
+}
+
+/** ---------------- Pro swatches ----------------
+ * Goal: professional, compact, readable.
+ * - circles only (no ugly truncated text)
+ * - tooltip on hover
+ * - active ring + subtle check mark
+ * - optional filter when many
+ */
+
+function SwatchDot({
+  hex,
+  active,
+}: {
+  hex: string | null;
+  active: boolean;
+}) {
+  return (
+    <span
+      className={cx(
+        "relative inline-flex items-center justify-center",
+        "h-8 w-8 rounded-full border border-slate-200 bg-white shadow-sm",
+        active ? "ring-2 ring-slate-900 ring-offset-2 ring-offset-white" : "hover:ring-2 hover:ring-slate-300 hover:ring-offset-2 hover:ring-offset-white"
+      )}
+    >
+      <span
+        className="h-6 w-6 rounded-full border border-black/10"
+        style={{ background: hex ?? "#e5e7eb" }}
+      />
+      {active ? (
+        <span className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full bg-slate-900 text-white text-[10px] font-black flex items-center justify-center shadow">
+          ✓
+        </span>
+      ) : null}
+    </span>
   );
 }
 
@@ -190,6 +242,7 @@ function PartColorDetailDrawer({
       { colorId: number; name: string; hex: string | null; row: PartColorRow; count: number }
     >();
 
+    // pick a “best” row for each color
     const score = (r: PartColorRow) => {
       let s = 0;
       if (r.thumb_url || r.image_url_1 || r.image_url_2) s += 10;
@@ -218,6 +271,7 @@ function PartColorDetailDrawer({
       }
     }
 
+    // sort by name
     return Array.from(map.values()).sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
   }, [siblings, colorHexById]);
 
@@ -229,13 +283,14 @@ function PartColorDetailDrawer({
 
   const heroSrc = selected?.image_url_1 || selected?.thumb_url || selected?.image_url_2 || null;
 
-  // IMPORTANT: keep Drawer title short so it never appears “centered” or wraps
+  // Keep title short and professional (avoid giant centered-looking strings)
   const drawerTitle = useMemo(() => {
     if (!selected?.part) return "PartColor";
-    return `${selected.part.part_id ?? "Part"} — PartColor`;
+    const pid = selected.part.part_id ?? "Part";
+    return `${pid} • PartColor Details`;
   }, [selected]);
 
-  // Single-line, no wrap display strings (truncate instead)
+  // Single-line display fields: no wrap, truncate
   const partLine = `${selected?.part?.part_id ?? "—"} — ${selected?.part?.name ?? "—"}`;
   const colorLine = `${selected?.color?.name ?? "—"}${selected?.variant ? ` • ${selected.variant}` : ""}`;
 
@@ -253,54 +308,65 @@ function PartColorDetailDrawer({
             </div>
           ) : null}
 
-          {/* Top: smaller hero + details */}
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[300px_1fr]">
-            {/* hero (smaller) */}
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 overflow-hidden flex items-center justify-center aspect-square">
-              {heroSrc ? (
-                <img
-                  src={heroSrc}
-                  alt=""
-                  className="h-full w-full object-contain"
-                  onError={(e) => {
-                    (e.currentTarget as HTMLImageElement).style.display = "none";
-                  }}
-                />
-              ) : (
-                <div className="text-xs text-slate-500 font-black">No image</div>
-              )}
-            </div>
-
-            {/* details */}
-            <div className={cx(card, "p-4 space-y-3")}>
-              <div className="grid grid-cols-[auto_1fr] gap-3 items-start">
-                <RowThumb src={selected.thumb_url || selected.image_url_1 || selected.image_url_2 || null} />
-
-                <div className="min-w-0">
-                  {/* no wrapping: truncate */}
-                  <div className="text-sm font-extrabold text-slate-900 leading-tight truncate">
-                    {partLine}
-                  </div>
-                  <div className="mt-1 text-sm font-bold text-slate-900 leading-tight truncate">
-                    {colorLine}
-                  </div>
-                  <div className="mt-1 text-xs text-slate-500 font-semibold">
-                    {siblings.length} variants for this shape
-                  </div>
+          {/* Top section: looks like a real product detail page (not a “floating box”) */}
+          <div className={cx(card, "p-4")}>
+            <div className="flex flex-col gap-4 lg:flex-row">
+              {/* left: image (smaller and tidy) */}
+              <div className="w-full lg:w-[260px]">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 overflow-hidden aspect-square flex items-center justify-center">
+                  {heroSrc ? (
+                    <img
+                      src={heroSrc}
+                      alt=""
+                      className="h-full w-full object-contain"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).style.display = "none";
+                      }}
+                    />
+                  ) : (
+                    <div className="text-xs text-slate-500 font-black">No image</div>
+                  )}
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                  <div className="text-[11px] text-slate-500 font-black">Your PartColor ID</div>
-                  <div className="text-sm font-extrabold text-slate-900 truncate">
-                    {selected.part_color_code ?? "—"}
+              {/* right: primary info */}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-start gap-3">
+                  <RowThumb src={selected.thumb_url || selected.image_url_1 || selected.image_url_2 || null} />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-base font-extrabold text-slate-900 truncate">{partLine}</div>
+                    <div className="mt-1 text-sm font-bold text-slate-700 truncate">{colorLine}</div>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-bold text-slate-700">
+                        {siblings.length} variants for this shape
+                      </span>
+
+                      {selected.part_color_code ? (
+                        <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-extrabold text-slate-900">
+                          ID: {selected.part_color_code}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold text-slate-500">
+                          ID: —
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* actions aligned top-right (pro layout) */}
+                  <div className="shrink-0 flex items-center gap-2">
+                    <button type="button" className={btnPrimary} onClick={onToggleEdit} disabled={saving}>
+                      {editing ? "Stop editing" : "Edit"}
+                    </button>
+                    <button type="button" className={btnDanger} onClick={onDelete} disabled={saving}>
+                      Delete
+                    </button>
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                  <div className="text-[11px] text-slate-500 font-black">Images</div>
-                  <div className="mt-1 flex items-center gap-3">
+                {/* links (small + clean) */}
+                {(selected.image_url_1 || selected.image_url_2) ? (
+                  <div className="mt-3 flex flex-wrap items-center gap-3">
                     {selected.image_url_1 ? (
                       <a
                         href={selected.image_url_1}
@@ -308,11 +374,9 @@ function PartColorDetailDrawer({
                         rel="noreferrer"
                         className="text-sm font-bold text-blue-600 hover:underline"
                       >
-                        Open 1
+                        Open image 1
                       </a>
-                    ) : (
-                      <span className="text-sm font-bold text-slate-400">—</span>
-                    )}
+                    ) : null}
                     {selected.image_url_2 ? (
                       <a
                         href={selected.image_url_2}
@@ -320,39 +384,22 @@ function PartColorDetailDrawer({
                         rel="noreferrer"
                         className="text-sm font-bold text-blue-600 hover:underline"
                       >
-                        Open 2
+                        Open image 2
                       </a>
-                    ) : (
-                      <span className="text-sm font-bold text-slate-400">—</span>
-                    )}
+                    ) : null}
                   </div>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <button type="button" className={btnPrimary} onClick={onToggleEdit} disabled={saving}>
-                  {editing ? "Stop editing" : "Edit"}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={onDelete}
-                  disabled={saving}
-                  className="rounded-xl px-3 py-2 text-sm font-semibold shadow-sm border border-red-200 bg-red-50 text-red-800 hover:bg-red-100 disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  Delete
-                </button>
+                ) : null}
               </div>
             </div>
           </div>
 
-          {/* Switch color — MORE compact, no wrapping labels (tooltip for full name) */}
+          {/* Color switching: professional swatch palette */}
           {swatches.length > 0 ? (
-            <div className={cx(card, "p-4 space-y-3")}>
+            <div className={cx(card, "p-4")}>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div className="text-xs font-black text-slate-600">Switch color</div>
+                <div className="text-xs font-black text-slate-600">Colors for this shape</div>
 
-                {swatches.length >= 20 ? (
+                {swatches.length >= 18 ? (
                   <input
                     className={cx(inputBase, "sm:w-[320px]")}
                     value={colorQ}
@@ -363,15 +410,10 @@ function PartColorDetailDrawer({
                 ) : null}
               </div>
 
-              {/* super dense grid; labels do NOT wrap (they truncate) */}
-              <div className="grid gap-1.5 grid-cols-[repeat(auto-fit,minmax(36px,1fr))]">
+              {/* compact, clean grid that uses space well */}
+              <div className="mt-3 grid gap-2 grid-cols-[repeat(auto-fit,minmax(36px,1fr))] sm:grid-cols-[repeat(auto-fit,minmax(44px,1fr))]">
                 {swatchesFiltered.map((s) => {
                   const active = selected.color?.id === s.colorId;
-                  const dot = s.hex ?? "#e5e7eb";
-
-                  // optional tiny label; keep it single-line truncate
-                  const tinyLabel = (s.name ?? "—").replace(/\s+/g, " ").slice(0, 10);
-
                   return (
                     <button
                       key={s.colorId}
@@ -380,33 +422,27 @@ function PartColorDetailDrawer({
                       title={s.name}
                       aria-label={`Switch to ${s.name}`}
                       className={cx(
-                        "rounded-lg border px-1.5 py-1.5 flex flex-col items-center justify-center gap-1",
-                        "hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-300",
-                        active ? "border-slate-900 bg-slate-900" : "border-slate-200 bg-white"
+                        "p-0.5 rounded-full",
+                        "focus:outline-none focus:ring-2 focus:ring-slate-300 focus:ring-offset-2 focus:ring-offset-white"
                       )}
                     >
-                      <span
-                        className={cx(
-                          "h-5 w-5 rounded-md border border-black/10",
-                          active ? "ring-2 ring-white/80" : ""
-                        )}
-                        style={{ background: dot }}
-                      />
-                      <span
-                        className={cx(
-                          "text-[10px] font-extrabold leading-none w-full text-center truncate",
-                          active ? "text-white/85" : "text-slate-500"
-                        )}
-                      >
-                        {tinyLabel}
-                      </span>
+                      <SwatchDot hex={s.hex} active={active} />
                     </button>
                   );
                 })}
               </div>
 
+              {/* show current selection clearly (no wrapping, no mess) */}
+              <div className="mt-3 flex items-center gap-2 text-sm">
+                <span className="text-slate-500 font-semibold">Selected:</span>
+                <span className="font-extrabold text-slate-900 truncate">
+                  {selected.color?.name ?? "—"}
+                  {selected.variant ? ` • ${selected.variant}` : ""}
+                </span>
+              </div>
+
               {swatchesFiltered.length === 0 ? (
-                <div className="text-sm text-slate-600">No matching colors.</div>
+                <div className="mt-2 text-sm text-slate-600">No matching colors.</div>
               ) : null}
             </div>
           ) : null}
@@ -717,7 +753,7 @@ export default function PartColorsPage() {
       </div>
 
       {/* create */}
-      <DrawerShell open={createOpen} title="New PartColor" onClose={() => setCreateOpen(false)} width={900}>
+      <DrawerShell open={createOpen} title="New PartColor" onClose={() => setCreateOpen(false)} width={980}>
         <PartColorForm parts={parts} colors={colors} submitting={saving} onSubmit={create} />
       </DrawerShell>
 
