@@ -1,674 +1,832 @@
-// src/App.tsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Routes, Route, Link, Navigate, useLocation } from "react-router-dom";
+import React, { useEffect, useMemo, useState } from "react";
+import api from "../../../api/client";
+import { ENDPOINTS } from "../../../api/endpoints";
+import { PartColorForm, Part, Color, PartColorRow } from "../form/PartColorForm";
 import { createPortal } from "react-dom";
-import api from "./api/client";
-import { ENDPOINTS } from "./api/endpoints";
 
-import LoginPage from "./pages/LoginPage";
-import RegisterPage from "./pages/RegisterPage";
+/** ---------------- helpers ---------------- */
 
-import AdminLayout from "./pages/admin/AdminLayout";
-import PartsAdminPage from "./pages/admin/page/PartsAdinPage";
-
-// ✅ IMPORTANT: these are in the SAME FILE as PartsAdminPage
-// (Adjust the import path if your filename is different)
-import {
-  ColorsAdminPage,
-  PartColorsPage,
-} from "./pages/admin/page/PartsAdinPage";
-
-type Me = {
-  id: number;
-  email: string;
-  username: string;
-  is_staff: boolean;
-  is_superuser: boolean;
-};
-
-function cx(...c: Array<string | false | null | undefined>) {
-  return c.filter(Boolean).join(" ");
+function getListData<T = any>(resData: any): T[] {
+  if (!resData) return [];
+  if (Array.isArray(resData)) return resData as T[];
+  if (Array.isArray((resData as any).results)) return (resData as any).results as T[];
+  return [];
 }
 
-function getAccessToken() {
-  return localStorage.getItem("access_token") || "";
-}
-
-function clearTokens() {
-  localStorage.removeItem("access_token");
-  localStorage.removeItem("refresh_token");
-}
-
-async function fetchMe(): Promise<Me | null> {
-  const token = getAccessToken();
-  if (!token) return null;
-
-  try {
-    const res = await api.get(ENDPOINTS.me, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    return res.data as Me;
-  } catch {
-    return null;
-  }
-}
-
-function RequireAuth({ me, children }: { me: Me | null; children: React.ReactNode }) {
-  const loc = useLocation();
-  if (!me) return <Navigate to="/login" replace state={{ from: loc.pathname }} />;
-  return <>{children}</>;
-}
-
-function RequireAdmin({ me, children }: { me: Me | null; children: React.ReactNode }) {
-  const loc = useLocation();
-  if (!me) return <Navigate to="/login" replace state={{ from: loc.pathname }} />;
-  if (!me.is_staff) return <Navigate to="/" replace />;
-  return <>{children}</>;
-}
-
-/** Close-on-outside-click helper */
-function useOutsideClick<T extends HTMLElement>(onOutside: () => void) {
-  const ref = useRef<T | null>(null);
-
-  useEffect(() => {
-    function onDown(e: MouseEvent | TouchEvent) {
-      const el = ref.current;
-      if (!el) return;
-      if (e.target && el.contains(e.target as Node)) return;
-      onOutside();
+function formatApiError(e: any): string {
+  const data = e?.response?.data;
+  if (!data) return e?.message ?? "Request failed";
+  if (typeof data === "string") return data;
+  if (data.detail) return data.detail;
+  if (typeof data === "object") {
+    const keys = Object.keys(data);
+    if (keys.length) {
+      const k = keys[0];
+      const v = (data as any)[k];
+      if (Array.isArray(v)) return `${k}: ${v.join(", ")}`;
+      if (typeof v === "string") return `${k}: ${v}`;
     }
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("touchstart", onDown);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("touchstart", onDown);
-    };
-  }, [onOutside]);
-
-  return ref;
+  }
+  return "Request failed";
 }
 
-/** ---------- UI atoms ---------- */
+function safeHex(hex?: string | null) {
+  if (!hex) return null;
+  const h = String(hex).trim();
+  if (!h) return null;
+  return h.startsWith("#") ? h : `#${h}`;
+}
 
-function ButtonLink({
-  to,
-  variant = "primary",
-  size = "md",
-  className,
+const cx = (...c: Array<string | false | null | undefined>) => c.filter(Boolean).join(" ");
+
+const inputBase =
+  "w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none " +
+  "focus:ring-2 focus:ring-slate-200 focus:border-slate-300";
+
+const btnBase =
+  "rounded-xl px-3 py-2 text-sm font-semibold shadow-sm border border-slate-200 bg-white " +
+  "text-slate-900 hover:bg-slate-50 active:bg-slate-100 disabled:opacity-60 disabled:cursor-not-allowed";
+
+const btnPrimary =
+  "rounded-xl px-3 py-2 text-sm font-semibold shadow-sm bg-slate-900 text-white " +
+  "hover:bg-slate-800 active:bg-slate-950 disabled:opacity-60 disabled:cursor-not-allowed";
+
+const btnDanger =
+  "rounded-xl px-3 py-2 text-sm font-semibold shadow-sm border border-red-200 bg-red-50 text-red-800 " +
+  "hover:bg-red-100 disabled:opacity-60 disabled:cursor-not-allowed";
+
+const card = "rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden";
+
+/** ---------------- Drawer shell ----------------
+ * Fix: eliminate the “box in front of everything” vibe:
+ * - Make the drawer a true right panel with its own layout.
+ * - Keep header compact and aligned left.
+ */
+
+function DrawerShell({
+  open,
+  title,
+  onClose,
   children,
+  width = 980,
 }: {
-  to: string;
-  variant?: "primary" | "secondary" | "ghost";
-  size?: "sm" | "md" | "lg";
-  className?: string;
+  open: boolean;
+  title: string;
+  onClose: () => void;
   children: React.ReactNode;
+  width?: number;
 }) {
-  const base =
-    "inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition active:translate-y-[1px] focus:outline-none focus:ring-2 focus:ring-slate-400/40";
-  const sizes =
-    size === "sm"
-      ? "h-9 px-3 text-sm"
-      : size === "lg"
-      ? "h-12 px-5 text-base rounded-2xl"
-      : "h-10 px-4 text-sm";
-  const variants =
-    variant === "primary"
-      ? "bg-slate-900 text-white hover:bg-slate-800"
-      : variant === "secondary"
-      ? "bg-white text-slate-900 border border-slate-200 hover:bg-slate-50"
-      : "bg-transparent text-slate-900 hover:bg-slate-100";
-  return (
-    <Link to={to} className={cx(base, sizes, variants, className)}>
-      {children}
-    </Link>
-  );
-}
-
-function Button({
-  variant = "secondary",
-  size = "md",
-  className,
-  onClick,
-  children,
-  type = "button",
-}: {
-  variant?: "primary" | "secondary" | "ghost";
-  size?: "sm" | "md" | "lg";
-  className?: string;
-  onClick?: () => void;
-  children: React.ReactNode;
-  type?: "button" | "submit";
-}) {
-  const base =
-    "inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition active:translate-y-[1px] focus:outline-none focus:ring-2 focus:ring-slate-400/40";
-  const sizes =
-    size === "sm"
-      ? "h-9 px-3 text-sm"
-      : size === "lg"
-      ? "h-12 px-5 text-base rounded-2xl"
-      : "h-10 px-4 text-sm";
-  const variants =
-    variant === "primary"
-      ? "bg-slate-900 text-white hover:bg-slate-800"
-      : variant === "secondary"
-      ? "bg-white text-slate-900 border border-slate-200 hover:bg-slate-50"
-      : "bg-transparent text-slate-900 hover:bg-slate-100";
-  return (
-    <button type={type} onClick={onClick} className={cx(base, sizes, variants, className)}>
-      {children}
-    </button>
-  );
-}
-
-function Badge({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-900">
-      {children}
-    </span>
-  );
-}
-
-/** ---------- Admin dropdown (desktop + admin mode) ---------- */
-function AdminMenu({ compact = false }: { compact?: boolean }) {
-  const [open, setOpen] = useState(false);
-  const close = () => setOpen(false);
-  const menuRef = useOutsideClick<HTMLDivElement>(() => setOpen(false));
-
-  const btnClass = compact
-    ? "inline-flex h-10 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-900 shadow-sm hover:bg-slate-50"
-    : "inline-flex h-10 items-center gap-2 rounded-2xl bg-slate-900 px-3.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-800";
-
-  return (
-    <div className="relative" ref={menuRef}>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className={cx(
-          btnClass,
-          "outline-none focus-visible:ring-2 focus-visible:ring-slate-900/20 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-        )}
-        aria-haspopup="menu"
-        aria-expanded={open}
-      >
-        Admin
-        <span className={cx("opacity-80 transition-transform", open && "rotate-180")}>▾</span>
-      </button>
-
-      {open ? (
-        <div
-          className="absolute right-0 top-full z-50 mt-2 w-72 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl"
-          role="menu"
-        >
-          <div className="p-2">
-            <div className="px-3 pb-2 pt-2 text-[11px] font-black uppercase tracking-wider text-slate-400">
-              Catalog
-            </div>
-
-            <div className="grid gap-1">
-              {/* ✅ These paths match the routes below */}
-              <Link
-                to="/admin/parts"
-                className="flex items-center justify-between rounded-2xl px-3 py-2.5 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-                onClick={close}
-              >
-                Parts <span className="text-slate-400">↗</span>
-              </Link>
-              <Link
-                to="/admin/colors"
-                className="flex items-center justify-between rounded-2xl px-3 py-2.5 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-                onClick={close}
-              >
-                Colors <span className="text-slate-400">↗</span>
-              </Link>
-              <Link
-                to="/admin/part-colors"
-                className="flex items-center justify-between rounded-2xl px-3 py-2.5 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-                onClick={close}
-              >
-                Part Colors <span className="text-slate-400">↗</span>
-              </Link>
-            </div>
-
-            <div className="my-2 h-px bg-slate-200" />
-
-            <div className="px-3 pb-2 pt-2 text-[11px] font-black uppercase tracking-wider text-slate-400">
-              System
-            </div>
-            <div className="grid gap-1">
-              <a
-                href="/dj-admin/"
-                className="flex items-center justify-between rounded-2xl px-3 py-2.5 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-                onClick={close}
-              >
-                Django Admin <span className="text-slate-400">↗</span>
-              </a>
-            </div>
-          </div>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-/** ---------- Header ---------- */
-function Header({ me, onLogout }: { me: Me | null; onLogout: () => void }) {
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const mobileRef = useOutsideClick<HTMLDivElement>(() => setMobileOpen(false));
-  const loc = useLocation();
-
-  useEffect(() => setMobileOpen(false), [loc.pathname]);
-
-  const isAdminRoute = loc.pathname === "/admin" || loc.pathname.startsWith("/admin/");
-  const userLabel = useMemo(() => {
-    if (!me) return "";
-    return `@${me.username}${me.is_staff ? " • Admin" : ""}`;
-  }, [me]);
-
-  // Lock background scroll when mobile drawer is open
+  // lock scroll when open (optional but feels pro)
   useEffect(() => {
-    if (!mobileOpen) return;
+    if (!open) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = prev;
     };
-  }, [mobileOpen]);
+  }, [open]);
 
-  const MobileDrawer = mobileOpen
-    ? createPortal(
-        <div className="fixed inset-0 z-[1000]">
-          <button
-            className="absolute inset-0 bg-black/50"
-            onClick={() => setMobileOpen(false)}
-            aria-label="Close menu overlay"
-          />
+  if (!open) return null;
 
-          <div className="absolute right-0 top-0 h-full w-[86vw] max-w-sm bg-white shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-200 p-4">
-              <div className="text-sm font-black text-slate-900">
-                {isAdminRoute ? "Admin Menu" : "Menu"}
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[9999]"
+      role="dialog"
+      aria-modal="true"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      {/* overlay */}
+      <div className="absolute inset-0 bg-black/40" />
+
+      {/* panel wrapper (use flex so it's always right-aligned) */}
+      <div className="absolute inset-0 flex justify-end">
+        <div
+          className="h-full w-full bg-white shadow-2xl flex flex-col"
+          style={{ maxWidth: width }}
+        >
+          <div className="sticky top-0 z-10 border-b border-slate-200 bg-white/90 backdrop-blur px-4 py-3 flex items-center gap-3">
+            <div className="min-w-0 flex-1 text-left">
+              <div className="text-sm font-extrabold text-slate-900 truncate">
+                {title}
               </div>
-              <button
-                className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white hover:bg-slate-50"
-                onClick={() => setMobileOpen(false)}
-                aria-label="Close menu"
-              >
-                ✕
-              </button>
             </div>
+            <button type="button" className={btnBase} onClick={onClose}>
+              Close
+            </button>
+          </div>
 
-            <div className="p-4">
-              {!isAdminRoute ? (
-                <div className="grid gap-2">
-                  <Link
-                    to="/"
-                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-                  >
-                    Home
-                  </Link>
-                  <Link
-                    to="/browse"
-                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-                  >
-                    Browse
-                  </Link>
+          <div className="flex-1 overflow-auto p-4">{children}</div>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+function RowThumb({ src }: { src?: string | null }) {
+  return (
+    <div className="h-10 w-10 rounded-xl border border-slate-200 bg-slate-50 overflow-hidden flex items-center justify-center shrink-0">
+      {src ? (
+        <img
+          src={src}
+          alt=""
+          className="h-full w-full object-cover"
+          onError={(e) => {
+            (e.currentTarget as HTMLImageElement).style.display = "none";
+          }}
+        />
+      ) : (
+        <span className="text-[10px] text-slate-400 font-black">—</span>
+      )}
+    </div>
+  );
+}
+
+function MiniThumb({ src }: { src?: string | null }) {
+  return (
+    <div className="h-7 w-7 rounded-lg border border-slate-200 bg-slate-50 overflow-hidden flex items-center justify-center shrink-0">
+      {src ? (
+        <img
+          src={src}
+          alt=""
+          className="h-full w-full object-cover"
+          onError={(e) => {
+            (e.currentTarget as HTMLImageElement).style.display = "none";
+          }}
+        />
+      ) : (
+        <span className="text-[9px] text-slate-300 font-black">•</span>
+      )}
+    </div>
+  );
+}
+
+
+function SwatchDot({
+  hex,
+  active,
+}: {
+  hex: string | null;
+  active: boolean;
+}) {
+  return (
+    <span
+      className={cx(
+        "relative inline-flex items-center justify-center",
+        "h-8 w-8 rounded-full border border-slate-200 bg-white shadow-sm",
+        active ? "ring-2 ring-slate-900 ring-offset-2 ring-offset-white" : "hover:ring-2 hover:ring-slate-300 hover:ring-offset-2 hover:ring-offset-white"
+      )}
+    >
+      <span
+        className="h-6 w-6 rounded-full border border-black/10"
+        style={{ background: hex ?? "#e5e7eb" }}
+      />
+      {active ? (
+        <span className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full bg-slate-900 text-white text-[10px] font-black flex items-center justify-center shadow">
+          ✓
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+/** ---------------- Detail drawer ---------------- */
+
+function PartColorDetailDrawer({
+  open,
+  selected,
+  allItems,
+  colors,
+  parts,
+  saving,
+  err,
+  editing,
+  onClose,
+  onToggleEdit,
+  onDelete,
+  onSubmitEdit,
+  onSelect,
+}: {
+  open: boolean;
+  selected: PartColorRow | null;
+  allItems: PartColorRow[];
+  parts: Part[];
+  colors: Color[];
+  saving: boolean;
+  err: string | null;
+  editing: boolean;
+  onClose: () => void;
+  onToggleEdit: () => void;
+  onDelete: () => void;
+  onSubmitEdit: (payload: any) => void;
+  onSelect: (pc: PartColorRow) => void;
+}) {
+  const [colorQ, setColorQ] = useState("");
+
+  useEffect(() => {
+    if (!open) setColorQ("");
+  }, [open]);
+
+  const partPk = selected?.part?.id;
+
+  const siblings = useMemo(() => {
+    if (!partPk) return [];
+    return allItems.filter((x) => x.part?.id === partPk);
+  }, [allItems, partPk]);
+
+  const colorHexById = useMemo(() => {
+    const m = new Map<number, string | null>();
+    for (const c of colors) {
+      if (c?.id == null) continue;
+      m.set(c.id, safeHex((c as any).hex ?? null));
+    }
+    return m;
+  }, [colors]);
+
+  const swatches = useMemo(() => {
+    const map = new Map<
+      number,
+      { colorId: number; name: string; hex: string | null; row: PartColorRow; count: number }
+    >();
+
+    // pick a “best” row for each color
+    const score = (r: PartColorRow) => {
+      let s = 0;
+      if (r.thumb_url || r.image_url_1 || r.image_url_2) s += 10;
+      if (!r.variant) s += 2;
+      if (r.part_color_code) s += 1;
+      return s;
+    };
+
+    for (const row of siblings) {
+      const c = row.color;
+      if (!c?.id) continue;
+
+      const fromRow = safeHex((c as any).hex ?? null);
+      const fromLookup = colorHexById.get(c.id) ?? null;
+      const cHex = fromRow ?? fromLookup ?? null;
+
+      const existing = map.get(c.id);
+      if (!existing) {
+        map.set(c.id, { colorId: c.id, name: c.name ?? "—", hex: cHex, row, count: 1 });
+        continue;
+      }
+
+      existing.count += 1;
+      if (score(row) > score(existing.row)) {
+        map.set(c.id, { ...existing, row, hex: existing.hex ?? cHex });
+      }
+    }
+
+    // sort by name
+    return Array.from(map.values()).sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
+  }, [siblings, colorHexById]);
+
+  const swatchesFiltered = useMemo(() => {
+    const qq = colorQ.trim().toLowerCase();
+    if (!qq) return swatches;
+    return swatches.filter((s) => (s.name ?? "").toLowerCase().includes(qq));
+  }, [swatches, colorQ]);
+
+  const heroSrc = selected?.image_url_1 || selected?.thumb_url || selected?.image_url_2 || null;
+
+  // Keep title short and professional (avoid giant centered-looking strings)
+  const drawerTitle = useMemo(() => {
+    if (!selected?.part) return "PartColor";
+    const pid = selected.part.part_id ?? "Part";
+    return `${pid} • PartColor Details`;
+  }, [selected]);
+
+  // Single-line display fields: no wrap, truncate
+  const partLine = `${selected?.part?.part_id ?? "—"} — ${selected?.part?.name ?? "—"}`;
+  const colorLine = `${selected?.color?.name ?? "—"}${selected?.variant ? ` • ${selected.variant}` : ""}`;
+
+  return (
+    <DrawerShell open={open} title={drawerTitle} onClose={onClose} width={980}>
+      {!selected ? (
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
+          No selection.
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {err ? (
+            <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {err}
+            </div>
+          ) : null}
+
+          {/* Top section: looks like a real product detail page (not a “floating box”) */}
+          <div className={cx(card, "p-4")}>
+            <div className="flex flex-col gap-4 lg:flex-row">
+              {/* left: image (smaller and tidy) */}
+              <div className="w-full lg:w-[260px]">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 overflow-hidden aspect-square flex items-center justify-center">
+                  {heroSrc ? (
+                    <img
+                      src={heroSrc}
+                      alt=""
+                      className="h-full w-full object-contain"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).style.display = "none";
+                      }}
+                    />
+                  ) : (
+                    <div className="text-xs text-slate-500 font-black">No image</div>
+                  )}
                 </div>
-              ) : (
-                <div className="grid gap-2">
-                  <Link
-                    to="/"
-                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-                  >
-                    ← Back to app
-                  </Link>
-                </div>
-              )}
+              </div>
 
-              {me?.is_staff ? (
-                <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50 p-3">
-                  <div className="mb-2 text-xs font-black uppercase tracking-wide text-slate-500">
-                    Admin
-                  </div>
-                  <div className="grid gap-2">
-                    {/* ✅ These match the routes below */}
-                    <Link
-                      to="/admin/parts"
-                      className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-                    >
-                      Parts
-                    </Link>
-                    <Link
-                      to="/admin/colors"
-                      className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-                    >
-                      Colors
-                    </Link>
-                    <Link
-                      to="/admin/part-colors"
-                      className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-                    >
-                      Part Colors
-                    </Link>
-                    <a
-                      href="/dj-admin/"
-                      className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-                    >
-                      Django admin
-                    </a>
-                  </div>
-                </div>
-              ) : null}
+              {/* right: primary info */}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-start gap-3">
+                  <RowThumb src={selected.thumb_url || selected.image_url_1 || selected.image_url_2 || null} />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-base font-extrabold text-slate-900 truncate">{partLine}</div>
+                    <div className="mt-1 text-sm font-bold text-slate-700 truncate">{colorLine}</div>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-bold text-slate-700">
+                        {siblings.length} variants for this shape
+                      </span>
 
-              <div className="mt-4 h-px bg-slate-200" />
-
-              <div className="mt-4 grid gap-2">
-                {me ? (
-                  <>
-                    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900">
-                      {userLabel}
+                      {selected.part_color_code ? (
+                        <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-extrabold text-slate-900">
+                          ID: {selected.part_color_code}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold text-slate-500">
+                          ID: —
+                        </span>
+                      )}
                     </div>
-                    <button
-                      className="inline-flex h-10 w-full items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-                      onClick={onLogout}
-                    >
-                      Log out
+                  </div>
+
+                  {/* actions aligned top-right (pro layout) */}
+                  <div className="shrink-0 flex items-center gap-2">
+                    <button type="button" className={btnPrimary} onClick={onToggleEdit} disabled={saving}>
+                      {editing ? "Stop editing" : "Edit"}
                     </button>
-                  </>
-                ) : (
-                  <>
-                    <Link
-                      to="/login"
-                      className="inline-flex h-10 w-full items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-                    >
-                      Log in
-                    </Link>
-                    <Link
-                      to="/register"
-                      className="inline-flex h-10 w-full items-center justify-center rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-800"
-                    >
-                      Create account
-                    </Link>
-                  </>
-                )}
+                    <button type="button" className={btnDanger} onClick={onDelete} disabled={saving}>
+                      Delete
+                    </button>
+                  </div>
+                </div>
+
+                {/* links (small + clean) */}
+                {(selected.image_url_1 || selected.image_url_2) ? (
+                  <div className="mt-3 flex flex-wrap items-center gap-3">
+                    {selected.image_url_1 ? (
+                      <a
+                        href={selected.image_url_1}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-sm font-bold text-blue-600 hover:underline"
+                      >
+                        Open image 1
+                      </a>
+                    ) : null}
+                    {selected.image_url_2 ? (
+                      <a
+                        href={selected.image_url_2}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-sm font-bold text-blue-600 hover:underline"
+                      >
+                        Open image 2
+                      </a>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>
-        </div>,
-        document.body
-      )
-    : null;
 
-  return (
-    <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur">
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
-        {/* Left: Brand + Admin mode badge (always visible) */}
-        <div className="flex min-w-0 items-center gap-3">
-          <Link
-            to="/"
-            className="flex flex-shrink-0 items-center gap-2 text-sm font-black tracking-tight text-slate-900"
-            title="Home"
-          >
-            <span className="grid h-9 w-9 place-items-center rounded-xl bg-slate-900 text-white">
-              L
+         {/* Compact color picker: tiny swatches + hard-truncate text */}
+        {swatches.length > 0 ? (
+        <div className={cx(card, "p-3 sm:p-4")}>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="text-xs font-black text-slate-600">Choose a color</div>
+
+            {swatches.length >= 16 ? (
+                <input
+                className={cx(inputBase, "sm:w-[280px]")}
+                value={colorQ}
+                onChange={(e) => setColorQ(e.target.value)}
+                placeholder="Search..."
+                autoComplete="off"
+                />
+            ) : null}
+            </div>
+
+            {/* Selected label stays compact */}
+            <div className="mt-2 flex items-center gap-2 text-xs">
+            <span className="text-slate-500 font-semibold">Selected:</span>
+            <span className="font-extrabold text-slate-900 truncate max-w-[70%]">
+                {selected.color?.name ?? "—"}
+                {selected.variant ? <span className="text-slate-400 font-semibold"> • {selected.variant}</span> : null}
             </span>
-            <span className="hidden sm:block">LEGO Inventory</span>
-            <span className="sm:hidden">LEGO</span>
-          </Link>
+            </div>
 
-          {isAdminRoute ? (
-            <div className="flex min-w-0 items-center gap-2">
-              <span className="hidden sm:block h-6 w-px bg-slate-200" />
-              <div
-                className={cx(
-                  "inline-flex items-center rounded-xl border border-slate-200 bg-white",
-                  "px-2 py-1 text-[10px] sm:px-3 sm:text-xs",
-                  "font-black uppercase text-slate-900",
-                  "tracking-[0.32em] sm:tracking-[0.28em]",
-                  "max-w-[42vw] sm:max-w-none truncate"
-                )}
-                style={{ textRendering: "geometricPrecision" }}
-                title="Admin mode"
-              >
-                ADMIN MODE
-              </div>
+            {/* Tighter grid: more columns, smaller gaps */}
+            <div className="mt-3 grid gap-1.5 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8">
+            {swatchesFiltered.map((s) => {
+                const active = selected.color?.id === s.colorId;
+
+                return (
+                <button
+                    key={s.colorId}
+                    type="button"
+                    onClick={() => onSelect(s.row)}
+                    title={s.name}
+                    aria-label={`Select color ${s.name}`}
+                    className={cx(
+                    "w-full rounded-xl border px-2 py-1.5 text-left transition",
+                    "min-h-[44px] flex items-center gap-2", // <- fixed tile height so text can't break layout
+                    active
+                        ? "border-slate-900 ring-2 ring-slate-900 ring-offset-1 ring-offset-white bg-slate-50"
+                        : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                    )}
+                >
+                    {/* Smallest practical swatch, still clickable */}
+                    <span
+                    className={cx(
+                        "h-5 w-5 rounded-md border border-black/10 shrink-0",
+                        active ? "outline outline-2 outline-slate-900 outline-offset-1" : ""
+                    )}
+                    style={{ background: s.hex ?? "#e5e7eb" }}
+                    />
+
+                    {/* Hard truncate so it NEVER spills */}
+                    <span className="min-w-0 flex-1">
+                    <span className={cx("block text-xs font-extrabold truncate", active ? "text-slate-900" : "text-slate-800")}>
+                        {s.name}
+                    </span>
+
+                    {/* optional tiny meta line, only if you want it; remove if you want ultra-minimal */}
+                    {s.count > 1 ? (
+                        <span className="block text-[10px] text-slate-500 font-semibold truncate">
+                        {s.count} opts
+                        </span>
+                    ) : (
+                        <span className="block text-[10px] text-transparent">.</span>
+                    )}
+                    </span>
+
+                    {/* tiny check */}
+                    {active ? (
+                    <span className="h-4 w-4 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-black shrink-0">
+                        ✓
+                    </span>
+                    ) : null}
+                </button>
+                );
+            })}
+            </div>
+
+            {swatchesFiltered.length === 0 ? (
+            <div className="mt-2 text-sm text-slate-600">No matching colors.</div>
+            ) : null}
+        </div>
+        ) : null}
+
+
+
+          {/* Edit form */}
+          {editing ? (
+            <div className={cx(card, "p-4")}>
+              <div className="mb-3 text-xs font-black text-slate-600">Edit this PartColor</div>
+              <PartColorForm
+                parts={parts}
+                colors={colors}
+                submitting={saving}
+                initialValues={selected}
+                onSubmit={onSubmitEdit}
+              />
             </div>
           ) : null}
         </div>
-
-        {/* Desktop nav */}
-        <nav className="hidden items-center gap-2 sm:flex" aria-label="Primary">
-          {!isAdminRoute ? (
-            <>
-              <Link
-                to="/"
-                className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-100"
-              >
-                Home
-              </Link>
-
-              <Link
-                to="/browse"
-                className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-100"
-              >
-                Browse
-              </Link>
-              {me?.is_staff ? <AdminMenu /> : null}
-            </>
-          ) : (
-            <>
-              <ButtonLink to="/" variant="secondary" size="sm">
-                ← Back to app
-              </ButtonLink>
-              {me?.is_staff ? <AdminMenu compact /> : null}
-            </>
-          )}
-
-          <div className="ml-2 flex items-center gap-2">
-            {me ? (
-              <>
-                <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-900">
-                  {userLabel}
-                </span>
-                <Button variant="ghost" onClick={onLogout}>
-                  Log out
-                </Button>
-              </>
-            ) : (
-              <>
-                <ButtonLink to="/login" variant="ghost">
-                  Log in
-                </ButtonLink>
-                <ButtonLink to="/register" variant="primary">
-                  Create account
-                </ButtonLink>
-              </>
-            )}
-          </div>
-        </nav>
-
-        {/* Mobile menu button */}
-        <div className="relative sm:hidden" ref={mobileRef}>
-          <button
-            className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white hover:bg-slate-50"
-            onClick={() => setMobileOpen((v) => !v)}
-            aria-label="Open menu"
-            aria-expanded={mobileOpen}
-          >
-            <span className="text-lg">☰</span>
-          </button>
-        </div>
-      </div>
-
-      {MobileDrawer}
-    </header>
+      )}
+    </DrawerShell>
   );
 }
 
-/** ---------- Layout ---------- */
-function PageShell({ children }: { children: React.ReactNode }) {
-  return (
-    <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
-      <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_20px_60px_rgba(2,6,23,0.08)]">
-        <div className="bg-[radial-gradient(900px_500px_at_10%_0%,rgba(15,23,42,0.10),transparent)] p-6 sm:p-10">
-          {children}
-        </div>
-      </div>
-    </main>
-  );
-}
+/** ---------------- Page ---------------- */
 
-/** ---------- Pages ---------- */
-function Home({ me }: { me: Me | null }) {
-  return (
-    <PageShell>
-      <Badge>Inventory • Pricing • Sets • Minifigs</Badge>
+type Group = { part: Part; rows: PartColorRow[] };
 
-      <h1 className="mt-4 text-4xl font-black tracking-tight text-slate-900 sm:text-5xl">
-        Track LEGO parts like a pro.
-      </h1>
+export default function PartColorsPage() {
+  const [items, setItems] = useState<PartColorRow[]>([]);
+  const [parts, setParts] = useState<Part[]>([]);
+  const [colors, setColors] = useState<Color[]>([]);
+  const [q, setQ] = useState("");
 
-      <p className="mt-3 max-w-2xl text-base leading-7 text-slate-600">
-        Keep your catalog clean, price parts accurately, and build sets with confidence.
-        {me ? " You’re signed in — jump back in." : " Create an account to get started."}
-      </p>
+  const [expanded, setExpanded] = useState<Record<number, boolean>>({});
+  const [createOpen, setCreateOpen] = useState(false);
 
-      <div className="mt-6 flex flex-wrap gap-3">
-        {me ? (
-          <>
-            {me.is_staff ? (
-              <ButtonLink to="/admin/parts" variant="primary" size="lg">
-                Open Admin
-              </ButtonLink>
-            ) : (
-              <ButtonLink to="/account" variant="primary" size="lg">
-                My Account
-              </ButtonLink>
-            )}
-            <ButtonLink to="/browse" variant="secondary" size="lg">
-              Browse
-            </ButtonLink>
-          </>
-        ) : (
-          <>
-            <ButtonLink to="/register" variant="primary" size="lg">
-              Create account
-            </ButtonLink>
-            <ButtonLink to="/login" variant="secondary" size="lg">
-              Log in
-            </ButtonLink>
-          </>
-        )}
-      </div>
-    </PageShell>
-  );
-}
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [selected, setSelected] = useState<PartColorRow | null>(null);
 
-function AccountPage({ me }: { me: Me }) {
-  return (
-    <PageShell>
-      <Badge>Account</Badge>
-      <h2 className="mt-4 text-2xl font-black tracking-tight text-slate-900">
-        Welcome, @{me.username}
-      </h2>
-      <div className="mt-6 grid gap-4 sm:grid-cols-2">
-        <div className="rounded-2xl border border-slate-200 bg-white p-4">
-          <div className="text-xs font-black uppercase tracking-wide text-slate-500">Email</div>
-          <div className="mt-1 text-sm font-semibold text-slate-900">{me.email}</div>
-        </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-4">
-          <div className="text-xs font-black uppercase tracking-wide text-slate-500">Role</div>
-          <div className="mt-1 text-sm font-semibold text-slate-900">
-            {me.is_staff ? "Admin" : "User"}
-          </div>
-        </div>
-      </div>
-    </PageShell>
-  );
-}
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
-function BrowsePlaceholder() {
-  return (
-    <PageShell>
-      <Badge>Browse</Badge>
-      <h2 className="mt-4 text-2xl font-black tracking-tight text-slate-900">Coming soon</h2>
-      <p className="mt-2 text-sm leading-6 text-slate-600">
-        This will be public browsing later. Admin pages are under{" "}
-        <span className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-0.5 font-mono text-xs text-slate-800">
-          /admin/*
-        </span>
-        .
-      </p>
-    </PageShell>
-  );
-}
+  async function loadAll() {
+    setErr(null);
+    const [pcRes, pRes, cRes] = await Promise.all([
+      api.get(ENDPOINTS.partColors),
+      api.get(ENDPOINTS.parts),
+      api.get(ENDPOINTS.colors),
+    ]);
 
-export default function App() {
-  const [me, setMe] = useState<Me | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  async function loadMe() {
-    setLoading(true);
-    setMe(await fetchMe());
-    setLoading(false);
+    setItems(getListData<PartColorRow>(pcRes.data));
+    setParts(getListData<Part>(pRes.data));
+    setColors(getListData<Color>(cRes.data));
   }
 
   useEffect(() => {
-    loadMe();
+    loadAll().catch((e) => setErr(formatApiError(e)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function logout() {
-    clearTokens();
-    setMe(null);
+  const grouped: Group[] = useMemo(() => {
+    const map = new Map<number, Group>();
+
+    for (const pc of items) {
+      const key = pc.part?.id;
+      if (!key || !pc.part) continue;
+      if (!map.has(key)) map.set(key, { part: pc.part, rows: [] });
+      map.get(key)!.rows.push(pc);
+    }
+
+    for (const g of map.values()) {
+      g.rows.sort((a, b) => {
+        const ac = (a.part_color_code ?? "").toLowerCase();
+        const bc = (b.part_color_code ?? "").toLowerCase();
+        if (ac !== bc) return ac.localeCompare(bc);
+
+        const an = (a.color?.name ?? "").toLowerCase();
+        const bn = (b.color?.name ?? "").toLowerCase();
+        if (an !== bn) return an.localeCompare(bn);
+
+        return (a.variant ?? "").localeCompare(b.variant ?? "");
+      });
+    }
+
+    let arr = Array.from(map.values()).sort((a, b) =>
+      (a.part.part_id ?? "").localeCompare(b.part.part_id ?? "")
+    );
+
+    const qq = q.trim().toLowerCase();
+    if (qq) {
+      arr = arr
+        .map((g) => {
+          const partHit = `${g.part.part_id ?? ""} ${g.part.name ?? ""}`.toLowerCase().includes(qq);
+
+          const rows = partHit
+            ? g.rows
+            : g.rows.filter((pc) =>
+                `${pc.part_color_code ?? ""} ${pc.color?.name ?? ""} ${pc.variant ?? ""}`
+                  .toLowerCase()
+                  .includes(qq)
+              );
+
+          return { ...g, rows };
+        })
+        .filter((g) => g.rows.length > 0);
+    }
+
+    return arr;
+  }, [items, q]);
+
+  function toggle(partPk: number) {
+    setExpanded((prev) => ({ ...prev, [partPk]: !prev[partPk] }));
+  }
+
+  function expandAll() {
+    const all: Record<number, boolean> = {};
+    grouped.forEach((g) => {
+      if (g.part?.id != null) all[g.part.id] = true;
+    });
+    setExpanded(all);
+  }
+
+  function collapseAll() {
+    setExpanded({});
+  }
+
+  function openDetail(pc: PartColorRow) {
+    setSelected(pc);
+    setDetailOpen(true);
+    setEditing(false);
+    setErr(null);
+  }
+
+  async function create(payload: any) {
+    setSaving(true);
+    setErr(null);
+    try {
+      await api.post(ENDPOINTS.partColors, payload);
+      setCreateOpen(false);
+      await loadAll();
+    } catch (e: any) {
+      setErr(formatApiError(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveEdit(payload: any) {
+    if (!selected?.id) return;
+    setSaving(true);
+    setErr(null);
+    try {
+      const res = await api.patch(`${ENDPOINTS.partColors}${selected.id}/`, payload);
+      setSelected(res.data);
+      setItems((prev) => prev.map((x) => (x.id === selected.id ? res.data : x)));
+      setEditing(false);
+    } catch (e: any) {
+      setErr(formatApiError(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function removeSelected() {
+    if (!selected?.id) return;
+    if (!confirm("Delete this PartColor?")) return;
+
+    setSaving(true);
+    setErr(null);
+    try {
+      await api.delete(`${ENDPOINTS.partColors}${selected.id}/`);
+      setDetailOpen(false);
+      setSelected(null);
+      setEditing(false);
+      await loadAll();
+    } catch (e: any) {
+      setErr(formatApiError(e));
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <Header me={me} onLogout={logout} />
+    <div className="space-y-3">
+      {/* top bar */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+        <input
+          className={cx(inputBase, "sm:max-w-md")}
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search shape, color, variant, or your ID..."
+          autoComplete="off"
+        />
 
-      {loading ? (
-        <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
-          <div className="rounded-3xl border border-slate-200 bg-white p-6 text-sm font-semibold text-slate-600">
-            Loading…
-          </div>
-        </main>
-      ) : (
-        <Routes>
-          <Route path="/" element={<Home me={me} />} />
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className={btnPrimary} onClick={() => setCreateOpen(true)}>
+            + New PartColor
+          </button>
 
-          <Route path="/login" element={<LoginPage onLogin={loadMe} />} />
-          <Route path="/register" element={<RegisterPage />} />
+          <button type="button" className={btnBase} onClick={expandAll}>
+            Expand all
+          </button>
 
-          <Route
-            path="/account"
-            element={
-              <RequireAuth me={me}>
-                <AccountPage me={me as Me} />
-              </RequireAuth>
-            }
-          />
+          <button type="button" className={btnBase} onClick={collapseAll}>
+            Collapse all
+          </button>
+        </div>
 
-          <Route path="/browse" element={<BrowsePlaceholder />} />
+        <div className="text-xs text-slate-500 font-semibold sm:ml-auto">
+          {grouped.length} shapes • {items.length} rows
+        </div>
+      </div>
 
-          {/* ✅ Admin routes (menu paths match these exactly) */}
-          <Route
-            path="/admin"
-            element={
-              <RequireAdmin me={me}>
-                <AdminLayout />
-              </RequireAdmin>
-            }
-          >
-            <Route index element={<Navigate to="/admin/parts" replace />} />
+      {err ? (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {err}
+        </div>
+      ) : null}
 
-            {/* ✅ All three admin pages come from the SAME FILE import above */}
-            <Route path="parts" element={<PartsAdminPage />} />
-            <Route path="colors" element={<ColorsAdminPage />} />
-            <Route path="part-colors" element={<PartColorsPage />} />
-          </Route>
+      {/* grouped list */}
+      <div className={card}>
+        {grouped.length === 0 ? (
+          <div className="p-4 text-sm text-slate-600">No results.</div>
+        ) : (
+          grouped.map((g, idx) => {
+            const isOpen = !!expanded[g.part.id];
+            const thumbs = g.rows
+              .map((r) => r.thumb_url || r.image_url_1 || r.image_url_2 || null)
+              .filter(Boolean)
+              .slice(0, 4) as string[];
 
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      )}
+            const showPlaceholders = Math.max(0, 4 - thumbs.length);
+
+            return (
+              <div key={g.part.id} className={idx === 0 ? "" : "border-t border-slate-200"}>
+                <button
+                  type="button"
+                  className="w-full px-4 py-3 flex items-center gap-3 hover:bg-slate-50 text-left"
+                  onClick={() => toggle(g.part.id)}
+                >
+                  <div className="w-6 text-slate-500 font-black">{isOpen ? "▾" : "▸"}</div>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-extrabold text-slate-900 break-words">
+                      {g.part.part_id} — {g.part.name}{" "}
+                      <span className="text-slate-500 font-bold">({g.rows.length})</span>
+                    </div>
+
+                    <div className="mt-2 flex items-center gap-2 flex-wrap">
+                      {thumbs.map((t, i) => (
+                        <MiniThumb key={`${g.part.id}-t-${i}`} src={t} />
+                      ))}
+                      {Array.from({ length: showPlaceholders }).map((_, i) => (
+                        <MiniThumb key={`${g.part.id}-p-${i}`} src={null} />
+                      ))}
+                      <div className="text-xs text-slate-500 font-semibold">
+                        {thumbs.length > 0 ? "preview" : "no images yet"}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="text-xs text-slate-500 font-semibold">{isOpen ? "hide" : "show"}</div>
+                </button>
+
+                {isOpen ? (
+                  <div className="border-t border-slate-200">
+                    {g.rows.map((pc, pcIdx) => {
+                      const img = pc.thumb_url || pc.image_url_1 || pc.image_url_2 || null;
+                      const idText = pc.part_color_code ? `ID: ${pc.part_color_code}` : "ID: —";
+                      const nameText = pc.color?.name ?? "—";
+
+                      return (
+                        <button
+                          key={pc.id}
+                          type="button"
+                          className={cx(
+                            "w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-slate-50",
+                            pcIdx === 0 ? "" : "border-t border-slate-100"
+                          )}
+                          onClick={() => openDetail(pc)}
+                        >
+                          <RowThumb src={img} />
+
+                          <div className="hidden sm:block w-[240px] text-xs font-semibold text-slate-600 truncate">
+                            {idText}
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm font-extrabold text-slate-900 truncate">
+                              {nameText}{" "}
+                              {pc.variant ? <span className="text-slate-500 font-bold">• {pc.variant}</span> : null}
+                            </div>
+
+                            <div className="sm:hidden text-xs text-slate-500 font-semibold truncate">
+                              {idText}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* create */}
+      <DrawerShell open={createOpen} title="New PartColor" onClose={() => setCreateOpen(false)} width={980}>
+        <PartColorForm parts={parts} colors={colors} submitting={saving} onSubmit={create} />
+      </DrawerShell>
+
+      {/* detail */}
+      <PartColorDetailDrawer
+        open={detailOpen}
+        selected={selected}
+        allItems={items}
+        parts={parts}
+        colors={colors}
+        saving={saving}
+        err={err}
+        editing={editing}
+        onClose={() => {
+          setDetailOpen(false);
+          setSelected(null);
+          setEditing(false);
+          setErr(null);
+        }}
+        onToggleEdit={() => setEditing((v) => !v)}
+        onDelete={removeSelected}
+        onSubmitEdit={saveEdit}
+        onSelect={(pc) => {
+          setSelected(pc);
+          setEditing(false);
+          setErr(null);
+        }}
+      />
     </div>
   );
 }
