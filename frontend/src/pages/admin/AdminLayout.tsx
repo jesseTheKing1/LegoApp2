@@ -3,9 +3,8 @@ import React from "react";
 import { Outlet } from "react-router-dom";
 
 /**
- * AdminLayout is intentionally "headerless".
- * The main App Header switches into Admin Mode when route starts with /admin,
- * so we don't render a second header here.
+ * Headerless AdminLayout.
+ * The main App header switches into Admin Mode on /admin routes.
  */
 export default function AdminLayout() {
   return (

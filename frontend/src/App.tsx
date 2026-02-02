@@ -1,5 +1,7 @@
+// src/App.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Routes, Route, Link, Navigate, useLocation } from "react-router-dom";
+import { createPortal } from "react-dom";
 import api from "./api/client";
 import { ENDPOINTS } from "./api/endpoints";
 
@@ -256,14 +258,149 @@ function Header({ me, onLogout }: { me: Me | null; onLogout: () => void }) {
     return `@${me.username}${me.is_staff ? " • Admin" : ""}`;
   }, [me]);
 
+  // Lock background scroll when mobile drawer is open
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [mobileOpen]);
+
+  const MobileDrawer = mobileOpen
+    ? createPortal(
+        <div className="fixed inset-0 z-[1000]">
+          {/* Dark overlay */}
+          <button
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setMobileOpen(false)}
+            aria-label="Close menu overlay"
+          />
+
+          {/* Drawer */}
+          <div className="absolute right-0 top-0 h-full w-[86vw] max-w-sm bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 p-4">
+              <div className="text-sm font-black text-slate-900">
+                {isAdminRoute ? "Admin Menu" : "Menu"}
+              </div>
+              <button
+                className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white hover:bg-slate-50"
+                onClick={() => setMobileOpen(false)}
+                aria-label="Close menu"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-4">
+              {!isAdminRoute ? (
+                <div className="grid gap-2">
+                  <Link
+                    to="/"
+                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                  >
+                    Home
+                  </Link>
+                  <Link
+                    to="/browse"
+                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                  >
+                    Browse
+                  </Link>
+                </div>
+              ) : (
+                <div className="grid gap-2">
+                  <Link
+                    to="/"
+                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                  >
+                    ← Back to app
+                  </Link>
+                </div>
+              )}
+
+              {me?.is_staff ? (
+                <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="mb-2 text-xs font-black uppercase tracking-wide text-slate-500">
+                    Admin
+                  </div>
+                  <div className="grid gap-2">
+                    <Link
+                      to="/admin/parts"
+                      className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                    >
+                      Parts
+                    </Link>
+                    <Link
+                      to="/admin/colors"
+                      className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                    >
+                      Colors
+                    </Link>
+                    <Link
+                      to="/admin/part-colors"
+                      className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                    >
+                      Part Colors
+                    </Link>
+                    <a
+                      href="/dj-admin/"
+                      className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                    >
+                      Django admin
+                    </a>
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="mt-4 h-px bg-slate-200" />
+
+              <div className="mt-4 grid gap-2">
+                {me ? (
+                  <>
+                    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900">
+                      {userLabel}
+                    </div>
+                    <button
+                      className="inline-flex h-10 w-full items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                      onClick={onLogout}
+                    >
+                      Log out
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <Link
+                      to="/login"
+                      className="inline-flex h-10 w-full items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                    >
+                      Log in
+                    </Link>
+                    <Link
+                      to="/register"
+                      className="inline-flex h-10 w-full items-center justify-center rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-800"
+                    >
+                      Create account
+                    </Link>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )
+    : null;
+
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
-        {/* Left: Brand / Admin mode */}
-        <div className="flex items-center gap-3">
+        {/* Left: Brand + Admin mode badge (always visible) */}
+        <div className="flex min-w-0 items-center gap-3">
           <Link
             to="/"
-            className="flex items-center gap-2 text-sm font-black tracking-tight text-slate-900"
+            className="flex flex-shrink-0 items-center gap-2 text-sm font-black tracking-tight text-slate-900"
             title="Home"
           >
             <span className="grid h-9 w-9 place-items-center rounded-xl bg-slate-900 text-white">
@@ -274,20 +411,17 @@ function Header({ me, onLogout }: { me: Me | null; onLogout: () => void }) {
           </Link>
 
           {isAdminRoute ? (
-            <div className="hidden sm:flex items-center gap-2">
-              <span className="h-6 w-px bg-slate-200" />
-              {/* Pixel-ish admin title (no extra font install needed) */}
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="hidden sm:block h-6 w-px bg-slate-200" />
               <div
                 className={cx(
-                  "rounded-xl border border-slate-200 bg-white px-3 py-1 text-xs",
-                  "font-black tracking-[0.25em] text-slate-900"
+                  "inline-flex items-center rounded-xl border border-slate-200 bg-white",
+                  "px-2 py-1 text-[10px] sm:px-3 sm:text-xs",
+                  "font-black uppercase text-slate-900",
+                  "tracking-[0.32em] sm:tracking-[0.28em]",
+                  "max-w-[42vw] sm:max-w-none truncate"
                 )}
-                style={{
-                  // gives a pixel/arcade vibe without needing a font file
-                  textRendering: "geometricPrecision",
-                  letterSpacing: "0.28em",
-                  textTransform: "uppercase",
-                }}
+                style={{ textRendering: "geometricPrecision" }}
                 title="Admin mode"
               >
                 ADMIN MODE
@@ -316,11 +450,9 @@ function Header({ me, onLogout }: { me: Me | null; onLogout: () => void }) {
             </>
           ) : (
             <>
-              {/* Admin mode: keep UI clean */}
               <ButtonLink to="/" variant="secondary" size="sm">
                 ← Back to app
               </ButtonLink>
-
               {me?.is_staff ? <AdminMenu compact /> : null}
             </>
           )}
@@ -360,119 +492,14 @@ function Header({ me, onLogout }: { me: Me | null; onLogout: () => void }) {
           >
             <span className="text-lg">☰</span>
           </button>
-
-          {/* Mobile overlay + drawer */}
-          {mobileOpen ? (
-            <div className="fixed inset-0 z-50">
-              <div className="absolute inset-0 bg-black/40" />
-              <div className="absolute right-0 top-0 h-full w-[86vw] max-w-sm bg-white shadow-2xl">
-                <div className="flex items-center justify-between border-b border-slate-200 p-4">
-                  <div className="text-sm font-black text-slate-900">
-                    {isAdminRoute ? "Admin Menu" : "Menu"}
-                  </div>
-                  <button
-                    className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white hover:bg-slate-50"
-                    onClick={() => setMobileOpen(false)}
-                    aria-label="Close menu"
-                  >
-                    ✕
-                  </button>
-                </div>
-
-                <div className="p-4">
-                  {!isAdminRoute ? (
-                    <div className="grid gap-2">
-                      <Link
-                        to="/"
-                        className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-                      >
-                        Home
-                      </Link>
-                      <Link
-                        to="/browse"
-                        className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-                      >
-                        Browse
-                      </Link>
-                    </div>
-                  ) : (
-                    <div className="grid gap-2">
-                      <Link
-                        to="/"
-                        className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-                      >
-                        ← Back to app
-                      </Link>
-                    </div>
-                  )}
-
-                  {me?.is_staff ? (
-                    <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50 p-3">
-                      <div className="mb-2 text-xs font-black uppercase tracking-wide text-slate-500">
-                        Admin
-                      </div>
-                      <div className="grid gap-2">
-                        <Link
-                          to="/admin/parts"
-                          className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-                        >
-                          Parts
-                        </Link>
-                        <Link
-                          to="/admin/colors"
-                          className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-                        >
-                          Colors
-                        </Link>
-                        <Link
-                          to="/admin/part-colors"
-                          className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-                        >
-                          Part Colors
-                        </Link>
-                        <a
-                          href="/dj-admin/"
-                          className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-                        >
-                          Django admin
-                        </a>
-                      </div>
-                    </div>
-                  ) : null}
-
-                  <div className="mt-4 h-px bg-slate-200" />
-
-                  <div className="mt-4 grid gap-2">
-                    {me ? (
-                      <>
-                        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900">
-                          {userLabel}
-                        </div>
-                        <Button variant="secondary" className="w-full" onClick={onLogout}>
-                          Log out
-                        </Button>
-                      </>
-                    ) : (
-                      <>
-                        <ButtonLink to="/login" variant="secondary" className="w-full">
-                          Log in
-                        </ButtonLink>
-                        <ButtonLink to="/register" variant="primary" className="w-full">
-                          Create account
-                        </ButtonLink>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : null}
         </div>
       </div>
+
+      {/* Mobile drawer rendered via portal so it darkens EVERYTHING */}
+      {MobileDrawer}
     </header>
   );
 }
-
 
 /** ---------- Layout ---------- */
 function PageShell({ children }: { children: React.ReactNode }) {
