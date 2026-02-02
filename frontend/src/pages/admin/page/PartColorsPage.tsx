@@ -17,14 +17,12 @@ function formatApiError(e: any): string {
   if (!data) return e?.message ?? "Request failed";
   if (typeof data === "string") return data;
   if (data.detail) return data.detail;
-  // DRF field errors
+  // DRF field errors (best-effort)
   if (typeof data === "object") {
-    try {
-      const firstKey = Object.keys(data)[0];
-      const v = (data as any)[firstKey];
-      if (Array.isArray(v)) return `${firstKey}: ${v.join(", ")}`;
-      if (typeof v === "string") return `${firstKey}: ${v}`;
-    } catch {}
+    const k = Object.keys(data)[0];
+    const v = (data as any)[k];
+    if (Array.isArray(v)) return `${k}: ${v.join(", ")}`;
+    if (typeof v === "string") return `${k}: ${v}`;
   }
   return "Request failed";
 }
@@ -77,8 +75,11 @@ function DrawerShell({
       }}
     >
       <div className="h-full bg-white shadow-2xl w-full" style={{ width: `min(${width}px, 100%)` }}>
-        <div className="sticky top-0 z-10 border-b border-slate-200 bg-white/90 backdrop-blur px-4 py-3 flex items-center justify-between gap-3">
-          <div className="text-sm font-extrabold text-slate-900 truncate">{title}</div>
+        {/* Header: force left alignment; never “looks centered” */}
+        <div className="sticky top-0 z-10 border-b border-slate-200 bg-white/90 backdrop-blur px-4 py-3 flex items-center gap-3">
+          <div className="min-w-0 flex-1 text-left">
+            <div className="text-sm font-extrabold text-slate-900 truncate">{title}</div>
+          </div>
           <button type="button" className={btnBase} onClick={onClose}>
             Close
           </button>
@@ -163,7 +164,6 @@ function PartColorDetailDrawer({
 }) {
   const [colorQ, setColorQ] = useState("");
 
-  // reset local filter when switching items / closing
   useEffect(() => {
     if (!open) setColorQ("");
   }, [open]);
@@ -229,12 +229,15 @@ function PartColorDetailDrawer({
 
   const heroSrc = selected?.image_url_1 || selected?.thumb_url || selected?.image_url_2 || null;
 
+  // IMPORTANT: keep Drawer title short so it never appears “centered” or wraps
   const drawerTitle = useMemo(() => {
     if (!selected?.part) return "PartColor";
-    const p = `${selected.part.part_id ?? ""} — ${selected.part.name ?? ""}`.trim();
-    const c = selected.color?.name ? ` • ${selected.color.name}` : "";
-    return (p + c).trim();
+    return `${selected.part.part_id ?? "Part"} — PartColor`;
   }, [selected]);
+
+  // Single-line, no wrap display strings (truncate instead)
+  const partLine = `${selected?.part?.part_id ?? "—"} — ${selected?.part?.name ?? "—"}`;
+  const colorLine = `${selected?.color?.name ?? "—"}${selected?.variant ? ` • ${selected.variant}` : ""}`;
 
   return (
     <DrawerShell open={open} title={drawerTitle} onClose={onClose} width={980}>
@@ -250,9 +253,9 @@ function PartColorDetailDrawer({
             </div>
           ) : null}
 
-          {/* Top: Hero + Details */}
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[380px_1fr]">
-            {/* hero */}
+          {/* Top: smaller hero + details */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[300px_1fr]">
+            {/* hero (smaller) */}
             <div className="rounded-2xl border border-slate-200 bg-slate-50 overflow-hidden flex items-center justify-center aspect-square">
               {heroSrc ? (
                 <img
@@ -270,35 +273,62 @@ function PartColorDetailDrawer({
 
             {/* details */}
             <div className={cx(card, "p-4 space-y-3")}>
-              {/* part identity row (never awkwardly “middle cut”) */}
               <div className="grid grid-cols-[auto_1fr] gap-3 items-start">
                 <RowThumb src={selected.thumb_url || selected.image_url_1 || selected.image_url_2 || null} />
 
                 <div className="min-w-0">
-                  <div className="text-sm font-extrabold text-slate-900 leading-tight break-words">
-                    <span className="mr-2">{selected.part?.part_id ?? "—"}</span>
-                    <span className="text-slate-700 font-bold">—</span>{" "}
-                    <span>{selected.part?.name ?? "—"}</span>
+                  {/* no wrapping: truncate */}
+                  <div className="text-sm font-extrabold text-slate-900 leading-tight truncate">
+                    {partLine}
                   </div>
-
-                  <div className="mt-1 text-sm font-bold text-slate-900 leading-tight break-words">
-                    {selected.color?.name ?? "—"}
-                    {selected.variant ? <span className="text-slate-500 font-bold"> • {selected.variant}</span> : null}
+                  <div className="mt-1 text-sm font-bold text-slate-900 leading-tight truncate">
+                    {colorLine}
                   </div>
-
                   <div className="mt-1 text-xs text-slate-500 font-semibold">
                     {siblings.length} variants for this shape
                   </div>
                 </div>
               </div>
 
-              {/* Your PartColor ID */}
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                <div className="text-[11px] text-slate-500 font-black">Your PartColor ID</div>
-                <div className="text-sm font-extrabold text-slate-900">{selected.part_color_code ?? "—"}</div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="text-[11px] text-slate-500 font-black">Your PartColor ID</div>
+                  <div className="text-sm font-extrabold text-slate-900 truncate">
+                    {selected.part_color_code ?? "—"}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="text-[11px] text-slate-500 font-black">Images</div>
+                  <div className="mt-1 flex items-center gap-3">
+                    {selected.image_url_1 ? (
+                      <a
+                        href={selected.image_url_1}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-sm font-bold text-blue-600 hover:underline"
+                      >
+                        Open 1
+                      </a>
+                    ) : (
+                      <span className="text-sm font-bold text-slate-400">—</span>
+                    )}
+                    {selected.image_url_2 ? (
+                      <a
+                        href={selected.image_url_2}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-sm font-bold text-blue-600 hover:underline"
+                      >
+                        Open 2
+                      </a>
+                    ) : (
+                      <span className="text-sm font-bold text-slate-400">—</span>
+                    )}
+                  </div>
+                </div>
               </div>
 
-              {/* Links + Actions */}
               <div className="flex flex-wrap items-center gap-2">
                 <button type="button" className={btnPrimary} onClick={onToggleEdit} disabled={saving}>
                   {editing ? "Stop editing" : "Edit"}
@@ -312,40 +342,17 @@ function PartColorDetailDrawer({
                 >
                   Delete
                 </button>
-
-                <div className="ml-auto flex items-center gap-3">
-                  {selected.image_url_1 ? (
-                    <a
-                      href={selected.image_url_1}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-sm font-bold text-blue-600 hover:underline"
-                    >
-                      Open image 1
-                    </a>
-                  ) : null}
-                  {selected.image_url_2 ? (
-                    <a
-                      href={selected.image_url_2}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-sm font-bold text-blue-600 hover:underline"
-                    >
-                      Open image 2
-                    </a>
-                  ) : null}
-                </div>
               </div>
             </div>
           </div>
 
-          {/* Switch color — dense grid that uses the whole width */}
+          {/* Switch color — MORE compact, no wrapping labels (tooltip for full name) */}
           {swatches.length > 0 ? (
             <div className={cx(card, "p-4 space-y-3")}>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div className="text-xs font-black text-slate-600">Switch color</div>
 
-                {swatches.length >= 18 ? (
+                {swatches.length >= 20 ? (
                   <input
                     className={cx(inputBase, "sm:w-[320px]")}
                     value={colorQ}
@@ -356,10 +363,14 @@ function PartColorDetailDrawer({
                 ) : null}
               </div>
 
-              <div className="grid gap-2 grid-cols-[repeat(auto-fit,minmax(52px,1fr))]">
+              {/* super dense grid; labels do NOT wrap (they truncate) */}
+              <div className="grid gap-1.5 grid-cols-[repeat(auto-fit,minmax(36px,1fr))]">
                 {swatchesFiltered.map((s) => {
                   const active = selected.color?.id === s.colorId;
                   const dot = s.hex ?? "#e5e7eb";
+
+                  // optional tiny label; keep it single-line truncate
+                  const tinyLabel = (s.name ?? "—").replace(/\s+/g, " ").slice(0, 10);
 
                   return (
                     <button
@@ -369,26 +380,26 @@ function PartColorDetailDrawer({
                       title={s.name}
                       aria-label={`Switch to ${s.name}`}
                       className={cx(
-                        "rounded-xl border p-2 flex flex-col items-center justify-center gap-1 shadow-sm",
+                        "rounded-lg border px-1.5 py-1.5 flex flex-col items-center justify-center gap-1",
                         "hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-300",
-                        active ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-900"
+                        active ? "border-slate-900 bg-slate-900" : "border-slate-200 bg-white"
                       )}
                     >
                       <span
-                        className={cx("h-7 w-7 rounded-lg border border-black/10", active ? "ring-2 ring-white/80" : "")}
+                        className={cx(
+                          "h-5 w-5 rounded-md border border-black/10",
+                          active ? "ring-2 ring-white/80" : ""
+                        )}
                         style={{ background: dot }}
                       />
-                      <span className={cx("text-[11px] font-bold leading-tight text-center", active ? "text-white/90" : "text-slate-600")}>
-                        {(s.name ?? "—").slice(0, 9)}
+                      <span
+                        className={cx(
+                          "text-[10px] font-extrabold leading-none w-full text-center truncate",
+                          active ? "text-white/85" : "text-slate-500"
+                        )}
+                      >
+                        {tinyLabel}
                       </span>
-
-                      {s.count > 1 ? (
-                        <span className={cx("text-[10px] font-extrabold", active ? "text-white/70" : "text-slate-400")}>
-                          +{s.count - 1}
-                        </span>
-                      ) : (
-                        <span className="text-[10px] font-extrabold text-transparent">.</span>
-                      )}
                     </button>
                   );
                 })}
@@ -494,7 +505,9 @@ export default function PartColorsPage() {
           const rows = partHit
             ? g.rows
             : g.rows.filter((pc) =>
-                `${pc.part_color_code ?? ""} ${pc.color?.name ?? ""} ${pc.variant ?? ""}`.toLowerCase().includes(qq)
+                `${pc.part_color_code ?? ""} ${pc.color?.name ?? ""} ${pc.variant ?? ""}`
+                  .toLowerCase()
+                  .includes(qq)
               );
 
           return { ...g, rows };
@@ -548,8 +561,6 @@ export default function PartColorsPage() {
     setErr(null);
     try {
       const res = await api.patch(`${ENDPOINTS.partColors}${selected.id}/`, payload);
-
-      // keep selected up to date + update list
       setSelected(res.data);
       setItems((prev) => prev.map((x) => (x.id === selected.id ? res.data : x)));
       setEditing(false);
@@ -687,9 +698,7 @@ export default function PartColorsPage() {
                           <div className="min-w-0 flex-1">
                             <div className="text-sm font-extrabold text-slate-900 truncate">
                               {nameText}{" "}
-                              {pc.variant ? (
-                                <span className="text-slate-500 font-bold">• {pc.variant}</span>
-                              ) : null}
+                              {pc.variant ? <span className="text-slate-500 font-bold">• {pc.variant}</span> : null}
                             </div>
 
                             <div className="sm:hidden text-xs text-slate-500 font-semibold truncate">
