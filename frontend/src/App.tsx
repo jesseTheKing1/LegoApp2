@@ -8,10 +8,8 @@ import { ENDPOINTS } from "./api/endpoints";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 
-import AdminLayout from "./pages/admin/AdminLayout";
-import ColorsAdminPage from "./pages/admin/page/ColorsAdminPage";
-import PartColorsPage from "./pages/admin/page/PartColorsPage";
-import PartsAdminPage from "./pages/admin/page/PartsAdinPage";
+// ✅ this is your admin router file in src/pages/admin
+import AdminRoutes from "./pages/admin/AdminRoutes";
 
 type Me = {
   id: number;
@@ -258,7 +256,6 @@ function Header({ me, onLogout }: { me: Me | null; onLogout: () => void }) {
     return `@${me.username}${me.is_staff ? " • Admin" : ""}`;
   }, [me]);
 
-  // Lock background scroll when mobile drawer is open
   useEffect(() => {
     if (!mobileOpen) return;
     const prev = document.body.style.overflow;
@@ -271,14 +268,11 @@ function Header({ me, onLogout }: { me: Me | null; onLogout: () => void }) {
   const MobileDrawer = mobileOpen
     ? createPortal(
         <div className="fixed inset-0 z-[1000]">
-          {/* Dark overlay */}
           <button
             className="absolute inset-0 bg-black/50"
             onClick={() => setMobileOpen(false)}
             aria-label="Close menu overlay"
           />
-
-          {/* Drawer */}
           <div className="absolute right-0 top-0 h-full w-[86vw] max-w-sm bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-200 p-4">
               <div className="text-sm font-black text-slate-900">
@@ -396,7 +390,6 @@ function Header({ me, onLogout }: { me: Me | null; onLogout: () => void }) {
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
-        {/* Left: Brand + Admin mode badge (always visible) */}
         <div className="flex min-w-0 items-center gap-3">
           <Link
             to="/"
@@ -430,7 +423,6 @@ function Header({ me, onLogout }: { me: Me | null; onLogout: () => void }) {
           ) : null}
         </div>
 
-        {/* Desktop nav */}
         <nav className="hidden items-center gap-2 sm:flex" aria-label="Primary">
           {!isAdminRoute ? (
             <>
@@ -482,7 +474,6 @@ function Header({ me, onLogout }: { me: Me | null; onLogout: () => void }) {
           </div>
         </nav>
 
-        {/* Mobile menu button */}
         <div className="relative sm:hidden" ref={mobileRef}>
           <button
             className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white hover:bg-slate-50"
@@ -495,7 +486,6 @@ function Header({ me, onLogout }: { me: Me | null; onLogout: () => void }) {
         </div>
       </div>
 
-      {/* Mobile drawer rendered via portal so it darkens EVERYTHING */}
       {MobileDrawer}
     </header>
   );
@@ -556,27 +546,6 @@ function Home({ me }: { me: Me | null }) {
           </>
         )}
       </div>
-
-      <div className="mt-8 grid gap-4 sm:grid-cols-3">
-        <div className="rounded-2xl border border-slate-200 bg-white p-4">
-          <div className="text-sm font-black text-slate-900">Accurate pricing</div>
-          <div className="mt-2 text-sm leading-6 text-slate-600">
-            Weighted averages + overrides so your numbers stay sane.
-          </div>
-        </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-4">
-          <div className="text-sm font-black text-slate-900">Fast cataloging</div>
-          <div className="mt-2 text-sm leading-6 text-slate-600">
-            Clean admin flows that work on phone or desktop.
-          </div>
-        </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-4">
-          <div className="text-sm font-black text-slate-900">Built to scale</div>
-          <div className="mt-2 text-sm leading-6 text-slate-600">
-            Parts → Part Colors → Sets → Minifigs, all consistent.
-          </div>
-        </div>
-      </div>
     </PageShell>
   );
 }
@@ -588,19 +557,6 @@ function AccountPage({ me }: { me: Me }) {
       <h2 className="mt-4 text-2xl font-black tracking-tight text-slate-900">
         Welcome, @{me.username}
       </h2>
-
-      <div className="mt-6 grid gap-4 sm:grid-cols-2">
-        <div className="rounded-2xl border border-slate-200 bg-white p-4">
-          <div className="text-xs font-black uppercase tracking-wide text-slate-500">Email</div>
-          <div className="mt-1 text-sm font-semibold text-slate-900">{me.email}</div>
-        </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-4">
-          <div className="text-xs font-black uppercase tracking-wide text-slate-500">Role</div>
-          <div className="mt-1 text-sm font-semibold text-slate-900">
-            {me.is_staff ? "Admin" : "User"}
-          </div>
-        </div>
-      </div>
     </PageShell>
   );
 }
@@ -611,7 +567,7 @@ function BrowsePlaceholder() {
       <Badge>Browse</Badge>
       <h2 className="mt-4 text-2xl font-black tracking-tight text-slate-900">Coming soon</h2>
       <p className="mt-2 text-sm leading-6 text-slate-600">
-        This will be public browsing later. Admin pages are under{" "}
+        Admin pages are under{" "}
         <span className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-0.5 font-mono text-xs text-slate-800">
           /admin/*
         </span>
@@ -640,52 +596,52 @@ export default function App() {
     setMe(null);
   }
 
-  return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <Header me={me} onLogout={logout} />
-
-      {loading ? (
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 text-slate-900">
+        <Header me={me} onLogout={logout} />
         <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
           <div className="rounded-3xl border border-slate-200 bg-white p-6 text-sm font-semibold text-slate-600">
             Loading…
           </div>
         </main>
-      ) : (
-        <Routes>
-          <Route path="/" element={<Home me={me} />} />
+      </div>
+    );
+  }
 
-          <Route path="/login" element={<LoginPage onLogin={loadMe} />} />
-          <Route path="/register" element={<RegisterPage />} />
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-900">
+      <Header me={me} onLogout={logout} />
 
-          <Route
-            path="/account"
-            element={
-              <RequireAuth me={me}>
-                <AccountPage me={me as Me} />
-              </RequireAuth>
-            }
-          />
+      <Routes>
+        <Route path="/" element={<Home me={me} />} />
 
-          <Route path="/browse" element={<BrowsePlaceholder />} />
+        <Route path="/login" element={<LoginPage onLogin={loadMe} />} />
+        <Route path="/register" element={<RegisterPage />} />
 
-          {/* Admin */}
-          <Route
-            path="/admin"
-            element={
-              <RequireAdmin me={me}>
-                <AdminLayout />
-              </RequireAdmin>
-            }
-          >
-            <Route index element={<Navigate to="/admin/parts" replace />} />
-            <Route path="parts" element={<PartsAdminPage />} />
-            <Route path="colors" element={<ColorsAdminPage />} />
-            <Route path="part-colors" element={<PartColorsPage />} />
-          </Route>
+        <Route
+          path="/account"
+          element={
+            <RequireAuth me={me}>
+              <AccountPage me={me as Me} />
+            </RequireAuth>
+          }
+        />
 
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      )}
+        <Route path="/browse" element={<BrowsePlaceholder />} />
+
+        {/* ✅ Admin (all admin routing lives in src/pages/admin/AdminRoutes.tsx) */}
+        <Route
+          path="/admin/*"
+          element={
+            <RequireAdmin me={me}>
+              <AdminRoutes />
+            </RequireAdmin>
+          }
+        />
+
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
     </div>
   );
 }
