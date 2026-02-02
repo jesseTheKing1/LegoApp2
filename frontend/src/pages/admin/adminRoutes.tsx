@@ -2,14 +2,6 @@
 import React from "react";
 import { NavLink, Navigate, Route, Routes } from "react-router-dom";
 
-/**
- * Put all 3 pages in THIS file:
- * - PartsAdminPage
- * - ColorsAdminPage
- * - PartColorsPage (paste your existing page code below)
- *
- * Then export CatalogAdminRoutes() and mount it in your main router.
- */
 
 function cx(...c: Array<string | false | null | undefined>) {
   return c.filter(Boolean).join(" ");
