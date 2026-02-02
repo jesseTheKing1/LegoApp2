@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import api from "../../../api/client";
 import { ENDPOINTS } from "../../../api/endpoints";
 import { Part, PartForm } from "../form/PartForm";
-import "../admin-ui.css";
 
 /** ---------------- helpers ---------------- */
 
@@ -20,6 +19,22 @@ function formatApiError(e: any): string {
   if (data.detail) return data.detail;
   return "Request failed";
 }
+
+const cx = (...c: Array<string | false | null | undefined>) => c.filter(Boolean).join(" ");
+
+const inputBase =
+  "w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none " +
+  "focus:ring-2 focus:ring-slate-200 focus:border-slate-300";
+
+const btnBase =
+  "rounded-xl px-3 py-2 text-sm font-semibold shadow-sm border border-slate-200 bg-white " +
+  "text-slate-900 hover:bg-slate-50 active:bg-slate-100 disabled:opacity-60 disabled:cursor-not-allowed";
+
+const btnPrimary =
+  "rounded-xl px-3 py-2 text-sm font-semibold shadow-sm bg-slate-900 text-white " +
+  "hover:bg-slate-800 active:bg-slate-950 disabled:opacity-60 disabled:cursor-not-allowed";
+
+const card = "rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden";
 
 /** ---------------- Drawer shell ---------------- */
 
@@ -40,19 +55,20 @@ function DrawerShell({
 
   return (
     <div
-      className="adminOverlay"
+      className="fixed inset-0 z-50 bg-black/40 flex justify-end"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="adminDrawer" style={{ width: `min(${width}px, 100%)` }}>
-        <div className="adminDrawerHeader">
-          <div className="adminDrawerTitle">{title}</div>
-          <button type="button" className="adminCloseBtn" onClick={onClose}>
+      <div className="h-full bg-white shadow-2xl w-full" style={{ width: `min(${width}px, 100%)` }}>
+        <div className="sticky top-0 z-10 border-b border-slate-200 bg-white/90 backdrop-blur px-4 py-3 flex items-center justify-between">
+          <div className="text-sm font-extrabold text-slate-900 truncate">{title}</div>
+          <button type="button" className={btnBase} onClick={onClose}>
             Close
           </button>
         </div>
-        {children}
+
+        <div className="h-[calc(100%-56px)] overflow-auto p-4">{children}</div>
       </div>
     </div>
   );
@@ -62,18 +78,18 @@ function DrawerShell({
 
 function RowThumb({ src }: { src?: string | null }) {
   return (
-    <div className="adminThumb" title={src || "No image"}>
+    <div className="h-10 w-10 rounded-xl border border-slate-200 bg-slate-50 overflow-hidden flex items-center justify-center shrink-0">
       {src ? (
         <img
           src={src}
           alt=""
-          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          className="h-full w-full object-cover"
           onError={(e) => {
-            e.currentTarget.style.display = "none";
+            (e.currentTarget as HTMLImageElement).style.display = "none";
           }}
         />
       ) : (
-        <span style={{ fontSize: 10, color: "#9ca3af", fontWeight: 900 }}>—</span>
+        <span className="text-[10px] text-slate-400 font-black">—</span>
       )}
     </div>
   );
@@ -109,9 +125,9 @@ export default function PartsAdminPage() {
     if (!qq) return items;
 
     return items.filter((p) => {
-      const hay = `${p.part_id ?? ""} ${p.name ?? ""} ${p.actual_category ?? ""} ${
-        p.general_category ?? ""
-      } ${p.specific_category ?? ""}`.toLowerCase();
+      const hay = `${(p as any).part_id ?? ""} ${(p as any).name ?? ""} ${(p as any).actual_category ?? ""} ${
+        (p as any).general_category ?? ""
+      } ${(p as any).specific_category ?? ""}`.toLowerCase();
       return hay.includes(qq);
     });
   }, [items, q]);
@@ -170,69 +186,85 @@ export default function PartsAdminPage() {
     }
   }
 
-  const detailTitle = selected ? `${selected.part_id} — ${selected.name}` : "Part";
+  const detailTitle = selected ? `${(selected as any).part_id} — ${(selected as any).name}` : "Part";
 
   return (
-    <div className="adminPage">
+    <div className="space-y-3">
       {/* top bar */}
-      <div className="adminToolbar">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
         <input
-          className="adminInput adminSearch"
+          className={cx(inputBase, "sm:max-w-md")}
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search part id, name, category..."
           autoComplete="off"
         />
 
-        <button type="button" className="adminBtn adminBtnPrimary" onClick={() => setCreateOpen(true)}>
-          + New Part
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className={btnPrimary} onClick={() => setCreateOpen(true)}>
+            + New Part
+          </button>
+        </div>
 
-        <div className="adminCountText">{filtered.length} parts</div>
+        <div className="text-xs text-slate-500 font-semibold sm:ml-auto">{filtered.length} parts</div>
       </div>
 
-      {err ? <div className="adminErr">{err}</div> : null}
+      {err ? (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {err}
+        </div>
+      ) : null}
 
       {/* list */}
-      <div className="adminListCard">
+      <div className={card}>
         {filtered.length === 0 ? (
-          <div className="adminEmpty">No results.</div>
+          <div className="p-4 text-sm text-slate-600">No results.</div>
         ) : (
-          filtered.map((p, idx) => (
-            <button
-              key={p.id}
-              type="button"
-              className={`adminPartsRowBtn ${idx === 0 ? "" : "adminRowTopBorder"}`}
-              onClick={() => openDetail(p)}
-              title="Open"
-            >
-              <RowThumb src={p.image_url || null} />
+          filtered.map((p, idx) => {
+            const partId = (p as any).part_id ?? "—";
+            const name = (p as any).name ?? "—";
+            const actual = (p as any).actual_category ?? "";
+            const general = (p as any).general_category ?? "";
+            const specific = (p as any).specific_category ?? "";
+            const sub = `${actual || "—"}${general ? ` • ${general}` : ""}${specific ? ` • ${specific}` : ""}`;
 
-              <div className="adminPartsId">{p.part_id}</div>
+            return (
+              <button
+                key={p.id}
+                type="button"
+                className={cx(
+                  "w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-slate-50",
+                  idx === 0 ? "" : "border-t border-slate-200"
+                )}
+                onClick={() => openDetail(p)}
+                title="Open"
+              >
+                <RowThumb src={(p as any).image_url || null} />
 
-              <div style={{ minWidth: 0 }}>
-                <div className="adminRowTitle" title={p.name}>
-                  {p.name}
+                <div className="hidden sm:block w-[120px] text-xs font-semibold text-slate-700">
+                  {partId}
                 </div>
 
-                <div className="adminRowSub" title={`${p.actual_category || ""} ${p.general_category || ""} ${p.specific_category || ""}`}>
-                  {p.actual_category || "—"}
-                  {p.general_category ? ` • ${p.general_category}` : ""}
-                  {p.specific_category ? ` • ${p.specific_category}` : ""}
-                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-extrabold text-slate-900 truncate" title={name}>
+                    {name}
+                  </div>
 
-                {/* mobile-only extra line for part_id */}
-                <div className="adminPartsSubline">
-                  <span>{p.part_id}</span>
+                  <div className="text-xs text-slate-500 font-semibold truncate" title={sub}>
+                    {sub}
+                  </div>
+
+                  {/* mobile-only extra line for part_id */}
+                  <div className="sm:hidden text-xs text-slate-500 font-semibold truncate">{partId}</div>
                 </div>
-              </div>
-            </button>
-          ))
+              </button>
+            );
+          })
         )}
       </div>
 
       {/* create */}
-      <DrawerShell open={createOpen} title="New Part" onClose={() => setCreateOpen(false)} width={780}>
+      <DrawerShell open={createOpen} title="New Part" onClose={() => setCreateOpen(false)} width={820}>
         <PartForm submitting={saving} onSubmit={create} />
       </DrawerShell>
 
@@ -246,76 +278,79 @@ export default function PartsAdminPage() {
           setEditing(false);
           setErr(null);
         }}
-        width={900}
+        width={920}
       >
         {!selected ? (
-          <div className="adminEmpty">No selection.</div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
+            No selection.
+          </div>
         ) : (
-          <div className="adminStack">
-            {err ? <div className="adminErr">{err}</div> : null}
+          <div className="space-y-4">
+            {err ? (
+              <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {err}
+              </div>
+            ) : null}
 
-            <div className="adminDetailGrid">
-              <div className="adminHero">
-                {selected.image_url ? (
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-[360px_1fr]">
+              {/* hero */}
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 overflow-hidden flex items-center justify-center aspect-square">
+                {(selected as any).image_url ? (
                   <img
-                    src={selected.image_url}
+                    src={(selected as any).image_url}
                     alt=""
-                    style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                    className="h-full w-full object-contain"
                     onError={(e) => {
-                      e.currentTarget.style.display = "none";
+                      (e.currentTarget as HTMLImageElement).style.display = "none";
                     }}
                   />
                 ) : (
-                  <div style={{ fontSize: 12, color: "#94a3b8", fontWeight: 900 }}>No image</div>
+                  <div className="text-xs text-slate-500 font-black">No image</div>
                 )}
               </div>
 
-              <div className="adminFormCard">
-                <div className="adminLabel">Shape family</div>
-                <div style={{ fontSize: 13, fontWeight: 950, color: "var(--text)" }}>
-                  {selected.actual_category || "—"}
+              {/* info */}
+              <div className={cx(card, "p-4 space-y-3")}>
+                <div className="space-y-1">
+                  <div className="text-xs font-black text-slate-600">Shape family</div>
+                  <div className="text-sm font-extrabold text-slate-900">
+                    {(selected as any).actual_category || "—"}
+                  </div>
                 </div>
 
-                <div className="adminLabel" style={{ marginTop: 6 }}>
-                  Categories
-                </div>
-                <div style={{ fontSize: 12, fontWeight: 900, color: "var(--text)" }}>
-                  {selected.general_category || "—"} / {selected.specific_category || "—"}
+                <div className="space-y-1">
+                  <div className="text-xs font-black text-slate-600">Categories</div>
+                  <div className="text-sm font-bold text-slate-900">
+                    {(selected as any).general_category || "—"} / {(selected as any).specific_category || "—"}
+                  </div>
                 </div>
 
-                {!!selected.image_url && (
+                {!!(selected as any).image_url && (
                   <a
-                    href={selected.image_url}
+                    href={(selected as any).image_url}
                     target="_blank"
                     rel="noreferrer"
-                    style={{ fontSize: 12, color: "#2563eb", fontWeight: 950, textDecoration: "none" }}
+                    className="text-sm font-bold text-blue-600 hover:underline"
                   >
                     Open image
                   </a>
                 )}
 
-                <div className="adminFormActions" style={{ marginTop: 4 }}>
+                <div className="flex flex-wrap gap-2 pt-1">
                   <button
                     type="button"
-                    className="adminBtn adminBtnPrimary"
+                    className={btnPrimary}
                     onClick={() => setEditing((v) => !v)}
                     disabled={saving}
-                    style={{ opacity: saving ? 0.6 : 1 }}
                   >
                     {editing ? "Stop editing" : "Edit"}
                   </button>
 
                   <button
                     type="button"
-                    className="adminBtn"
                     onClick={removeSelected}
                     disabled={saving}
-                    style={{
-                      opacity: saving ? 0.6 : 1,
-                      borderColor: "#fecaca",
-                      background: "#fee2e2",
-                      color: "#991b1b",
-                    }}
+                    className="rounded-xl px-3 py-2 text-sm font-semibold shadow-sm border border-red-200 bg-red-50 text-red-800 hover:bg-red-100 disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     Delete
                   </button>
@@ -324,10 +359,8 @@ export default function PartsAdminPage() {
             </div>
 
             {editing ? (
-              <div className="adminFormCard">
-                <div className="adminLabel" style={{ marginBottom: 10 }}>
-                  Edit this Part
-                </div>
+              <div className={cx(card, "p-4")}>
+                <div className="mb-3 text-xs font-black text-slate-600">Edit this Part</div>
                 <PartForm submitting={saving} initialValues={selected} onSubmit={saveEdit} />
               </div>
             ) : null}

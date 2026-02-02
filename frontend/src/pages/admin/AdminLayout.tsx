@@ -48,11 +48,11 @@ function NavTab({ to, label }: { to: string; label: string }) {
       to={to}
       className={cx(
         "relative inline-flex h-10 items-center justify-center gap-2 rounded-full px-4 text-sm font-semibold transition",
-        "outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/20 focus-visible:ring-offset-2 focus-visible:ring-offset-white",
-        "border border-neutral-900/10 flex-shrink-0",
+        "outline-none focus-visible:ring-2 focus-visible:ring-slate-900/20 focus-visible:ring-offset-2 focus-visible:ring-offset-white",
+        "border border-slate-900/10 flex-shrink-0",
         active
-          ? "bg-neutral-900 text-white shadow-sm"
-          : "bg-white text-neutral-900 hover:bg-neutral-50"
+          ? "bg-slate-900 text-white shadow-sm"
+          : "bg-white text-slate-900 hover:bg-slate-50"
       )}
       aria-current={active ? "page" : undefined}
       title={label}
@@ -85,14 +85,14 @@ function MenuItem({
       onClick={onClick}
       className={cx(
         "flex items-center justify-between rounded-xl px-3 py-2.5 text-sm transition",
-        "outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/20 focus-visible:ring-offset-2 focus-visible:ring-offset-white",
-        active ? "bg-neutral-900 text-white" : "text-neutral-800 hover:bg-neutral-50"
+        "outline-none focus-visible:ring-2 focus-visible:ring-slate-900/20 focus-visible:ring-offset-2 focus-visible:ring-offset-white",
+        active ? "bg-slate-900 text-white" : "text-slate-800 hover:bg-slate-50"
       )}
       aria-current={active ? "page" : undefined}
       title={label}
     >
       <span className="font-medium">{label}</span>
-      <span className={cx("text-xs", active ? "text-white/70" : "text-neutral-400")}>↗</span>
+      <span className={cx("text-xs", active ? "text-white/70" : "text-slate-400")}>↗</span>
     </Link>
   );
 }
@@ -123,9 +123,12 @@ export default function AdminLayout() {
 
   const grouped = useMemo(() => buildGroups(ADMIN_ROUTES as AdminRoute[]), []);
 
-  // ✅ Measure header height so content never hides under it
+  // This MUST match your App header height (you used h-16)
+  const APP_HEADER_H = 64;
+
+  // Measure admin header height (tabs + wrap)
   const headerRef = useRef<HTMLElement | null>(null);
-  const [headerH, setHeaderH] = useState(160);
+  const [adminHeaderH, setAdminHeaderH] = useState(160);
 
   useEffect(() => {
     const el = headerRef.current;
@@ -133,12 +136,11 @@ export default function AdminLayout() {
 
     const update = () => {
       const h = el.getBoundingClientRect().height;
-      setHeaderH(Math.ceil(h));
+      setAdminHeaderH(Math.ceil(h));
     };
 
     update();
 
-    // ResizeObserver tracks wrapping tabs + responsive changes
     const ro = new ResizeObserver(() => update());
     ro.observe(el);
 
@@ -178,12 +180,19 @@ export default function AdminLayout() {
     return Array.from(byGroup.entries());
   }, [tabs, restGroups]);
 
+  const totalTopOffset = APP_HEADER_H + adminHeaderH;
+
   return (
-    <div className="h-screen bg-neutral-50 text-neutral-900">
-      {/* FIXED TOP BAR */}
+    // Don't use h-screen here (nested under App header). Use min-height instead.
+    <div className="min-h-[calc(100vh-4rem)] bg-slate-50 text-slate-900">
+      {/* ADMIN HEADER: sits UNDER the App header */}
       <header
         ref={headerRef}
-        className="fixed inset-x-0 top-0 z-40 border-b border-neutral-900/10 bg-white/85 backdrop-blur"
+        className={cx(
+          "fixed inset-x-0 z-30 border-b border-slate-900/10 bg-white/85 backdrop-blur",
+          // The key fix: push this below the App header
+          "top-16"
+        )}
       >
         <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
           <div className="flex items-center gap-3 py-4">
@@ -191,16 +200,16 @@ export default function AdminLayout() {
               <div className="truncate text-lg font-semibold tracking-tight sm:text-xl">
                 LEGO Admin
               </div>
-              <div className="text-sm text-neutral-500">Catalog tools</div>
+              <div className="text-sm text-slate-500">Catalog tools</div>
             </div>
 
             <div className="ml-auto flex items-center gap-2">
               <Link
                 to="/"
                 className={cx(
-                  "inline-flex h-10 items-center rounded-full border border-neutral-900/10 bg-white px-3.5 text-sm font-semibold",
-                  "text-neutral-900 shadow-sm transition hover:bg-neutral-50",
-                  "outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/20 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+                  "inline-flex h-10 items-center rounded-full border border-slate-900/10 bg-white px-3.5 text-sm font-semibold",
+                  "text-slate-900 shadow-sm transition hover:bg-slate-50",
+                  "outline-none focus-visible:ring-2 focus-visible:ring-slate-900/20 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
                 )}
                 title="Back to app"
               >
@@ -212,28 +221,28 @@ export default function AdminLayout() {
                   type="button"
                   onClick={() => setOpen((v) => !v)}
                   className={cx(
-                    "inline-flex h-10 items-center gap-2 rounded-full border border-neutral-900/10 bg-white px-3.5 text-sm font-semibold",
-                    "text-neutral-900 shadow-sm transition hover:bg-neutral-50",
-                    "outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/20 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+                    "inline-flex h-10 items-center gap-2 rounded-full border border-slate-900/10 bg-white px-3.5 text-sm font-semibold",
+                    "text-slate-900 shadow-sm transition hover:bg-slate-50",
+                    "outline-none focus-visible:ring-2 focus-visible:ring-slate-900/20 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
                   )}
                   aria-haspopup="menu"
                   aria-expanded={open}
                 >
                   More
-                  <span className={cx("text-neutral-400 transition-transform", open && "rotate-180")}>
+                  <span className={cx("text-slate-400 transition-transform", open && "rotate-180")}>
                     ▾
                   </span>
                 </button>
 
                 {open ? (
                   <div
-                    className="absolute right-0 mt-2 w-72 overflow-hidden rounded-2xl border border-neutral-900/10 bg-white shadow-xl"
+                    className="absolute right-0 mt-2 w-72 overflow-hidden rounded-2xl border border-slate-900/10 bg-white shadow-xl"
                     role="menu"
                   >
                     <div className="p-2">
                       {secondaryGroups.map(([groupName, routes], idx) => (
                         <div key={groupName}>
-                          <div className="px-3 pb-2 pt-2 text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
+                          <div className="px-3 pb-2 pt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
                             {groupName}
                           </div>
                           <div className="grid gap-1">
@@ -247,12 +256,12 @@ export default function AdminLayout() {
                             ))}
                           </div>
                           {idx !== secondaryGroups.length - 1 ? (
-                            <div className="my-2 h-px bg-neutral-900/10" />
+                            <div className="my-2 h-px bg-slate-900/10" />
                           ) : null}
                         </div>
                       ))}
 
-                      <div className="mt-2 px-3 pb-2 pt-2 text-[11px] text-neutral-400">
+                      <div className="mt-2 px-3 pb-2 pt-2 text-[11px] text-slate-400">
                         {location.pathname}
                       </div>
                     </div>
@@ -262,7 +271,7 @@ export default function AdminLayout() {
             </div>
           </div>
 
-          {/* ✅ Main tabs (horizontal scroll if too many) */}
+          {/* Tabs */}
           <div className="pb-4">
             <div className="flex items-center gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {tabs.map((r) => (
@@ -270,7 +279,7 @@ export default function AdminLayout() {
               ))}
             </div>
 
-            <div className="mt-4 h-px w-full bg-gradient-to-r from-transparent via-neutral-900/10 to-transparent" />
+            <div className="mt-4 h-px w-full bg-gradient-to-r from-transparent via-slate-900/10 to-transparent" />
           </div>
         </div>
       </header>
@@ -279,17 +288,23 @@ export default function AdminLayout() {
       <main
         className="mx-auto w-full max-w-6xl px-4 sm:px-6"
         style={{
-          paddingTop: headerH, // ✅ always respects real header height
-          height: "100%",
+          // totalTopOffset = AppHeader + AdminHeader (measured)
+          paddingTop: APP_HEADER_H + adminHeaderH,
         }}
       >
-        <div className="pb-6" style={{ height: `calc(100vh - ${headerH}px)` }}>
-          <div className="h-full overflow-auto rounded-3xl border border-neutral-900/10 bg-white shadow-sm">
+        <div className="pb-8">
+          <div
+            className="overflow-hidden rounded-3xl border border-slate-900/10 bg-white shadow-sm"
+            style={{
+              // ensure it always fits the viewport, never clipped
+              minHeight: `calc(100vh - ${totalTopOffset}px - 2rem)`,
+            }}
+          >
+            {/* Important: allow inner pages to scroll naturally */}
             <div className="p-4 sm:p-6">
               <Outlet />
             </div>
           </div>
-          <div className="h-6" />
         </div>
       </main>
     </div>

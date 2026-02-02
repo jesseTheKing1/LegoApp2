@@ -11,8 +11,6 @@ import ColorsAdminPage from "./pages/admin/page/ColorsAdminPage";
 import PartColorsPage from "./pages/admin/page/PartColorsPage";
 import PartsAdminPage from "./pages/admin/page/PartsAdinPage";
 
-import "./App.css";
-
 type Me = {
   id: number;
   email: string;
@@ -20,6 +18,10 @@ type Me = {
   is_staff: boolean;
   is_superuser: boolean;
 };
+
+function cx(...c: Array<string | false | null | undefined>) {
+  return c.filter(Boolean).join(" ");
+}
 
 function getAccessToken() {
   return localStorage.getItem("access_token") || "";
@@ -79,85 +81,145 @@ function useOutsideClick<T extends HTMLElement>(onOutside: () => void) {
   return ref;
 }
 
-/** ---------- Admin dropdown ---------- */
-function AdminMenu({ onNavigate }: { onNavigate: () => void }) {
+/** ---------- UI atoms ---------- */
+
+function ButtonLink({
+  to,
+  variant = "primary",
+  size = "md",
+  className,
+  children,
+}: {
+  to: string;
+  variant?: "primary" | "secondary" | "ghost";
+  size?: "sm" | "md" | "lg";
+  className?: string;
+  children: React.ReactNode;
+}) {
+  const base =
+    "inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition active:translate-y-[1px] focus:outline-none focus:ring-2 focus:ring-slate-400/40";
+  const sizes =
+    size === "sm"
+      ? "h-9 px-3 text-sm"
+      : size === "lg"
+      ? "h-12 px-5 text-base rounded-2xl"
+      : "h-10 px-4 text-sm";
+  const variants =
+    variant === "primary"
+      ? "bg-slate-900 text-white hover:bg-slate-800"
+      : variant === "secondary"
+      ? "bg-white text-slate-900 border border-slate-200 hover:bg-slate-50"
+      : "bg-transparent text-slate-900 hover:bg-slate-100";
+  return (
+    <Link to={to} className={cx(base, sizes, variants, className)}>
+      {children}
+    </Link>
+  );
+}
+
+function Button({
+  variant = "secondary",
+  size = "md",
+  className,
+  onClick,
+  children,
+  type = "button",
+}: {
+  variant?: "primary" | "secondary" | "ghost";
+  size?: "sm" | "md" | "lg";
+  className?: string;
+  onClick?: () => void;
+  children: React.ReactNode;
+  type?: "button" | "submit";
+}) {
+  const base =
+    "inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition active:translate-y-[1px] focus:outline-none focus:ring-2 focus:ring-slate-400/40";
+  const sizes =
+    size === "sm"
+      ? "h-9 px-3 text-sm"
+      : size === "lg"
+      ? "h-12 px-5 text-base rounded-2xl"
+      : "h-10 px-4 text-sm";
+  const variants =
+    variant === "primary"
+      ? "bg-slate-900 text-white hover:bg-slate-800"
+      : variant === "secondary"
+      ? "bg-white text-slate-900 border border-slate-200 hover:bg-slate-50"
+      : "bg-transparent text-slate-900 hover:bg-slate-100";
+  return (
+    <button type={type} onClick={onClick} className={cx(base, sizes, variants, className)}>
+      {children}
+    </button>
+  );
+}
+
+function Badge({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-900">
+      {children}
+    </span>
+  );
+}
+
+/** ---------- Admin dropdown (desktop) ---------- */
+function AdminMenu() {
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
   const menuRef = useOutsideClick<HTMLDivElement>(() => setOpen(false));
 
   return (
-    <div className="menuWrap" ref={menuRef}>
-      <button
-        type="button"
-        className="btn btnPrimary btnSm"
-        onClick={() => setOpen((v) => !v)}
-        aria-haspopup="menu"
-        aria-expanded={open}
-      >
-        Admin <span className="chev">▾</span>
-      </button>
+    <div className="relative" ref={menuRef}>
+      <Button variant="primary" size="sm" onClick={() => setOpen((v) => !v)}>
+        Admin <span className="opacity-90">▾</span>
+      </Button>
 
       {open ? (
-        <div className="menu" role="menu">
-          <Link
-            to="/admin/parts"
-            className="menuItem"
-            role="menuitem"
-            onClick={() => {
-              close();
-              onNavigate();
-            }}
-          >
-            Parts
-          </Link>
-          <Link
-            to="/admin/colors"
-            className="menuItem"
-            role="menuitem"
-            onClick={() => {
-              close();
-              onNavigate();
-            }}
-          >
-            Colors
-          </Link>
-          <Link
-            to="/admin/part-colors"
-            className="menuItem"
-            role="menuitem"
-            onClick={() => {
-              close();
-              onNavigate();
-            }}
-          >
-            Part Colors
-          </Link>
+        <div className="absolute right-0 top-full z-50 mt-2 w-56 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
+          <div className="p-2">
+            <Link
+              to="/admin/parts"
+              className="block rounded-xl px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+              onClick={close}
+            >
+              Parts
+            </Link>
+            <Link
+              to="/admin/colors"
+              className="block rounded-xl px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+              onClick={close}
+            >
+              Colors
+            </Link>
+            <Link
+              to="/admin/part-colors"
+              className="block rounded-xl px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+              onClick={close}
+            >
+              Part Colors
+            </Link>
 
-          <div className="menuDivider" />
+            <div className="my-2 h-px bg-slate-200" />
 
-          <a
-            href="/dj-admin/"
-            className="menuItem"
-            role="menuitem"
-            onClick={() => {
-              close();
-              onNavigate();
-            }}
-          >
-            Django admin
-          </a>
+            <a
+              href="/dj-admin/"
+              className="block rounded-xl px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+              onClick={close}
+            >
+              Django admin
+            </a>
+          </div>
         </div>
       ) : null}
     </div>
   );
 }
 
+/** ---------- Header ---------- */
 function Header({ me, onLogout }: { me: Me | null; onLogout: () => void }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const mobileRef = useOutsideClick<HTMLDivElement>(() => setMobileOpen(false));
-
-  // Close mobile drawer on route changes (best-effort)
   const loc = useLocation();
+
   useEffect(() => setMobileOpen(false), [loc.pathname]);
 
   const userLabel = useMemo(() => {
@@ -166,107 +228,158 @@ function Header({ me, onLogout }: { me: Me | null; onLogout: () => void }) {
   }, [me]);
 
   return (
-    <header className="header">
-      <div className="container headerInner">
-        <Link to="/" className="brand" onClick={() => setMobileOpen(false)}>
-          LEGO Inventory
+    <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur">
+      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
+        <Link to="/" className="flex items-center gap-2 text-sm font-black tracking-tight text-slate-900">
+          <span className="grid h-9 w-9 place-items-center rounded-xl bg-slate-900 text-white">
+            L
+          </span>
+          <span className="hidden sm:block">LEGO Inventory</span>
+          <span className="sm:hidden">LEGO</span>
         </Link>
 
         {/* Desktop nav */}
-        <nav className="navDesktop" aria-label="Primary">
-          <Link to="/" className="navLink">
+        <nav className="hidden items-center gap-2 sm:flex" aria-label="Primary">
+          <Link
+            to="/"
+            className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-100"
+          >
             Home
           </Link>
 
-          {me?.is_staff ? <AdminMenu onNavigate={() => setMobileOpen(false)} /> : null}
+          <Link
+            to="/browse"
+            className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-100"
+          >
+            Browse
+          </Link>
 
-          {me ? (
-            <>
-              <span className="pill">{userLabel}</span>
-              <button className="btn btnGhost" type="button" onClick={onLogout}>
-                Log out
-              </button>
-            </>
-          ) : (
-            <>
-              <Link to="/login" className="btn btnGhostLink">
-                Log in
-              </Link>
-              <Link to="/register" className="btn btnPrimaryLink">
-                Create account
-              </Link>
-            </>
-          )}
+          {me?.is_staff ? <AdminMenu /> : null}
+
+          <div className="ml-2 flex items-center gap-2">
+            {me ? (
+              <>
+                <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-900">
+                  {userLabel}
+                </span>
+                <Button variant="ghost" onClick={onLogout}>
+                  Log out
+                </Button>
+              </>
+            ) : (
+              <>
+                <ButtonLink to="/login" variant="ghost">
+                  Log in
+                </ButtonLink>
+                <ButtonLink to="/register" variant="primary">
+                  Create account
+                </ButtonLink>
+              </>
+            )}
+          </div>
         </nav>
 
-        {/* Mobile button */}
-        <div className="navMobile" ref={mobileRef}>
+        {/* Mobile menu button */}
+        <div className="relative sm:hidden" ref={mobileRef}>
           <button
-            className="iconBtn"
-            type="button"
+            className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white hover:bg-slate-50"
             onClick={() => setMobileOpen((v) => !v)}
             aria-label="Open menu"
             aria-expanded={mobileOpen}
           >
-            <span className="iconBtnBars" />
+            <span className="text-lg">☰</span>
           </button>
 
+          {/* Mobile overlay + drawer */}
           {mobileOpen ? (
-            <div className="mobilePanel" role="dialog" aria-label="Menu">
-              <div className="mobileTop">
-                <div className="mobileTitle">Menu</div>
-                <button
-                  className="iconBtn"
-                  type="button"
-                  onClick={() => setMobileOpen(false)}
-                  aria-label="Close menu"
-                >
-                  ✕
-                </button>
-              </div>
+            <div className="fixed inset-0 z-50">
+              <div className="absolute inset-0 bg-black/40" />
+              <div className="absolute right-0 top-0 h-full w-[86vw] max-w-sm bg-white shadow-2xl">
+                <div className="flex items-center justify-between border-b border-slate-200 p-4">
+                  <div className="text-sm font-black text-slate-900">Menu</div>
+                  <button
+                    className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white hover:bg-slate-50"
+                    onClick={() => setMobileOpen(false)}
+                    aria-label="Close menu"
+                  >
+                    ✕
+                  </button>
+                </div>
 
-              <div className="mobileLinks">
-                <Link to="/" className="mobileLink">
-                  Home
-                </Link>
-
-                {me?.is_staff ? (
-                  <div className="mobileGroup">
-                    <div className="mobileGroupLabel">Admin</div>
-                    <Link to="/admin/parts" className="mobileLink">
-                      Parts
+                <div className="p-4">
+                  <div className="grid gap-2">
+                    <Link
+                      to="/"
+                      className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                    >
+                      Home
                     </Link>
-                    <Link to="/admin/colors" className="mobileLink">
-                      Colors
-                    </Link>
-                    <Link to="/admin/part-colors" className="mobileLink">
-                      Part Colors
-                    </Link>
-                    <a href="/dj-admin/" className="mobileLink">
-                      Django admin
-                    </a>
-                  </div>
-                ) : null}
-
-                <div className="mobileDivider" />
-
-                {me ? (
-                  <>
-                    <div className="pill pillFull">{userLabel}</div>
-                    <button className="btn btnGhost btnFull" type="button" onClick={onLogout}>
-                      Log out
-                    </button>
-                  </>
-                ) : (
-                  <div className="mobileAuth">
-                    <Link to="/login" className="btn btnGhostLink btnFull">
-                      Log in
-                    </Link>
-                    <Link to="/register" className="btn btnPrimaryLink btnFull">
-                      Create account
+                    <Link
+                      to="/browse"
+                      className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                    >
+                      Browse
                     </Link>
                   </div>
-                )}
+
+                  {me?.is_staff ? (
+                    <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                      <div className="mb-2 text-xs font-black uppercase tracking-wide text-slate-500">
+                        Admin
+                      </div>
+                      <div className="grid gap-2">
+                        <Link
+                          to="/admin/parts"
+                          className="rounded-xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                        >
+                          Parts
+                        </Link>
+                        <Link
+                          to="/admin/colors"
+                          className="rounded-xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                        >
+                          Colors
+                        </Link>
+                        <Link
+                          to="/admin/part-colors"
+                          className="rounded-xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                        >
+                          Part Colors
+                        </Link>
+                        <a
+                          href="/dj-admin/"
+                          className="rounded-xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                        >
+                          Django admin
+                        </a>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div className="mt-4 h-px bg-slate-200" />
+
+                  <div className="mt-4 grid gap-2">
+                    {me ? (
+                      <>
+                        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900">
+                          {userLabel}
+                        </div>
+                        <Button variant="secondary" className="w-full" onClick={onLogout}>
+                          Log out
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <ButtonLink to="/login" variant="secondary" className="w-full">
+                          Log in
+                        </ButtonLink>
+                        <ButtonLink to="/register" variant="primary" className="w-full">
+                          Create account
+                        </ButtonLink>
+                      </>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           ) : null}
@@ -276,65 +389,80 @@ function Header({ me, onLogout }: { me: Me | null; onLogout: () => void }) {
   );
 }
 
+/** ---------- Layout ---------- */
 function PageShell({ children }: { children: React.ReactNode }) {
   return (
-    <main className="container page">
-      <div className="card">{children}</div>
+    <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
+      <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_20px_60px_rgba(2,6,23,0.08)]">
+        <div className="bg-[radial-gradient(900px_500px_at_10%_0%,rgba(15,23,42,0.10),transparent)] p-6 sm:p-10">
+          {children}
+        </div>
+      </div>
     </main>
   );
 }
 
+/** ---------- Pages ---------- */
 function Home({ me }: { me: Me | null }) {
   return (
     <PageShell>
-      <div className="badge">Inventory • Pricing • Sets • Minifigs</div>
+      <Badge>Inventory • Pricing • Sets • Minifigs</Badge>
 
-      <h1 className="h1">Track LEGO parts like a pro.</h1>
-      <p className="p">
+      <h1 className="mt-4 text-4xl font-black tracking-tight text-slate-900 sm:text-5xl">
+        Track LEGO parts like a pro.
+      </h1>
+
+      <p className="mt-3 max-w-2xl text-base leading-7 text-slate-600">
         Keep your catalog clean, price parts accurately, and build sets with confidence.
         {me ? " You’re signed in — jump back in." : " Create an account to get started."}
       </p>
 
-      <div className="ctaRow">
+      <div className="mt-6 flex flex-wrap gap-3">
         {me ? (
           <>
             {me.is_staff ? (
-              <Link to="/admin/parts" className="btn btnPrimary btnLg">
+              <ButtonLink to="/admin/parts" variant="primary" size="lg">
                 Open Admin
-              </Link>
+              </ButtonLink>
             ) : (
-              <Link to="/account" className="btn btnPrimary btnLg">
+              <ButtonLink to="/account" variant="primary" size="lg">
                 My Account
-              </Link>
+              </ButtonLink>
             )}
-            <Link to="/browse" className="btn btnSecondary btnLg">
+            <ButtonLink to="/browse" variant="secondary" size="lg">
               Browse
-            </Link>
+            </ButtonLink>
           </>
         ) : (
           <>
-            <Link to="/register" className="btn btnPrimary btnLg">
+            <ButtonLink to="/register" variant="primary" size="lg">
               Create account
-            </Link>
-            <Link to="/login" className="btn btnSecondary btnLg">
+            </ButtonLink>
+            <ButtonLink to="/login" variant="secondary" size="lg">
               Log in
-            </Link>
+            </ButtonLink>
           </>
         )}
       </div>
 
-      <div className="featureGrid">
-        <div className="featureCard">
-          <div className="featureTitle">Accurate pricing</div>
-          <div className="featureText">Weighted averages + overrides so your numbers stay sane.</div>
+      <div className="mt-8 grid gap-4 sm:grid-cols-3">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+          <div className="text-sm font-black text-slate-900">Accurate pricing</div>
+          <div className="mt-2 text-sm leading-6 text-slate-600">
+            Weighted averages + overrides so your numbers stay sane.
+          </div>
         </div>
-        <div className="featureCard">
-          <div className="featureTitle">Fast cataloging</div>
-          <div className="featureText">Clean admin flows that work on phone or desktop.</div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+          <div className="text-sm font-black text-slate-900">Fast cataloging</div>
+          <div className="mt-2 text-sm leading-6 text-slate-600">
+            Clean admin flows that work on phone or desktop.
+          </div>
         </div>
-        <div className="featureCard">
-          <div className="featureTitle">Built to scale</div>
-          <div className="featureText">Parts → Part Colors → Sets → Minifigs, all consistent.</div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+          <div className="text-sm font-black text-slate-900">Built to scale</div>
+          <div className="mt-2 text-sm leading-6 text-slate-600">
+            Parts → Part Colors → Sets → Minifigs, all consistent.
+          </div>
         </div>
       </div>
     </PageShell>
@@ -344,16 +472,21 @@ function Home({ me }: { me: Me | null }) {
 function AccountPage({ me }: { me: Me }) {
   return (
     <PageShell>
-      <div className="badge">Account</div>
-      <h2 className="h2">Welcome, @{me.username}</h2>
-      <div className="meta">
-        <div>
-          <span className="metaLabel">Email</span>
-          <div className="metaValue">{me.email}</div>
+      <Badge>Account</Badge>
+      <h2 className="mt-4 text-2xl font-black tracking-tight text-slate-900">
+        Welcome, @{me.username}
+      </h2>
+
+      <div className="mt-6 grid gap-4 sm:grid-cols-2">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+          <div className="text-xs font-black uppercase tracking-wide text-slate-500">Email</div>
+          <div className="mt-1 text-sm font-semibold text-slate-900">{me.email}</div>
         </div>
-        <div>
-          <span className="metaLabel">Role</span>
-          <div className="metaValue">{me.is_staff ? "Admin" : "User"}</div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+          <div className="text-xs font-black uppercase tracking-wide text-slate-500">Role</div>
+          <div className="mt-1 text-sm font-semibold text-slate-900">
+            {me.is_staff ? "Admin" : "User"}
+          </div>
         </div>
       </div>
     </PageShell>
@@ -363,10 +496,14 @@ function AccountPage({ me }: { me: Me }) {
 function BrowsePlaceholder() {
   return (
     <PageShell>
-      <div className="badge">Browse</div>
-      <h2 className="h2">Coming soon</h2>
-      <p className="p">
-        This will be public browsing later. Admin pages are under <span className="code">/admin/*</span>.
+      <Badge>Browse</Badge>
+      <h2 className="mt-4 text-2xl font-black tracking-tight text-slate-900">Coming soon</h2>
+      <p className="mt-2 text-sm leading-6 text-slate-600">
+        This will be public browsing later. Admin pages are under{" "}
+        <span className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-0.5 font-mono text-xs text-slate-800">
+          /admin/*
+        </span>
+        .
       </p>
     </PageShell>
   );
@@ -392,12 +529,14 @@ export default function App() {
   }
 
   return (
-    <>
+    <div className="min-h-screen bg-slate-50 text-slate-900">
       <Header me={me} onLogout={logout} />
 
       {loading ? (
-        <main className="container page">
-          <div className="loading">Loading…</div>
+        <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
+          <div className="rounded-3xl border border-slate-200 bg-white p-6 text-sm font-semibold text-slate-600">
+            Loading…
+          </div>
         </main>
       ) : (
         <Routes>
@@ -435,6 +574,6 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       )}
-    </>
+    </div>
   );
 }

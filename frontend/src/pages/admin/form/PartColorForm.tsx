@@ -1,6 +1,5 @@
 import React, { useMemo, useRef, useState } from "react";
 import { uploadImageToR2 } from "../../../lib/r2Uploads";
-import "../admin-ui.css"; // or import once globally in AdminLayout
 
 export type Color = {
   id: number;
@@ -48,6 +47,16 @@ function formatErr(e: any) {
 }
 
 type UploadField = "img1" | "img2";
+
+const inputBase =
+  "w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none " +
+  "focus:ring-2 focus:ring-slate-200 focus:border-slate-300";
+
+const selectBase =
+  "w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none " +
+  "focus:ring-2 focus:ring-slate-200 focus:border-slate-300";
+
+const labelText = "text-xs font-medium text-slate-600";
 
 export function PartColorForm({
   parts,
@@ -177,136 +186,152 @@ export function PartColorForm({
   }
 
   return (
-    <form onSubmit={submit} className="adminForm">
-      {/* selectors */}
-      <div className="adminGrid2">
-        <label className="adminField">
-          <div className="adminLabel">Part</div>
-          <select
-            className="adminSelect"
-            value={partId}
-            onChange={(e) => setPartId(e.target.value ? Number(e.target.value) : "")}
-          >
-            <option value="">Select part…</option>
-            {parts.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.part_id} — {p.name}
-              </option>
-            ))}
-          </select>
-        </label>
+    <form onSubmit={submit} className="space-y-3">
+      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="p-4 sm:p-5 space-y-4">
+          {/* selectors */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <label className="space-y-1">
+              <div className={labelText}>Part</div>
+              <select
+                className={selectBase}
+                value={partId}
+                onChange={(e) => setPartId(e.target.value ? Number(e.target.value) : "")}
+              >
+                <option value="">Select part…</option>
+                {parts.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.part_id} — {p.name}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-        <label className="adminField">
-          <div className="adminLabel">Color</div>
-          <select
-            className="adminSelect"
-            value={colorId}
-            onChange={(e) => setColorId(e.target.value ? Number(e.target.value) : "")}
-          >
-            <option value="">Select color…</option>
-            {colors.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-
-      {/* summary */}
-      <div className="adminSummaryRow">
-        <div className="adminSwatchMini" style={{ background: swatchHex }} />
-        <div className="adminSummaryText">
-          <div className="adminSummaryStrong">
-            {part ? `${part.part_id} — ${part.name}` : "No part selected"}
+            <label className="space-y-1">
+              <div className={labelText}>Color</div>
+              <select
+                className={selectBase}
+                value={colorId}
+                onChange={(e) => setColorId(e.target.value ? Number(e.target.value) : "")}
+              >
+                <option value="">Select color…</option>
+                {colors.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
-          <div className="adminSummaryMuted">{color ? color.name : "No color selected"}</div>
+
+          {/* summary */}
+          <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
+            <div
+              className="h-8 w-8 rounded-xl border border-slate-200 shadow-sm"
+              style={{ background: swatchHex }}
+              title={swatchHex}
+            />
+            <div className="min-w-0">
+              <div className="truncate text-sm font-semibold text-slate-900">
+                {part ? `${part.part_id} — ${part.name}` : "No part selected"}
+              </div>
+              <div className="truncate text-xs text-slate-600">
+                {color ? color.name : "No color selected"}
+              </div>
+            </div>
+          </div>
+
+          {/* text fields */}
+          <label className="space-y-1">
+            <div className={labelText}>Your PartColor ID</div>
+            <input
+              className={inputBase}
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              placeholder="3001-black-plain"
+              autoComplete="off"
+            />
+          </label>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <label className="space-y-1">
+              <div className={labelText}>Variant</div>
+              <input
+                className={inputBase}
+                value={variant}
+                onChange={(e) => setVariant(e.target.value)}
+                placeholder="printed / pearl / etc."
+                autoComplete="off"
+              />
+            </label>
+
+            <label className="space-y-1">
+              <div className={labelText}>Description</div>
+              <input
+                className={inputBase}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="optional notes"
+                autoComplete="off"
+              />
+            </label>
+          </div>
+
+          {/* images */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <ImageField
+              title="Image URL 1"
+              url={img1}
+              setUrl={setImg1}
+              uploading={uploading1}
+              error={uploadErr1}
+              onPickClick={() => fileRef1.current?.click()}
+              onClear={() => setImg1("")}
+            />
+            <input
+              ref={fileRef1}
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) uploadTo("img1", f);
+              }}
+            />
+
+            <ImageField
+              title="Image URL 2"
+              url={img2}
+              setUrl={setImg2}
+              uploading={uploading2}
+              error={uploadErr2}
+              onPickClick={() => fileRef2.current?.click()}
+              onClear={() => setImg2("")}
+            />
+            <input
+              ref={fileRef2}
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) uploadTo("img2", f);
+              }}
+            />
+          </div>
         </div>
-      </div>
-
-      {/* text fields */}
-      <label className="adminField">
-        <div className="adminLabel">Your PartColor ID</div>
-        <input
-          className="adminInput"
-          value={code}
-          onChange={(e) => setCode(e.target.value)}
-          placeholder="3001-black-plain"
-          autoComplete="off"
-        />
-      </label>
-
-      <label className="adminField">
-        <div className="adminLabel">Variant</div>
-        <input
-          className="adminInput"
-          value={variant}
-          onChange={(e) => setVariant(e.target.value)}
-          placeholder="printed / pearl / etc."
-          autoComplete="off"
-        />
-      </label>
-
-      <label className="adminField">
-        <div className="adminLabel">Description</div>
-        <input
-          className="adminInput"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="optional notes"
-          autoComplete="off"
-        />
-      </label>
-
-      {/* images */}
-      <div className="adminGrid2">
-        <ImageField
-          title="Image URL 1"
-          url={img1}
-          setUrl={setImg1}
-          uploading={uploading1}
-          error={uploadErr1}
-          onPickClick={() => fileRef1.current?.click()}
-          onClear={() => setImg1("")}
-        />
-        <input
-          ref={fileRef1}
-          type="file"
-          accept="image/*"
-          hidden
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) uploadTo("img1", f);
-          }}
-        />
-
-        <ImageField
-          title="Image URL 2"
-          url={img2}
-          setUrl={setImg2}
-          uploading={uploading2}
-          error={uploadErr2}
-          onPickClick={() => fileRef2.current?.click()}
-          onClear={() => setImg2("")}
-        />
-        <input
-          ref={fileRef2}
-          type="file"
-          accept="image/*"
-          hidden
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) uploadTo("img2", f);
-          }}
-        />
       </div>
 
       {/* save */}
       <button
         type="submit"
-        className="adminBtn adminBtnPrimary adminBtnFullOnMobile"
         disabled={!canSave}
-        style={{ opacity: canSave ? 1 : 0.55 }}
+        className={[
+          "w-full rounded-xl px-4 py-3 text-sm font-semibold text-white shadow-sm",
+          "bg-slate-900 hover:bg-slate-800 active:bg-slate-950",
+          "disabled:opacity-50 disabled:cursor-not-allowed",
+          "sm:w-auto sm:min-w-[180px]",
+        ].join(" ")}
       >
         {submitting ? "Saving…" : "Save"}
       </button>
@@ -334,12 +359,12 @@ function ImageField({
   onClear: () => void;
 }) {
   return (
-    <div className="adminImageField">
-      <div className="adminLabel">{title}</div>
+    <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+      <div className="mb-2 text-xs font-medium text-slate-600">{title}</div>
 
-      <div className="adminRowInline">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <input
-          className="adminInput"
+          className={inputBase}
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           placeholder="https://..."
@@ -348,39 +373,53 @@ function ImageField({
 
         <button
           type="button"
-          className="adminBtn adminBtnSoft"
           onClick={onPickClick}
           disabled={uploading}
-          style={{ opacity: uploading ? 0.6 : 1 }}
+          className={[
+            "rounded-xl px-3 py-2 text-sm font-semibold shadow-sm",
+            "border border-slate-200 bg-white text-slate-900 hover:bg-slate-50",
+            "disabled:opacity-60 disabled:cursor-not-allowed",
+          ].join(" ")}
         >
           {uploading ? "Uploading…" : "Upload"}
         </button>
 
         <button
           type="button"
-          className="adminBtn"
           onClick={onClear}
           disabled={!url || uploading}
-          style={{ opacity: !url || uploading ? 0.6 : 1 }}
+          className={[
+            "rounded-xl px-3 py-2 text-sm font-semibold shadow-sm",
+            "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
+            "disabled:opacity-60 disabled:cursor-not-allowed",
+          ].join(" ")}
         >
           Clear
         </button>
       </div>
 
-      {error ? <div className="adminErr">{error}</div> : null}
-
-      {url ? (
-        <div className="adminThumbBox">
-          <img
-            src={url}
-            alt=""
-            style={{ width: "100%", height: "100%", objectFit: "contain" }}
-            onError={() => console.warn("Image preview failed to load:", url)}
-          />
+      {error ? (
+        <div className="mt-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+          {error}
         </div>
-      ) : (
-        <div className="adminThumbEmpty">No image</div>
-      )}
+      ) : null}
+
+      <div className="mt-3">
+        {url ? (
+          <div className="aspect-square w-full overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+            <img
+              src={url}
+              alt=""
+              className="h-full w-full object-contain"
+              onError={() => console.warn("Image preview failed to load:", url)}
+            />
+          </div>
+        ) : (
+          <div className="flex aspect-square w-full items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 text-xs text-slate-500">
+            No image
+          </div>
+        )}
+      </div>
     </div>
   );
 }

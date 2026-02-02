@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from "react";
 import { uploadImageToR2 } from "../../../lib/r2Uploads";
-import "../admin-ui.css"; // ideally import once in AdminLayout instead
 
 export type Part = {
   id: number;
@@ -27,6 +26,29 @@ function validateFile(file: File) {
   if (file.size > maxBytes) return "Image is too large (max 10 MB).";
   return null;
 }
+
+/** ---------- tiny tailwind style system ---------- */
+const cx = (...c: Array<string | false | null | undefined>) => c.filter(Boolean).join(" ");
+
+const inputBase =
+  "w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none " +
+  "focus:ring-2 focus:ring-slate-200 focus:border-slate-300";
+
+const btnBase =
+  "rounded-xl px-3 py-2 text-sm font-semibold shadow-sm border border-slate-200 bg-white " +
+  "text-slate-900 hover:bg-slate-50 active:bg-slate-100 disabled:opacity-60 disabled:cursor-not-allowed";
+
+const btnSoft =
+  "rounded-xl px-3 py-2 text-sm font-semibold shadow-sm border border-slate-200 bg-slate-50 " +
+  "text-slate-900 hover:bg-slate-100 active:bg-slate-200 disabled:opacity-60 disabled:cursor-not-allowed";
+
+const btnPrimary =
+  "rounded-xl px-3 py-2 text-sm font-semibold shadow-sm bg-slate-900 text-white " +
+  "hover:bg-slate-800 active:bg-slate-950 disabled:opacity-60 disabled:cursor-not-allowed";
+
+const card = "rounded-2xl border border-slate-200 bg-white shadow-sm";
+
+const labelText = "text-xs font-black text-slate-600";
 
 export function PartForm({
   initialValues,
@@ -96,13 +118,18 @@ export function PartForm({
   }
 
   return (
-    <form onSubmit={submit} className="adminForm">
-      {err ? <div className="adminErr">{err}</div> : null}
+    <form onSubmit={submit} className="space-y-3">
+      {err ? (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {err}
+        </div>
+      ) : null}
 
-      <label className="adminField">
-        <div className="adminLabel">Part ID</div>
+      {/* Part ID */}
+      <label className="block space-y-1">
+        <div className={labelText}>Part ID</div>
         <input
-          className="adminInput"
+          className={inputBase}
           value={partId}
           onChange={(e) => setPartId(e.target.value)}
           placeholder="3001"
@@ -110,10 +137,11 @@ export function PartForm({
         />
       </label>
 
-      <label className="adminField">
-        <div className="adminLabel">Name</div>
+      {/* Name */}
+      <label className="block space-y-1">
+        <div className={labelText}>Name</div>
         <input
-          className="adminInput"
+          className={inputBase}
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Brick 2 x 4"
@@ -121,11 +149,12 @@ export function PartForm({
         />
       </label>
 
-      <div className="adminGrid2">
-        <label className="adminField">
-          <div className="adminLabel">General category</div>
+      {/* General / Specific */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <label className="block space-y-1">
+          <div className={labelText}>General category</div>
           <input
-            className="adminInput"
+            className={inputBase}
             value={general}
             onChange={(e) => setGeneral(e.target.value)}
             placeholder="e.g. Bricks"
@@ -133,10 +162,10 @@ export function PartForm({
           />
         </label>
 
-        <label className="adminField">
-          <div className="adminLabel">Specific category</div>
+        <label className="block space-y-1">
+          <div className={labelText}>Specific category</div>
           <input
-            className="adminInput"
+            className={inputBase}
             value={specific}
             onChange={(e) => setSpecific(e.target.value)}
             placeholder="e.g. Rectangular"
@@ -145,10 +174,11 @@ export function PartForm({
         </label>
       </div>
 
-      <label className="adminField">
-        <div className="adminLabel">Actual category (shape family)</div>
+      {/* Actual category */}
+      <label className="block space-y-1">
+        <div className={labelText}>Actual category (shape family)</div>
         <input
-          className="adminInput"
+          className={inputBase}
           value={actual}
           onChange={(e) => setActual(e.target.value)}
           placeholder="brick"
@@ -156,22 +186,20 @@ export function PartForm({
         />
       </label>
 
-      <div className="adminImageField">
-        <div className="adminLabel">Image</div>
+      {/* Image */}
+      <div className={cx(card, "p-4 space-y-2")}>
+        <div className={labelText}>Image</div>
 
-        <div className="adminRowInline">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <input
-            className="adminInput"
+            className={cx(inputBase, "sm:flex-1")}
             value={imageUrl}
             onChange={(e) => setImageUrl(e.target.value)}
             placeholder="https://..."
             autoComplete="off"
           />
 
-          <label
-            className="adminBtn adminBtnSoft"
-            style={{ opacity: uploading ? 0.6 : 1 }}
-          >
+          <label className={cx(btnSoft, "inline-flex items-center justify-center")} style={{ opacity: uploading ? 0.6 : 1 }}>
             {uploading ? "Uploading…" : "Upload"}
             <input
               type="file"
@@ -189,29 +217,38 @@ export function PartForm({
           </label>
 
           {imageUrl ? (
-            <button type="button" className="adminBtn" onClick={() => setImageUrl("")} disabled={uploading}>
+            <button
+              type="button"
+              className={btnBase}
+              onClick={() => setImageUrl("")}
+              disabled={uploading}
+              title="Clear image URL"
+            >
               Clear
             </button>
           ) : null}
         </div>
 
         {imageUrl ? (
-          <div className="adminHero">
+          <div className="mt-2 rounded-2xl border border-slate-200 bg-slate-50 overflow-hidden aspect-square flex items-center justify-center">
             <img
               src={imageUrl}
               alt=""
-              style={{ width: "100%", height: "100%", objectFit: "contain" }}
+              className="h-full w-full object-contain"
               onError={() => setErr("Image preview failed to load. Check the URL.")}
             />
           </div>
         ) : (
-          <div className="adminThumbEmpty">No image</div>
+          <div className="mt-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500 font-semibold">
+            No image
+          </div>
         )}
       </div>
 
+      {/* Save */}
       <button
         type="submit"
-        className="adminBtn adminBtnPrimary adminBtnFullOnMobile"
+        className={cx(btnPrimary, "w-full sm:w-auto")}
         disabled={!canSave}
         style={{ opacity: canSave ? 1 : 0.55 }}
       >

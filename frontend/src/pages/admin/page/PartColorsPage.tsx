@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import api from "../../../api/client";
 import { ENDPOINTS } from "../../../api/endpoints";
 import { PartColorForm, Part, Color, PartColorRow } from "../form/PartColorForm";
-import "../admin-ui.css";
 
 /** ---------------- helpers ---------------- */
 
@@ -28,6 +27,26 @@ function safeHex(hex?: string | null) {
   return h.startsWith("#") ? h : `#${h}`;
 }
 
+const cx = (...c: Array<string | false | null | undefined>) => c.filter(Boolean).join(" ");
+
+const inputBase =
+  "w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none " +
+  "focus:ring-2 focus:ring-slate-200 focus:border-slate-300";
+
+const btnBase =
+  "rounded-xl px-3 py-2 text-sm font-semibold shadow-sm border border-slate-200 bg-white " +
+  "text-slate-900 hover:bg-slate-50 active:bg-slate-100 disabled:opacity-60 disabled:cursor-not-allowed";
+
+const btnPrimary =
+  "rounded-xl px-3 py-2 text-sm font-semibold shadow-sm bg-slate-900 text-white " +
+  "hover:bg-slate-800 active:bg-slate-950 disabled:opacity-60 disabled:cursor-not-allowed";
+
+const card =
+  "rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden";
+
+const muted = "text-slate-600";
+const muted2 = "text-slate-500";
+
 /** ---------------- Drawer shell ---------------- */
 
 function DrawerShell({
@@ -47,19 +66,23 @@ function DrawerShell({
 
   return (
     <div
-      className="adminOverlay"
+      className="fixed inset-0 z-50 bg-black/40 flex justify-end"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="adminDrawer" style={{ width: `min(${width}px, 100%)` }}>
-        <div className="adminDrawerHeader">
-          <div className="adminDrawerTitle">{title}</div>
-          <button type="button" className="adminCloseBtn" onClick={onClose}>
+      <div
+        className="h-full bg-white shadow-2xl w-full"
+        style={{ width: `min(${width}px, 100%)` }}
+      >
+        <div className="sticky top-0 z-10 border-b border-slate-200 bg-white/90 backdrop-blur px-4 py-3 flex items-center justify-between">
+          <div className="text-sm font-extrabold text-slate-900 truncate">{title}</div>
+          <button type="button" className={btnBase} onClick={onClose}>
             Close
           </button>
         </div>
-        {children}
+
+        <div className="h-[calc(100%-56px)] overflow-auto p-4">{children}</div>
       </div>
     </div>
   );
@@ -69,18 +92,18 @@ function DrawerShell({
 
 function RowThumb({ src }: { src?: string | null }) {
   return (
-    <div className="adminThumb">
+    <div className="h-10 w-10 rounded-xl border border-slate-200 bg-slate-50 overflow-hidden flex items-center justify-center shrink-0">
       {src ? (
         <img
           src={src}
           alt=""
-          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          className="h-full w-full object-cover"
           onError={(e) => {
-            e.currentTarget.style.display = "none";
+            (e.currentTarget as HTMLImageElement).style.display = "none";
           }}
         />
       ) : (
-        <span style={{ fontSize: 10, color: "#9ca3af", fontWeight: 900 }}>—</span>
+        <span className="text-[10px] text-slate-400 font-black">—</span>
       )}
     </div>
   );
@@ -88,18 +111,18 @@ function RowThumb({ src }: { src?: string | null }) {
 
 function MiniThumb({ src }: { src?: string | null }) {
   return (
-    <div className="adminMiniThumb">
+    <div className="h-7 w-7 rounded-lg border border-slate-200 bg-slate-50 overflow-hidden flex items-center justify-center shrink-0">
       {src ? (
         <img
           src={src}
           alt=""
-          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          className="h-full w-full object-cover"
           onError={(e) => {
-            e.currentTarget.style.display = "none";
+            (e.currentTarget as HTMLImageElement).style.display = "none";
           }}
         />
       ) : (
-        <span style={{ fontSize: 9, color: "#cbd5e1", fontWeight: 900 }}>•</span>
+        <span className="text-[9px] text-slate-300 font-black">•</span>
       )}
     </div>
   );
@@ -187,99 +210,106 @@ function PartColorDetailDrawer({
       open={open}
       title={selected?.part ? `${selected.part.part_id} — ${selected.part.name}` : "PartColor"}
       onClose={onClose}
-      width={900}
+      width={920}
     >
       {!selected ? (
-        <div className="adminEmpty">No selection.</div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
+          No selection.
+        </div>
       ) : (
-        <div className="adminStack">
-          {err ? <div className="adminErr">{err}</div> : null}
+        <div className="space-y-4">
+          {err ? (
+            <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {err}
+            </div>
+          ) : null}
 
-          <div className="adminDetailGrid">
-            <div className="adminHero">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[360px_1fr]">
+            {/* hero */}
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 overflow-hidden flex items-center justify-center aspect-square">
               {heroSrc ? (
                 <img
                   src={heroSrc}
                   alt=""
-                  style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                  className="h-full w-full object-contain"
                   onError={(e) => {
-                    e.currentTarget.style.display = "none";
+                    (e.currentTarget as HTMLImageElement).style.display = "none";
                   }}
                 />
               ) : (
-                <div style={{ fontSize: 12, color: "#94a3b8", fontWeight: 900 }}>No image</div>
+                <div className="text-xs text-slate-500 font-black">No image</div>
               )}
             </div>
 
-            <div className="adminFormCard">
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {/* details */}
+            <div className={cx(card, "p-4 space-y-3")}>
+              <div className="flex items-center gap-3">
                 <RowThumb src={selected.thumb_url || selected.image_url_1 || selected.image_url_2 || null} />
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 14, fontWeight: 950, color: "var(--text)" }}>
+                <div className="min-w-0">
+                  <div className="text-sm font-extrabold text-slate-900 truncate">
                     {selected.color?.name ?? "—"}
                     {selected.variant ? (
-                      <span className="adminPcNameMuted"> • {selected.variant}</span>
+                      <span className="text-slate-500 font-bold"> • {selected.variant}</span>
                     ) : null}
                   </div>
 
-                  <div style={{ fontSize: 12, color: "var(--muted2)", fontWeight: 900 }}>
-                    <span style={{ color: "var(--text)" }}>
-                      {selected.part?.part_id ?? "—"}
-                    </span>{" "}
+                  <div className="text-xs text-slate-500 font-semibold truncate">
+                    <span className="text-slate-900 font-bold">{selected.part?.part_id ?? "—"}</span>{" "}
                     — {selected.part?.name ?? "—"}
                   </div>
                 </div>
               </div>
 
-              <div style={{ border: "1px solid rgba(15,23,42,.06)", borderRadius: 12, padding: 10, background: "#fafafa" }}>
-                <div style={{ fontSize: 11, color: "var(--muted2)", fontWeight: 950 }}>Your PartColor ID</div>
-                <div style={{ fontSize: 13, fontWeight: 950, color: "var(--text)" }}>
-                  {selected.part_color_code ?? "—"}
-                </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                <div className="text-[11px] text-slate-500 font-black">Your PartColor ID</div>
+                <div className="text-sm font-extrabold text-slate-900">{selected.part_color_code ?? "—"}</div>
               </div>
 
               {selected.image_url_1 || selected.image_url_2 ? (
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <div className="flex flex-wrap gap-3">
                   {selected.image_url_1 ? (
-                    <a href={selected.image_url_1} target="_blank" rel="noreferrer" style={{ fontSize: 12, fontWeight: 950, color: "#2563eb", textDecoration: "none" }}>
+                    <a
+                      href={selected.image_url_1}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-sm font-bold text-blue-600 hover:underline"
+                    >
                       Open image 1
                     </a>
                   ) : null}
                   {selected.image_url_2 ? (
-                    <a href={selected.image_url_2} target="_blank" rel="noreferrer" style={{ fontSize: 12, fontWeight: 950, color: "#2563eb", textDecoration: "none" }}>
+                    <a
+                      href={selected.image_url_2}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-sm font-bold text-blue-600 hover:underline"
+                    >
                       Open image 2
                     </a>
                   ) : null}
                 </div>
               ) : null}
 
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
-                  className="adminBtn adminBtnPrimary"
+                  className={btnPrimary}
                   onClick={onToggleEdit}
                   disabled={saving}
-                  style={{ opacity: saving ? 0.6 : 1 }}
                 >
                   {editing ? "Stop editing" : "Edit"}
                 </button>
 
                 <button
                   type="button"
-                  className="adminBtn"
                   onClick={onDelete}
                   disabled={saving}
-                  style={{
-                    opacity: saving ? 0.6 : 1,
-                    borderColor: "#fecaca",
-                    background: "#fee2e2",
-                    color: "#991b1b",
-                  }}
+                  className="rounded-xl px-3 py-2 text-sm font-semibold shadow-sm border border-red-200 bg-red-50 text-red-800 hover:bg-red-100 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   Delete
                 </button>
 
-                <div className="adminCountText" style={{ alignSelf: "center" }}>
+                <div className="text-xs text-slate-500 font-semibold self-center">
                   {siblings.length} variants for this shape
                 </div>
               </div>
@@ -287,30 +317,30 @@ function PartColorDetailDrawer({
           </div>
 
           {swatches.length > 0 ? (
-            <div className="adminSwitchCard">
-              <div className="adminSwitchLabel">Switch color</div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <div className={cx(card, "p-4 space-y-2")}>
+              <div className="text-xs font-black text-slate-600">Switch color</div>
+              <div className="flex flex-wrap gap-2">
                 {swatches.map((s) => {
                   const active = selected.color?.id === s.colorId;
                   return (
                     <button
                       key={s.colorId}
                       type="button"
-                      className={active ? "adminSwatchBtn adminSwatchBtnActive" : "adminSwatchBtn"}
                       onClick={() => onSelect(s.row)}
+                      className={cx(
+                        "inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold shadow-sm",
+                        active
+                          ? "border-slate-900 bg-slate-900 text-white"
+                          : "border-slate-200 bg-white text-slate-900 hover:bg-slate-50"
+                      )}
                     >
                       <span
-                        style={{
-                          width: 12,
-                          height: 12,
-                          borderRadius: 5,
-                          background: s.hex ?? "#e5e7eb",
-                          border: "1px solid rgba(0,0,0,.12)",
-                        }}
+                        className="h-3 w-3 rounded-md border border-black/10"
+                        style={{ background: s.hex ?? "#e5e7eb" }}
                       />
-                      <span style={{ whiteSpace: "nowrap" }}>{s.name}</span>
+                      <span className="whitespace-nowrap">{s.name}</span>
                       {s.count > 1 ? (
-                        <span style={{ fontSize: 11, opacity: 0.85, marginLeft: 2 }}>
+                        <span className={cx("text-xs", active ? "text-white/80" : "text-slate-500")}>
                           +{s.count - 1}
                         </span>
                       ) : null}
@@ -322,10 +352,8 @@ function PartColorDetailDrawer({
           ) : null}
 
           {editing ? (
-            <div className="adminFormCard">
-              <div className="adminLabel" style={{ marginBottom: 10 }}>
-                Edit this PartColor
-              </div>
+            <div className={cx(card, "p-4")}>
+              <div className="mb-3 text-xs font-black text-slate-600">Edit this PartColor</div>
               <PartColorForm
                 parts={parts}
                 colors={colors}
@@ -498,40 +526,46 @@ export default function PartColorsPage() {
   }
 
   return (
-    <div className="adminPage">
+    <div className="space-y-3">
       {/* top bar */}
-      <div className="adminToolbar">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
         <input
-          className="adminInput adminSearch"
+          className={cx(inputBase, "sm:max-w-md")}
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search shape, color, variant, or your ID..."
           autoComplete="off"
         />
 
-        <button type="button" className="adminBtn adminBtnPrimary" onClick={() => setCreateOpen(true)}>
-          + New PartColor
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className={btnPrimary} onClick={() => setCreateOpen(true)}>
+            + New PartColor
+          </button>
 
-        <button type="button" className="adminBtn" onClick={expandAll}>
-          Expand all
-        </button>
+          <button type="button" className={btnBase} onClick={expandAll}>
+            Expand all
+          </button>
 
-        <button type="button" className="adminBtn" onClick={collapseAll}>
-          Collapse all
-        </button>
+          <button type="button" className={btnBase} onClick={collapseAll}>
+            Collapse all
+          </button>
+        </div>
 
-        <div className="adminCountText">
+        <div className="text-xs text-slate-500 font-semibold sm:ml-auto">
           {grouped.length} shapes • {items.length} rows
         </div>
       </div>
 
-      {err ? <div className="adminErr">{err}</div> : null}
+      {err ? (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {err}
+        </div>
+      ) : null}
 
       {/* grouped list */}
-      <div className="adminListCard">
+      <div className={card}>
         {grouped.length === 0 ? (
-          <div className="adminEmpty">No results.</div>
+          <div className="p-4 text-sm text-slate-600">No results.</div>
         ) : (
           grouped.map((g, idx) => {
             const isOpen = !!expanded[g.part.id];
@@ -543,59 +577,72 @@ export default function PartColorsPage() {
             const showPlaceholders = Math.max(0, 4 - thumbs.length);
 
             return (
-              <div key={g.part.id} className={idx === 0 ? "" : "adminRowTopBorder"}>
-                <button type="button" className="adminGroupBtn" onClick={() => toggle(g.part.id)}>
-                  <div className="adminChev">{isOpen ? "▾" : "▸"}</div>
+              <div key={g.part.id} className={idx === 0 ? "" : "border-t border-slate-200"}>
+                <button
+                  type="button"
+                  className="w-full px-4 py-3 flex items-center gap-3 hover:bg-slate-50 text-left"
+                  onClick={() => toggle(g.part.id)}
+                >
+                  <div className="w-6 text-slate-500 font-black">{isOpen ? "▾" : "▸"}</div>
 
-                  <div style={{ minWidth: 0 }}>
-                    <div className="adminGroupTitle" title={`${g.part.part_id} — ${g.part.name}`}>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-extrabold text-slate-900 truncate">
                       {g.part.part_id} — {g.part.name}{" "}
-                      <span className="adminGroupCount">({g.rows.length})</span>
+                      <span className="text-slate-500 font-bold">({g.rows.length})</span>
                     </div>
 
-                    <div className="adminPreviewRow">
+                    <div className="mt-2 flex items-center gap-2">
                       {thumbs.map((t, i) => (
                         <MiniThumb key={`${g.part.id}-t-${i}`} src={t} />
                       ))}
                       {Array.from({ length: showPlaceholders }).map((_, i) => (
                         <MiniThumb key={`${g.part.id}-p-${i}`} src={null} />
                       ))}
-                      <div className="adminPreviewLabel">{thumbs.length > 0 ? "preview" : "no images yet"}</div>
+                      <div className="text-xs text-slate-500 font-semibold">
+                        {thumbs.length > 0 ? "preview" : "no images yet"}
+                      </div>
                     </div>
                   </div>
 
-                  <div className="adminShowHide">{isOpen ? "hide" : "show"}</div>
+                  <div className="text-xs text-slate-500 font-semibold">
+                    {isOpen ? "hide" : "show"}
+                  </div>
                 </button>
 
                 {isOpen ? (
-                  <div className="adminGroupBody">
+                  <div className="border-t border-slate-200">
                     {g.rows.map((pc, pcIdx) => {
                       const img = pc.thumb_url || pc.image_url_1 || pc.image_url_2 || null;
                       const idText = pc.part_color_code ? `ID: ${pc.part_color_code}` : "ID: —";
                       const nameText = pc.color?.name ?? "—";
-                      const variantText = pc.variant ? `• ${pc.variant}` : "";
 
                       return (
                         <button
                           key={pc.id}
                           type="button"
-                          className={`adminPcRowBtn ${pcIdx === 0 ? "" : "adminPcRowTopBorder"}`}
+                          className={cx(
+                            "w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-slate-50",
+                            pcIdx === 0 ? "" : "border-t border-slate-100"
+                          )}
                           onClick={() => openDetail(pc)}
                         >
                           <RowThumb src={img} />
 
-                          <div className="adminPcId" title={idText}>
+                          <div className="hidden sm:block w-[220px] text-xs font-semibold text-slate-600 truncate">
                             {idText}
                           </div>
 
-                          <div style={{ minWidth: 0 }}>
-                            <div className="adminPcName" title={`${nameText} ${variantText}`}>
-                              {nameText} {pc.variant ? <span className="adminPcNameMuted">• {pc.variant}</span> : null}
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm font-extrabold text-slate-900 truncate">
+                              {nameText}{" "}
+                              {pc.variant ? (
+                                <span className="text-slate-500 font-bold">• {pc.variant}</span>
+                              ) : null}
                             </div>
 
                             {/* Mobile subline */}
-                            <div className="adminPcSubline">
-                              <span>{idText}</span>
+                            <div className="sm:hidden text-xs text-slate-500 font-semibold truncate">
+                              {idText}
                             </div>
                           </div>
                         </button>
@@ -610,7 +657,7 @@ export default function PartColorsPage() {
       </div>
 
       {/* create */}
-      <DrawerShell open={createOpen} title="New PartColor" onClose={() => setCreateOpen(false)} width={780}>
+      <DrawerShell open={createOpen} title="New PartColor" onClose={() => setCreateOpen(false)} width={820}>
         <PartColorForm parts={parts} colors={colors} submitting={saving} onSubmit={create} />
       </DrawerShell>
 
