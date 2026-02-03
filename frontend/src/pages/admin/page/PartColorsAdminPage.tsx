@@ -57,11 +57,6 @@ const btnDanger =
 
 const card = "rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden";
 
-/** ---------------- Drawer shell ----------------
- * Fix: eliminate the “box in front of everything” vibe:
- * - Make the drawer a true right panel with its own layout.
- * - Keep header compact and aligned left.
- */
 
 function DrawerShell({
   open,
