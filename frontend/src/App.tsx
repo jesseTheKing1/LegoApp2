@@ -1,59 +1,32 @@
-// src/App.tsx
+// src/App.ts// src/App.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Routes, Route, Link, Navigate, useLocation } from "react-router-dom";
 import { createPortal } from "react-dom";
-import api from "./api/client";
-import { ENDPOINTS } from "./api/endpoints";
 
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
-import CatalogAdminRoutes from "./pages/admin/adminRoutes";
+import CatalogAdminRoutes from "./pages/admin/AdminRoutes";
 
-type Me = {
-  id: number;
-  email: string;
-  username: string;
-  is_staff: boolean;
-  is_superuser: boolean;
-};
+import { AuthProvider, Me, useAuth } from "./auth/AuthContext";
 
 function cx(...c: Array<string | false | null | undefined>) {
   return c.filter(Boolean).join(" ");
 }
 
-function getAccessToken() {
-  return localStorage.getItem("access_token") || "";
-}
-
-function clearTokens() {
-  localStorage.removeItem("access_token");
-  localStorage.removeItem("refresh_token");
-}
-
-async function fetchMe(): Promise<Me | null> {
-  const token = getAccessToken();
-  if (!token) return null;
-
-  try {
-    const res = await api.get(ENDPOINTS.me, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    return res.data as Me;
-  } catch {
-    return null;
-  }
-}
-
-function RequireAuth({ me, children }: { me: Me | null; children: React.ReactNode }) {
+function RequireAuth({ children }: { children: React.ReactNode }) {
+  const { isAuthed, loading } = useAuth();
   const loc = useLocation();
-  if (!me) return <Navigate to="/login" replace state={{ from: loc.pathname }} />;
+  if (loading) return null; // AppShell handles loading UI
+  if (!isAuthed) return <Navigate to="/login" replace state={{ from: loc.pathname }} />;
   return <>{children}</>;
 }
 
-function RequireAdmin({ me, children }: { me: Me | null; children: React.ReactNode }) {
+function RequireAdmin({ children }: { children: React.ReactNode }) {
+  const { isAuthed, isAdmin, loading } = useAuth();
   const loc = useLocation();
-  if (!me) return <Navigate to="/login" replace state={{ from: loc.pathname }} />;
-  if (!me.is_staff) return <Navigate to="/" replace />;
+  if (loading) return null;
+  if (!isAuthed) return <Navigate to="/login" replace state={{ from: loc.pathname }} />;
+  if (!isAdmin) return <Navigate to="/" replace />;
   return <>{children}</>;
 }
 
@@ -159,7 +132,7 @@ function Badge({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** ---------- Admin dropdown (desktop + admin mode) ---------- */
+/** ---------- Admin dropdown ---------- */
 function AdminMenu({ compact = false }: { compact?: boolean }) {
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
@@ -241,7 +214,8 @@ function AdminMenu({ compact = false }: { compact?: boolean }) {
 }
 
 /** ---------- Header ---------- */
-function Header({ me, onLogout }: { me: Me | null; onLogout: () => void }) {
+function Header() {
+  const { me, logout, isAdmin } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const mobileRef = useOutsideClick<HTMLDivElement>(() => setMobileOpen(false));
   const loc = useLocation();
@@ -312,7 +286,7 @@ function Header({ me, onLogout }: { me: Me | null; onLogout: () => void }) {
                 </div>
               )}
 
-              {me?.is_staff ? (
+              {isAdmin ? (
                 <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50 p-3">
                   <div className="mb-2 text-xs font-black uppercase tracking-wide text-slate-500">
                     Admin
@@ -356,7 +330,7 @@ function Header({ me, onLogout }: { me: Me | null; onLogout: () => void }) {
                     </div>
                     <button
                       className="inline-flex h-10 w-full items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-                      onClick={onLogout}
+                      onClick={logout}
                     >
                       Log out
                     </button>
@@ -430,7 +404,6 @@ function Header({ me, onLogout }: { me: Me | null; onLogout: () => void }) {
               >
                 Home
               </Link>
-
               <Link
                 to="/browse"
                 className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-100"
@@ -443,11 +416,11 @@ function Header({ me, onLogout }: { me: Me | null; onLogout: () => void }) {
               <ButtonLink to="/" variant="secondary" size="sm">
                 ← Back to app
               </ButtonLink>
-              {me?.is_staff ? <AdminMenu compact /> : null}
+              {isAdmin ? <AdminMenu compact /> : null}
             </>
           )}
 
-          {!isAdminRoute && me?.is_staff ? <AdminMenu /> : null}
+          {!isAdminRoute && isAdmin ? <AdminMenu /> : null}
 
           <div className="ml-2 flex items-center gap-2">
             {me ? (
@@ -455,7 +428,7 @@ function Header({ me, onLogout }: { me: Me | null; onLogout: () => void }) {
                 <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-900">
                   {userLabel}
                 </span>
-                <Button variant="ghost" onClick={onLogout}>
+                <Button variant="ghost" onClick={logout}>
                   Log out
                 </Button>
               </>
@@ -575,29 +548,13 @@ function BrowsePlaceholder() {
   );
 }
 
-export default function App() {
-  const [me, setMe] = useState<Me | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  async function loadMe() {
-    setLoading(true);
-    setMe(await fetchMe());
-    setLoading(false);
-  }
-
-  useEffect(() => {
-    loadMe();
-  }, []);
-
-  function logout() {
-    clearTokens();
-    setMe(null);
-  }
+function AppShell() {
+  const { me, loading } = useAuth();
 
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 text-slate-900">
-        <Header me={me} onLogout={logout} />
+        <Header />
         <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
           <div className="rounded-3xl border border-slate-200 bg-white p-6 text-sm font-semibold text-slate-600">
             Loading…
@@ -609,18 +566,19 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
-      <Header me={me} onLogout={logout} />
+      <Header />
 
       <Routes>
         <Route path="/" element={<Home me={me} />} />
 
-        <Route path="/login" element={<LoginPage onLogin={loadMe} />} />
+        {/* Login page will call refreshMe() after storing tokens */}
+        <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
 
         <Route
           path="/account"
           element={
-            <RequireAuth me={me}>
+            <RequireAuth>
               <AccountPage me={me as Me} />
             </RequireAuth>
           }
@@ -628,11 +586,10 @@ export default function App() {
 
         <Route path="/browse" element={<BrowsePlaceholder />} />
 
-        {/* ✅ Admin (all admin routing lives in src/pages/admin/AdminRoutes.tsx) */}
         <Route
           path="/admin/*"
           element={
-            <RequireAdmin me={me}>
+            <RequireAdmin>
               <CatalogAdminRoutes />
             </RequireAdmin>
           }
@@ -641,5 +598,13 @@ export default function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppShell />
+    </AuthProvider>
   );
 }
