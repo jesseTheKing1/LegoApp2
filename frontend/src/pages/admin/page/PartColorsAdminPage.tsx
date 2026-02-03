@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 import api from "../../../api/client";
 import { ENDPOINTS } from "../../../api/endpoints";
-import { PartColorForm, Part, Color, PartColorRow } from "../form/PartColorForm";
+import { PartColorForm, PartColorRow } from "../form/PartColorForm";
 import { createPortal } from "react-dom";
+import { Color } from "../../../types/color";
+import { Part } from "../../../types/part";
 
 /** ---------------- helpers ---------------- */
 
