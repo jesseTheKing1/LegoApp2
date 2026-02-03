@@ -549,7 +549,9 @@ function BrowsePlaceholder() {
 }
 
 function AppShell() {
-  const { me, loading } = useAuth();
+  // IMPORTANT: refreshMe is what the login page calls after saving tokens.
+  // It should fetch /api/me and update auth state in AuthProvider.
+  const { me, loading, refreshMe } = useAuth();
 
   if (loading) {
     return (
@@ -571,14 +573,24 @@ function AppShell() {
       <Routes>
         <Route path="/" element={<Home me={me} />} />
 
-        {/* Login page will call refreshMe() after storing tokens */}
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
+        {/* Login must receive onLogin */}
+        <Route
+  path="/login"
+  element={
+    <LoginPage
+      onLogin={async () => {
+        await refreshMe(); // ignore returned Me|null
+      }}
+    />
+  }
+/>
+<Route path="/register" element={<RegisterPage />} />
 
         <Route
           path="/account"
           element={
             <RequireAuth>
+              {/* RequireAuth guarantees me is non-null */}
               <AccountPage me={me as Me} />
             </RequireAuth>
           }
@@ -600,6 +612,7 @@ function AppShell() {
     </div>
   );
 }
+
 
 export default function App() {
   return (
