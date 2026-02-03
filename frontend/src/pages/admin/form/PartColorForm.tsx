@@ -1,11 +1,7 @@
 import React, { useMemo, useRef, useState } from "react";
 import { uploadImageToR2 } from "../../../lib/r2Uploads";
+import { Color } from "../../../types/color";
 
-export type Color = {
-  id: number;
-  name: string;
-  hex?: string;
-};
 
 export type Part = {
   id: number;

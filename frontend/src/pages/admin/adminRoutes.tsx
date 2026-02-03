@@ -1,7 +1,9 @@
 // src/pages/admin/catalog/CatalogAdminRoutes.tsx
 import React from "react";
 import { NavLink, Navigate, Route, Routes } from "react-router-dom";
-
+import PartsAdminPage from "./page/PartsAdinPage";
+import ColorsAdminPage from "./page/ColorsAdminPage";
+import PartColorsPage from "./page/PartColorsAdminPage";
 
 function cx(...c: Array<string | false | null | undefined>) {
   return c.filter(Boolean).join(" ");
@@ -73,62 +75,5 @@ export default function CatalogAdminRoutes() {
         <Route path="*" element={<Navigate to="parts" replace />} />
       </Routes>
     </CatalogAdminLayout>
-  );
-}
-
-/** -----------------------------------------
- *  PAGE 1: PARTS
- *  Replace this placeholder with your real Parts admin page
- *  ----------------------------------------- */
-function PartsAdminPage() {
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-4">
-      <div className="text-sm font-extrabold text-slate-900">Parts</div>
-      <div className="mt-2 text-sm text-slate-600">
-        Replace this with your Parts admin page component code.
-      </div>
-    </div>
-  );
-}
-
-/** -----------------------------------------
- *  PAGE 2: COLORS
- *  Replace this placeholder with your real Colors admin page
- *  ----------------------------------------- */
-function ColorsAdminPage() {
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-4">
-      <div className="text-sm font-extrabold text-slate-900">Colors</div>
-      <div className="mt-2 text-sm text-slate-600">
-        Replace this with your Colors admin page component code.
-      </div>
-    </div>
-  );
-}
-
-/** -----------------------------------------
- *  PAGE 3: PART COLORS
- *  Paste your existing PartColorsPage code here.
- *
- *  IMPORTANT: change `export default function PartColorsPage() { ... }`
- *  to:        `function PartColorsPage() { ... }`
- *  because the default export is already used above.
- *  ----------------------------------------- */
-
-// ✅ Paste your entire PartColorsPage file below this line.
-// ✅ Change `export default function PartColorsPage()` to `function PartColorsPage()`.
-
-function PartColorsPage() {
-  // PASTE YOUR EXISTING PartColorsPage IMPLEMENTATION HERE
-  // (the big code you pasted in chat)
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-4">
-      <div className="text-sm font-extrabold text-slate-900">
-        PartColorsPage not pasted yet
-      </div>
-      <div className="mt-2 text-sm text-slate-600">
-        Paste your PartColorsPage code here and remove this placeholder.
-      </div>
-    </div>
   );
 }
