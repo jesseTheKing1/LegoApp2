@@ -1,5 +1,20 @@
 from rest_framework import serializers
 from .models import Color, Part, PartColor
+from catalog.models import CatalogItem
+
+
+class CatalogItemMiniSerializer(serializers.ModelSerializer):
+    """Small read-only view of the catalog item (good for embedding in PartColor)."""
+    class Meta:
+        model = CatalogItem
+        fields = [
+            "id",
+            "sku",
+            "is_active",
+            "base_price_override",
+            "force_override",
+            "notes",
+        ]
 
 
 class ColorSerializer(serializers.ModelSerializer):
@@ -14,6 +29,7 @@ class ColorSerializer(serializers.ModelSerializer):
             "is_metallic",
         ]
 
+
 class PartSerializer(serializers.ModelSerializer):
     class Meta:
         model = Part
@@ -26,6 +42,7 @@ class PartSerializer(serializers.ModelSerializer):
             "actual_category",
             "image_url",
         ]
+
 
 class PartColorSerializer(serializers.ModelSerializer):
     # read-only nested objects (nice for frontend rendering)
@@ -43,10 +60,20 @@ class PartColorSerializer(serializers.ModelSerializer):
         source="color",
         write_only=True,
     )
-    variant = serializers.CharField(required=False, allow_blank=True)
 
-    # catalog_item is in another app; keep it optional + ID-based
-    catalog_item_id = serializers.IntegerField(required=False, allow_null=True)
+    # READ: include catalog item info on GET
+    catalog_item = CatalogItemMiniSerializer(read_only=True)
+
+    # WRITE: attach/detach catalog item by id on POST/PATCH
+    catalog_item_id = serializers.PrimaryKeyRelatedField(
+        queryset=CatalogItem.objects.all(),
+        source="catalog_item",
+        write_only=True,
+        required=False,
+        allow_null=True,
+    )
+
+    variant = serializers.CharField(required=False, allow_blank=True)
 
     class Meta:
         model = PartColor
@@ -61,6 +88,7 @@ class PartColorSerializer(serializers.ModelSerializer):
             "description",
             "image_url_1",
             "image_url_2",
+            "catalog_item",
             "catalog_item_id",
         ]
 
@@ -69,27 +97,3 @@ class PartColorSerializer(serializers.ModelSerializer):
         if not v:
             raise serializers.ValidationError("part_color_code cannot be blank.")
         return v
-
-    def create(self, validated_data):
-        # catalog_item_id comes in as raw int; only assign if provided
-        catalog_item_id = validated_data.pop("catalog_item_id", None)
-
-        obj = super().create(validated_data)
-
-        if catalog_item_id is not None:
-            # Set by id without importing CatalogItem model directly (keeps coupling low)
-            obj.catalog_item_id = catalog_item_id
-            obj.save(update_fields=["catalog_item"])
-
-        return obj
-
-    def update(self, instance, validated_data):
-        catalog_item_id = validated_data.pop("catalog_item_id", None)
-
-        obj = super().update(instance, validated_data)
-
-        if catalog_item_id is not None:
-            obj.catalog_item_id = catalog_item_id
-            obj.save(update_fields=["catalog_item"])
-
-        return obj

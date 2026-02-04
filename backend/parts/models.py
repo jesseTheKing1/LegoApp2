@@ -36,20 +36,17 @@ class PartColor(models.Model):
     variant = models.CharField(max_length=80, blank=True)  # printed / pearl / etc.
 
     part_color_code = models.CharField(max_length=64, unique=True)
-
     description = models.CharField(max_length=300, blank=True)
     image_url_1 = models.URLField(blank=True)
     image_url_2 = models.URLField(blank=True)
 
-    # FUTURE HOOK (don’t implement CatalogItem yet if you don’t want)
-    # Set null=True so PartColor can exist before it's sellable/priced
-    # catalog_item = models.OneToOneField(
-    #     "catalog.CatalogItem",
-    #     on_delete=models.PROTECT,
-    #     related_name="part_color",
-    #     null=True,
-    #     blank=True,
-    # )
+    catalog_item = models.OneToOneField(
+        "catalog.CatalogItem",
+        on_delete=models.PROTECT,
+        related_name="part_color",
+        null=True,
+        blank=True,
+    )
 
     class Meta:
         ordering = ["part__part_id", "color__name", "variant"]
