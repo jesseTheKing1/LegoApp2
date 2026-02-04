@@ -1,10 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
 import api from "../../../api/client";
 import { ENDPOINTS } from "../../../api/endpoints";
-import { PartColorForm, PartColorRow } from "../form/PartColorForm";
 import { createPortal } from "react-dom";
-import { Color } from "../../../types/color";
-import { Part } from "../../../types/part";
+
+import { PartColorForm } from "../form/PartColorForm";
+import type { PartColorRow } from "../../../types/partColor";
+import type { CatalogItemMini, CatalogItemPayload } from "../../../types/catalog";
+import type { Color } from "../../../types/color";
+import type { Part } from "../../../types/part";
 
 /** ---------------- helpers ---------------- */
 
@@ -59,6 +62,7 @@ const btnDanger =
 
 const card = "rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden";
 
+/** ---------------- Drawer shell ---------------- */
 
 function DrawerShell({
   open,
@@ -73,7 +77,6 @@ function DrawerShell({
   children: React.ReactNode;
   width?: number;
 }) {
-  // lock scroll when open (optional but feels pro)
   useEffect(() => {
     if (!open) return;
     const prev = document.body.style.overflow;
@@ -94,26 +97,17 @@ function DrawerShell({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      {/* overlay */}
       <div className="absolute inset-0 bg-black/40" />
-
-      {/* panel wrapper (use flex so it's always right-aligned) */}
       <div className="absolute inset-0 flex justify-end">
-        <div
-          className="h-full w-full bg-white shadow-2xl flex flex-col"
-          style={{ maxWidth: width }}
-        >
+        <div className="h-full w-full bg-white shadow-2xl flex flex-col" style={{ maxWidth: width }}>
           <div className="sticky top-0 z-10 border-b border-slate-200 bg-white/90 backdrop-blur px-4 py-3 flex items-center gap-3">
             <div className="min-w-0 flex-1 text-left">
-              <div className="text-sm font-extrabold text-slate-900 truncate">
-                {title}
-              </div>
+              <div className="text-sm font-extrabold text-slate-900 truncate">{title}</div>
             </div>
             <button type="button" className={btnBase} onClick={onClose}>
               Close
             </button>
           </div>
-
           <div className="flex-1 overflow-auto p-4">{children}</div>
         </div>
       </div>
@@ -160,32 +154,197 @@ function MiniThumb({ src }: { src?: string | null }) {
   );
 }
 
+/** ---------------- Catalog mini editor ---------------- */
 
-function SwatchDot({
-  hex,
-  active,
+function buildSuggestedSku(pc: PartColorRow) {
+  const pid = pc.part?.part_id ?? "PART";
+  const cname = pc.color?.name ?? "COLOR";
+  const v = pc.variant ? `-${pc.variant}` : "";
+  return `PC-${pid}-${cname}${v}`.replace(/\s+/g, "_").toUpperCase();
+}
+
+function CatalogMiniEditor({
+  selected,
+  saving,
+  setSaving,
+  setErr,
+  onPatched,
 }: {
-  hex: string | null;
-  active: boolean;
+  selected: PartColorRow;
+  saving: boolean;
+  setSaving: (v: boolean) => void;
+  setErr: (v: string | null) => void;
+  onPatched: (pc: PartColorRow) => void;
 }) {
+  const ci: CatalogItemMini | null = selected.catalog_item ?? null;
+
+  const [sku, setSku] = useState(ci?.sku ?? "");
+  const [isActive, setIsActive] = useState(ci?.is_active ?? true);
+  const [baseOverride, setBaseOverride] = useState<string>(ci?.base_price_override ?? "");
+  const [forceOverride, setForceOverride] = useState<boolean>(ci?.force_override ?? false);
+  const [notes, setNotes] = useState(ci?.notes ?? "");
+
+  useEffect(() => {
+    const next = selected.catalog_item ?? null;
+    setSku(next?.sku ?? "");
+    setIsActive(next?.is_active ?? true);
+    setBaseOverride(next?.base_price_override ?? "");
+    setForceOverride(next?.force_override ?? false);
+    setNotes(next?.notes ?? "");
+  }, [selected.id, selected.catalog_item?.id]);
+
+  async function refreshPartColor() {
+    const refreshed = await api.get(`${ENDPOINTS.partColors}${selected.id}/`);
+    onPatched(refreshed.data);
+  }
+
+  async function createAndAttach() {
+    setSaving(true);
+    setErr(null);
+    try {
+      const createPayload: CatalogItemPayload = {
+        sku: sku.trim() ? sku.trim() : buildSuggestedSku(selected),
+        is_active: true,
+        base_price_override: null,
+        force_override: false,
+        notes: "",
+      };
+
+      const created = await api.post(ENDPOINTS.catalog, createPayload);
+      const newId = created.data?.id;
+      await api.patch(`${ENDPOINTS.partColors}${selected.id}/`, { catalog_item_id: newId });
+
+      await refreshPartColor();
+    } catch (e: any) {
+      setErr(formatApiError(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function detach() {
+    setSaving(true);
+    setErr(null);
+    try {
+      await api.patch(`${ENDPOINTS.partColors}${selected.id}/`, { catalog_item_id: null });
+      await refreshPartColor();
+    } catch (e: any) {
+      setErr(formatApiError(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveCatalog() {
+    if (!ci?.id) return;
+    setSaving(true);
+    setErr(null);
+    try {
+      const payload: CatalogItemPayload = {
+        sku: sku.trim(),
+        is_active: isActive,
+        base_price_override: baseOverride.trim() === "" ? null : baseOverride.trim(),
+        force_override: forceOverride,
+        notes,
+      };
+
+      await api.patch(`${ENDPOINTS.catalog}${ci.id}/`, payload);
+      await refreshPartColor();
+    } catch (e: any) {
+      setErr(formatApiError(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
-    <span
-      className={cx(
-        "relative inline-flex items-center justify-center",
-        "h-8 w-8 rounded-full border border-slate-200 bg-white shadow-sm",
-        active ? "ring-2 ring-slate-900 ring-offset-2 ring-offset-white" : "hover:ring-2 hover:ring-slate-300 hover:ring-offset-2 hover:ring-offset-white"
+    <div className={cx(card, "p-4")}>
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-xs font-black text-slate-600">Pricing (Catalog Item)</div>
+        {ci ? (
+          <button type="button" className={btnDanger} onClick={detach} disabled={saving}>
+            Detach
+          </button>
+        ) : (
+          <button type="button" className={btnPrimary} onClick={createAndAttach} disabled={saving}>
+            Create & Attach
+          </button>
+        )}
+      </div>
+
+      {!ci ? (
+        <div className="mt-3">
+          <div className="text-sm text-slate-600">
+            No catalog item attached. Create one to store price override, active flag, and notes.
+          </div>
+
+          <div className="mt-3">
+            <label className="block text-xs font-bold text-slate-700 mb-1">SKU (optional)</label>
+            <input
+              className={inputBase}
+              value={sku}
+              onChange={(e) => setSku(e.target.value)}
+              placeholder={buildSuggestedSku(selected)}
+              disabled={saving}
+              autoComplete="off"
+            />
+          </div>
+        </div>
+      ) : (
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <label className="block text-xs font-bold text-slate-700 mb-1">SKU</label>
+            <input className={inputBase} value={sku} onChange={(e) => setSku(e.target.value)} disabled={saving} />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1">Base price override</label>
+            <input
+              className={inputBase}
+              value={baseOverride}
+              onChange={(e) => setBaseOverride(e.target.value)}
+              placeholder="e.g. 0.0375"
+              disabled={saving}
+              autoComplete="off"
+            />
+            <div className="mt-1 text-[11px] text-slate-500 font-semibold">Blank = null (clears override).</div>
+          </div>
+
+          <div className="flex items-end gap-4">
+            <label className="inline-flex items-center gap-2 text-sm font-bold text-slate-700">
+              <input
+                type="checkbox"
+                checked={forceOverride}
+                onChange={(e) => setForceOverride(e.target.checked)}
+                disabled={saving}
+              />
+              Force override
+            </label>
+
+            <label className="inline-flex items-center gap-2 text-sm font-bold text-slate-700">
+              <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} disabled={saving} />
+              Active
+            </label>
+          </div>
+
+          <div className="sm:col-span-2">
+            <label className="block text-xs font-bold text-slate-700 mb-1">Notes</label>
+            <textarea
+              className={cx(inputBase, "min-h-[90px]")}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              disabled={saving}
+            />
+          </div>
+
+          <div className="sm:col-span-2 flex justify-end">
+            <button type="button" className={btnPrimary} onClick={saveCatalog} disabled={saving}>
+              Save pricing
+            </button>
+          </div>
+        </div>
       )}
-    >
-      <span
-        className="h-6 w-6 rounded-full border border-black/10"
-        style={{ background: hex ?? "#e5e7eb" }}
-      />
-      {active ? (
-        <span className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full bg-slate-900 text-white text-[10px] font-black flex items-center justify-center shadow">
-          ✓
-        </span>
-      ) : null}
-    </span>
+    </div>
   );
 }
 
@@ -205,6 +364,9 @@ function PartColorDetailDrawer({
   onDelete,
   onSubmitEdit,
   onSelect,
+  setSaving,
+  setErr,
+  onPatched,
 }: {
   open: boolean;
   selected: PartColorRow | null;
@@ -219,6 +381,11 @@ function PartColorDetailDrawer({
   onDelete: () => void;
   onSubmitEdit: (payload: any) => void;
   onSelect: (pc: PartColorRow) => void;
+
+  // for catalog editor
+  setSaving: (v: boolean) => void;
+  setErr: (v: string | null) => void;
+  onPatched: (pc: PartColorRow) => void;
 }) {
   const [colorQ, setColorQ] = useState("");
 
@@ -243,12 +410,8 @@ function PartColorDetailDrawer({
   }, [colors]);
 
   const swatches = useMemo(() => {
-    const map = new Map<
-      number,
-      { colorId: number; name: string; hex: string | null; row: PartColorRow; count: number }
-    >();
+    const map = new Map<number, { colorId: number; name: string; hex: string | null; row: PartColorRow; count: number }>();
 
-    // pick a “best” row for each color
     const score = (r: PartColorRow) => {
       let s = 0;
       if (r.thumb_url || r.image_url_1 || r.image_url_2) s += 10;
@@ -277,7 +440,6 @@ function PartColorDetailDrawer({
       }
     }
 
-    // sort by name
     return Array.from(map.values()).sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
   }, [siblings, colorHexById]);
 
@@ -289,35 +451,28 @@ function PartColorDetailDrawer({
 
   const heroSrc = selected?.image_url_1 || selected?.thumb_url || selected?.image_url_2 || null;
 
-  // Keep title short and professional (avoid giant centered-looking strings)
   const drawerTitle = useMemo(() => {
     if (!selected?.part) return "PartColor";
     const pid = selected.part.part_id ?? "Part";
     return `${pid} • PartColor Details`;
   }, [selected]);
 
-  // Single-line display fields: no wrap, truncate
   const partLine = `${selected?.part?.part_id ?? "—"} — ${selected?.part?.name ?? "—"}`;
   const colorLine = `${selected?.color?.name ?? "—"}${selected?.variant ? ` • ${selected.variant}` : ""}`;
 
   return (
     <DrawerShell open={open} title={drawerTitle} onClose={onClose} width={980}>
       {!selected ? (
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
-          No selection.
-        </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">No selection.</div>
       ) : (
         <div className="space-y-4">
           {err ? (
-            <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {err}
-            </div>
+            <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{err}</div>
           ) : null}
 
-          {/* Top section: looks like a real product detail page (not a “floating box”) */}
+          {/* top */}
           <div className={cx(card, "p-4")}>
             <div className="flex flex-col gap-4 lg:flex-row">
-              {/* left: image (smaller and tidy) */}
               <div className="w-full lg:w-[260px]">
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 overflow-hidden aspect-square flex items-center justify-center">
                   {heroSrc ? (
@@ -335,7 +490,6 @@ function PartColorDetailDrawer({
                 </div>
               </div>
 
-              {/* right: primary info */}
               <div className="min-w-0 flex-1">
                 <div className="flex items-start gap-3">
                   <RowThumb src={selected.thumb_url || selected.image_url_1 || selected.image_url_2 || null} />
@@ -346,7 +500,6 @@ function PartColorDetailDrawer({
                       <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-bold text-slate-700">
                         {siblings.length} variants for this shape
                       </span>
-
                       {selected.part_color_code ? (
                         <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-extrabold text-slate-900">
                           ID: {selected.part_color_code}
@@ -359,7 +512,6 @@ function PartColorDetailDrawer({
                     </div>
                   </div>
 
-                  {/* actions aligned top-right (pro layout) */}
                   <div className="shrink-0 flex items-center gap-2">
                     <button type="button" className={btnPrimary} onClick={onToggleEdit} disabled={saving}>
                       {editing ? "Stop editing" : "Edit"}
@@ -370,26 +522,15 @@ function PartColorDetailDrawer({
                   </div>
                 </div>
 
-                {/* links (small + clean) */}
                 {(selected.image_url_1 || selected.image_url_2) ? (
                   <div className="mt-3 flex flex-wrap items-center gap-3">
                     {selected.image_url_1 ? (
-                      <a
-                        href={selected.image_url_1}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-sm font-bold text-blue-600 hover:underline"
-                      >
+                      <a href={selected.image_url_1} target="_blank" rel="noreferrer" className="text-sm font-bold text-blue-600 hover:underline">
                         Open image 1
                       </a>
                     ) : null}
                     {selected.image_url_2 ? (
-                      <a
-                        href={selected.image_url_2}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-sm font-bold text-blue-600 hover:underline"
-                      >
+                      <a href={selected.image_url_2} target="_blank" rel="noreferrer" className="text-sm font-bold text-blue-600 hover:underline">
                         Open image 2
                       </a>
                     ) : null}
@@ -399,107 +540,97 @@ function PartColorDetailDrawer({
             </div>
           </div>
 
-         {/* Compact color picker: tiny swatches + hard-truncate text */}
-        {swatches.length > 0 ? (
-        <div className={cx(card, "p-3 sm:p-4")}>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="text-xs font-black text-slate-600">Choose a color</div>
+          {/* color picker */}
+          {swatches.length > 0 ? (
+            <div className={cx(card, "p-3 sm:p-4")}>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="text-xs font-black text-slate-600">Choose a color</div>
 
-            {swatches.length >= 16 ? (
-                <input
-                className={cx(inputBase, "sm:w-[280px]")}
-                value={colorQ}
-                onChange={(e) => setColorQ(e.target.value)}
-                placeholder="Search..."
-                autoComplete="off"
-                />
-            ) : null}
-            </div>
+                {swatches.length >= 16 ? (
+                  <input
+                    className={cx(inputBase, "sm:w-[280px]")}
+                    value={colorQ}
+                    onChange={(e) => setColorQ(e.target.value)}
+                    placeholder="Search..."
+                    autoComplete="off"
+                  />
+                ) : null}
+              </div>
 
-            {/* Selected label stays compact */}
-            <div className="mt-2 flex items-center gap-2 text-xs">
-            <span className="text-slate-500 font-semibold">Selected:</span>
-            <span className="font-extrabold text-slate-900 truncate max-w-[70%]">
-                {selected.color?.name ?? "—"}
-                {selected.variant ? <span className="text-slate-400 font-semibold"> • {selected.variant}</span> : null}
-            </span>
-            </div>
+              <div className="mt-2 flex items-center gap-2 text-xs">
+                <span className="text-slate-500 font-semibold">Selected:</span>
+                <span className="font-extrabold text-slate-900 truncate max-w-[70%]">
+                  {selected.color?.name ?? "—"}
+                  {selected.variant ? <span className="text-slate-400 font-semibold"> • {selected.variant}</span> : null}
+                </span>
+              </div>
 
-            {/* Tighter grid: more columns, smaller gaps */}
-            <div className="mt-3 grid gap-1.5 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8">
-            {swatchesFiltered.map((s) => {
-                const active = selected.color?.id === s.colorId;
+              <div className="mt-3 grid gap-1.5 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8">
+                {swatchesFiltered.map((s) => {
+                  const active = selected.color?.id === s.colorId;
 
-                return (
-                <button
-                    key={s.colorId}
-                    type="button"
-                    onClick={() => onSelect(s.row)}
-                    title={s.name}
-                    aria-label={`Select color ${s.name}`}
-                    className={cx(
-                    "w-full rounded-xl border px-2 py-1.5 text-left transition",
-                    "min-h-[44px] flex items-center gap-2", // <- fixed tile height so text can't break layout
-                    active
-                        ? "border-slate-900 ring-2 ring-slate-900 ring-offset-1 ring-offset-white bg-slate-50"
-                        : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
-                    )}
-                >
-                    {/* Smallest practical swatch, still clickable */}
-                    <span
-                    className={cx(
-                        "h-5 w-5 rounded-md border border-black/10 shrink-0",
-                        active ? "outline outline-2 outline-slate-900 outline-offset-1" : ""
-                    )}
-                    style={{ background: s.hex ?? "#e5e7eb" }}
-                    />
+                  return (
+                    <button
+                      key={s.colorId}
+                      type="button"
+                      onClick={() => onSelect(s.row)}
+                      title={s.name}
+                      aria-label={`Select color ${s.name}`}
+                      className={cx(
+                        "w-full rounded-xl border px-2 py-1.5 text-left transition",
+                        "min-h-[44px] flex items-center gap-2",
+                        active
+                          ? "border-slate-900 ring-2 ring-slate-900 ring-offset-1 ring-offset-white bg-slate-50"
+                          : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                      )}
+                    >
+                      <span
+                        className={cx(
+                          "h-5 w-5 rounded-md border border-black/10 shrink-0",
+                          active ? "outline outline-2 outline-slate-900 outline-offset-1" : ""
+                        )}
+                        style={{ background: s.hex ?? "#e5e7eb" }}
+                      />
 
-                    {/* Hard truncate so it NEVER spills */}
-                    <span className="min-w-0 flex-1">
-                    <span className={cx("block text-xs font-extrabold truncate", active ? "text-slate-900" : "text-slate-800")}>
-                        {s.name}
-                    </span>
-
-                    {/* optional tiny meta line, only if you want it; remove if you want ultra-minimal */}
-                    {s.count > 1 ? (
-                        <span className="block text-[10px] text-slate-500 font-semibold truncate">
-                        {s.count} opts
+                      <span className="min-w-0 flex-1">
+                        <span className={cx("block text-xs font-extrabold truncate", active ? "text-slate-900" : "text-slate-800")}>
+                          {s.name}
                         </span>
-                    ) : (
-                        <span className="block text-[10px] text-transparent">.</span>
-                    )}
-                    </span>
+                        {s.count > 1 ? (
+                          <span className="block text-[10px] text-slate-500 font-semibold truncate">{s.count} opts</span>
+                        ) : (
+                          <span className="block text-[10px] text-transparent">.</span>
+                        )}
+                      </span>
 
-                    {/* tiny check */}
-                    {active ? (
-                    <span className="h-4 w-4 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-black shrink-0">
-                        ✓
-                    </span>
-                    ) : null}
-                </button>
-                );
-            })}
+                      {active ? (
+                        <span className="h-4 w-4 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-black shrink-0">
+                          ✓
+                        </span>
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {swatchesFiltered.length === 0 ? <div className="mt-2 text-sm text-slate-600">No matching colors.</div> : null}
             </div>
+          ) : null}
 
-            {swatchesFiltered.length === 0 ? (
-            <div className="mt-2 text-sm text-slate-600">No matching colors.</div>
-            ) : null}
-        </div>
-        ) : null}
+          {/* ✅ Pricing editor */}
+          <CatalogMiniEditor
+            selected={selected}
+            saving={saving}
+            setSaving={setSaving}
+            setErr={setErr}
+            onPatched={onPatched}
+          />
 
-
-
-          {/* Edit form */}
+          {/* edit form */}
           {editing ? (
             <div className={cx(card, "p-4")}>
               <div className="mb-3 text-xs font-black text-slate-600">Edit this PartColor</div>
-              <PartColorForm
-                parts={parts}
-                colors={colors}
-                submitting={saving}
-                initialValues={selected}
-                onSubmit={onSubmitEdit}
-              />
+              <PartColorForm parts={parts} colors={colors} submitting={saving} initialValues={selected} onSubmit={onSubmitEdit} />
             </div>
           ) : null}
         </div>
@@ -570,24 +701,18 @@ export default function PartColorsPage() {
       });
     }
 
-    let arr = Array.from(map.values()).sort((a, b) =>
-      (a.part.part_id ?? "").localeCompare(b.part.part_id ?? "")
-    );
+    let arr = Array.from(map.values()).sort((a, b) => (a.part.part_id ?? "").localeCompare(b.part.part_id ?? ""));
 
     const qq = q.trim().toLowerCase();
     if (qq) {
       arr = arr
         .map((g) => {
           const partHit = `${g.part.part_id ?? ""} ${g.part.name ?? ""}`.toLowerCase().includes(qq);
-
           const rows = partHit
             ? g.rows
             : g.rows.filter((pc) =>
-                `${pc.part_color_code ?? ""} ${pc.color?.name ?? ""} ${pc.variant ?? ""}`
-                  .toLowerCase()
-                  .includes(qq)
+                `${pc.part_color_code ?? ""} ${pc.color?.name ?? ""} ${pc.variant ?? ""}`.toLowerCase().includes(qq)
               );
-
           return { ...g, rows };
         })
         .filter((g) => g.rows.length > 0);
@@ -619,6 +744,11 @@ export default function PartColorsPage() {
     setErr(null);
   }
 
+  function applyPatched(pc: PartColorRow) {
+    setSelected(pc);
+    setItems((prev) => prev.map((x) => (x.id === pc.id ? pc : x)));
+  }
+
   async function create(payload: any) {
     setSaving(true);
     setErr(null);
@@ -639,8 +769,7 @@ export default function PartColorsPage() {
     setErr(null);
     try {
       const res = await api.patch(`${ENDPOINTS.partColors}${selected.id}/`, payload);
-      setSelected(res.data);
-      setItems((prev) => prev.map((x) => (x.id === selected.id ? res.data : x)));
+      applyPatched(res.data);
       setEditing(false);
     } catch (e: any) {
       setErr(formatApiError(e));
@@ -670,7 +799,6 @@ export default function PartColorsPage() {
 
   return (
     <div className="space-y-3">
-      {/* top bar */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
         <input
           className={cx(inputBase, "sm:max-w-md")}
@@ -684,11 +812,9 @@ export default function PartColorsPage() {
           <button type="button" className={btnPrimary} onClick={() => setCreateOpen(true)}>
             + New PartColor
           </button>
-
           <button type="button" className={btnBase} onClick={expandAll}>
             Expand all
           </button>
-
           <button type="button" className={btnBase} onClick={collapseAll}>
             Collapse all
           </button>
@@ -700,12 +826,9 @@ export default function PartColorsPage() {
       </div>
 
       {err ? (
-        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {err}
-        </div>
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{err}</div>
       ) : null}
 
-      {/* grouped list */}
       <div className={card}>
         {grouped.length === 0 ? (
           <div className="p-4 text-sm text-slate-600">No results.</div>
@@ -741,9 +864,7 @@ export default function PartColorsPage() {
                       {Array.from({ length: showPlaceholders }).map((_, i) => (
                         <MiniThumb key={`${g.part.id}-p-${i}`} src={null} />
                       ))}
-                      <div className="text-xs text-slate-500 font-semibold">
-                        {thumbs.length > 0 ? "preview" : "no images yet"}
-                      </div>
+                      <div className="text-xs text-slate-500 font-semibold">{thumbs.length > 0 ? "preview" : "no images yet"}</div>
                     </div>
                   </div>
 
@@ -769,19 +890,20 @@ export default function PartColorsPage() {
                         >
                           <RowThumb src={img} />
 
-                          <div className="hidden sm:block w-[240px] text-xs font-semibold text-slate-600 truncate">
-                            {idText}
-                          </div>
+                          <div className="hidden sm:block w-[240px] text-xs font-semibold text-slate-600 truncate">{idText}</div>
 
                           <div className="min-w-0 flex-1">
                             <div className="text-sm font-extrabold text-slate-900 truncate">
                               {nameText}{" "}
                               {pc.variant ? <span className="text-slate-500 font-bold">• {pc.variant}</span> : null}
+                              {pc.catalog_item ? (
+                                <span className="ml-2 inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-extrabold text-slate-700">
+                                  ${pc.catalog_item.base_price_override ?? "—"}
+                                </span>
+                              ) : null}
                             </div>
 
-                            <div className="sm:hidden text-xs text-slate-500 font-semibold truncate">
-                              {idText}
-                            </div>
+                            <div className="sm:hidden text-xs text-slate-500 font-semibold truncate">{idText}</div>
                           </div>
                         </button>
                       );
@@ -794,12 +916,10 @@ export default function PartColorsPage() {
         )}
       </div>
 
-      {/* create */}
       <DrawerShell open={createOpen} title="New PartColor" onClose={() => setCreateOpen(false)} width={980}>
         <PartColorForm parts={parts} colors={colors} submitting={saving} onSubmit={create} />
       </DrawerShell>
 
-      {/* detail */}
       <PartColorDetailDrawer
         open={detailOpen}
         selected={selected}
@@ -807,7 +927,9 @@ export default function PartColorsPage() {
         parts={parts}
         colors={colors}
         saving={saving}
+        setSaving={setSaving}
         err={err}
+        setErr={setErr}
         editing={editing}
         onClose={() => {
           setDetailOpen(false);
@@ -818,6 +940,7 @@ export default function PartColorsPage() {
         onToggleEdit={() => setEditing((v) => !v)}
         onDelete={removeSelected}
         onSubmitEdit={saveEdit}
+        onPatched={applyPatched}
         onSelect={(pc) => {
           setSelected(pc);
           setEditing(false);

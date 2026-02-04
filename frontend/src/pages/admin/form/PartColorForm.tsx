@@ -2,22 +2,7 @@ import React, { useMemo, useRef, useState } from "react";
 import { uploadImageToR2 } from "../../../lib/r2Uploads";
 import { Color } from "../../../types/color";
 import { Part } from "../../../types/part";
-
-export type PartColorRow = {
-  id: number;
-  part_color_code: string;
-  variant?: string;
-  description?: string;
-  image_url_1?: string;
-  image_url_2?: string;
-  thumb_url?: string;
-
-  part?: Part;
-  color?: Color;
-
-  part_id?: number; // write-only
-  color_id?: number; // write-only
-};
+import { PartColorRow } from "../../../types/partColor";
 
 function safeHex(hex?: string | null) {
   if (!hex) return null;
