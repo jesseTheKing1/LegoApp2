@@ -9,7 +9,7 @@ export const ENDPOINTS = {
   parts: "/api/parts/parts/",
   partColors: "/api/parts/part-colors/",
 
-  catalog:"/api/catalog/catalog-item/",
+  catalog:"/api/catalog/catalog-items/",
 
   presignUpload: "/api/upload/presign/",
 };
