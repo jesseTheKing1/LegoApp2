@@ -1,8 +1,11 @@
 import React, { useMemo, useRef, useState } from "react";
 import { uploadImageToR2 } from "../../../lib/r2Uploads";
-import { Color } from "../../../types/color";
-import { Part } from "../../../types/part";
-import { PartColorRow } from "../../../types/partColor";
+import type { Color } from "../../../types/color";
+import type { Part } from "../../../types/part";
+import type { CatalogItemMini } from "../../../types/catalog";
+import type { PartColorRow } from "../../../types/partColor";
+
+type UploadField = "img1" | "img2";
 
 function safeHex(hex?: string | null) {
   if (!hex) return null;
@@ -20,8 +23,6 @@ function formatErr(e: any) {
   );
 }
 
-type UploadField = "img1" | "img2";
-
 const inputBase =
   "w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none " +
   "focus:ring-2 focus:ring-slate-200 focus:border-slate-300";
@@ -35,12 +36,14 @@ const labelText = "text-xs font-medium text-slate-600";
 export function PartColorForm({
   parts,
   colors,
+  catalogItems,
   initialValues,
   submitting,
   onSubmit,
 }: {
   parts: Part[];
   colors: Color[];
+  catalogItems?: CatalogItemMini[]; // optional so you can reuse form elsewhere
   initialValues?: Partial<PartColorRow>;
   submitting?: boolean;
   onSubmit: (payload: {
@@ -51,15 +54,19 @@ export function PartColorForm({
     description?: string;
     image_url_1?: string;
     image_url_2?: string;
+    catalog_item_id?: number | null;
   }) => Promise<void> | void;
 }) {
-  const initialPartId =
-    (initialValues as any)?.part_id ?? initialValues?.part?.id ?? "";
-  const initialColorId =
-    (initialValues as any)?.color_id ?? initialValues?.color?.id ?? "";
+  const initialPartId = (initialValues as any)?.part_id ?? initialValues?.part?.id ?? "";
+  const initialColorId = (initialValues as any)?.color_id ?? initialValues?.color?.id ?? "";
+  const initialCatalogId =
+    (initialValues as any)?.catalog_item_id ??
+    (initialValues as any)?.catalog_item?.id ??
+    "";
 
   const [partId, setPartId] = useState<number | "">(initialPartId || "");
   const [colorId, setColorId] = useState<number | "">(initialColorId || "");
+  const [catalogId, setCatalogId] = useState<number | "">(initialCatalogId || "");
 
   const [code, setCode] = useState(initialValues?.part_color_code ?? "");
   const [variant, setVariant] = useState(initialValues?.variant ?? "");
@@ -77,14 +84,8 @@ export function PartColorForm({
   const fileRef1 = useRef<HTMLInputElement | null>(null);
   const fileRef2 = useRef<HTMLInputElement | null>(null);
 
-  const part = useMemo(
-    () => parts.find((p) => p.id === Number(partId)) ?? null,
-    [parts, partId]
-  );
-  const color = useMemo(
-    () => colors.find((c) => c.id === Number(colorId)) ?? null,
-    [colors, colorId]
-  );
+  const part = useMemo(() => parts.find((p) => p.id === Number(partId)) ?? null, [parts, partId]);
+  const color = useMemo(() => colors.find((c) => c.id === Number(colorId)) ?? null, [colors, colorId]);
 
   const swatchHex = safeHex(color?.hex ?? null) ?? "#e5e7eb";
 
@@ -156,6 +157,7 @@ export function PartColorForm({
       description: description.trim() || undefined,
       image_url_1: img1.trim() || undefined,
       image_url_2: img2.trim() || undefined,
+      catalog_item_id: catalogId === "" ? null : Number(catalogId),
     });
   }
 
@@ -163,7 +165,6 @@ export function PartColorForm({
     <form onSubmit={submit} className="space-y-3">
       <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="p-4 sm:p-5 space-y-4">
-          {/* selectors */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label className="space-y-1">
               <div className={labelText}>Part</div>
@@ -198,24 +199,39 @@ export function PartColorForm({
             </label>
           </div>
 
-          {/* summary */}
+          {/* optional catalog attach */}
+          {catalogItems ? (
+            <label className="space-y-1">
+              <div className={labelText}>Catalog Item (pricing)</div>
+              <select
+                className={selectBase}
+                value={catalogId}
+                onChange={(e) => setCatalogId(e.target.value ? Number(e.target.value) : "")}
+              >
+                <option value="">None</option>
+                {catalogItems.map((ci) => (
+                  <option key={ci.id} value={ci.id}>
+                    {ci.sku}
+                    {ci.base_price_override != null ? ` — $${ci.base_price_override}` : ""}
+                  </option>
+                ))}
+              </select>
+              <div className="text-[11px] text-slate-500 font-semibold">
+                You can attach an existing pricing record here, or create one from the detail drawer.
+              </div>
+            </label>
+          ) : null}
+
           <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
-            <div
-              className="h-8 w-8 rounded-xl border border-slate-200 shadow-sm"
-              style={{ background: swatchHex }}
-              title={swatchHex}
-            />
+            <div className="h-8 w-8 rounded-xl border border-slate-200 shadow-sm" style={{ background: swatchHex }} />
             <div className="min-w-0">
               <div className="truncate text-sm font-semibold text-slate-900">
                 {part ? `${part.part_id} — ${part.name}` : "No part selected"}
               </div>
-              <div className="truncate text-xs text-slate-600">
-                {color ? color.name : "No color selected"}
-              </div>
+              <div className="truncate text-xs text-slate-600">{color ? color.name : "No color selected"}</div>
             </div>
           </div>
 
-          {/* text fields */}
           <label className="space-y-1">
             <div className={labelText}>Your PartColor ID</div>
             <input
@@ -251,7 +267,6 @@ export function PartColorForm({
             </label>
           </div>
 
-          {/* images */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <ImageField
               title="Image URL 1"
@@ -296,7 +311,6 @@ export function PartColorForm({
         </div>
       </div>
 
-      {/* save */}
       <button
         type="submit"
         disabled={!canSave}
@@ -312,8 +326,6 @@ export function PartColorForm({
     </form>
   );
 }
-
-/** ---------- image field subcomponent ---------- */
 
 function ImageField({
   title,
@@ -337,8 +349,7 @@ function ImageField({
       <div className="mb-2 text-xs font-medium text-slate-600">{title}</div>
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-        <input
-          className={inputBase}
+        <input className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-200 focus:border-slate-300"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           placeholder="https://..."

@@ -212,8 +212,8 @@ function CatalogMiniEditor({
 
       const created = await api.post(ENDPOINTS.catalog, createPayload);
       const newId = created.data?.id;
-      await api.patch(`${ENDPOINTS.partColors}${selected.id}/`, { catalog_item_id: newId });
 
+      await api.patch(`${ENDPOINTS.partColors}${selected.id}/`, { catalog_item_id: newId });
       await refreshPartColor();
     } catch (e: any) {
       setErr(formatApiError(e));
@@ -322,7 +322,12 @@ function CatalogMiniEditor({
             </label>
 
             <label className="inline-flex items-center gap-2 text-sm font-bold text-slate-700">
-              <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} disabled={saving} />
+              <input
+                type="checkbox"
+                checked={isActive}
+                onChange={(e) => setIsActive(e.target.checked)}
+                disabled={saving}
+              />
               Active
             </label>
           </div>
@@ -356,6 +361,7 @@ function PartColorDetailDrawer({
   allItems,
   colors,
   parts,
+  catalogItems,
   saving,
   err,
   editing,
@@ -373,6 +379,7 @@ function PartColorDetailDrawer({
   allItems: PartColorRow[];
   parts: Part[];
   colors: Color[];
+  catalogItems: CatalogItemMini[];
   saving: boolean;
   err: string | null;
   editing: boolean;
@@ -382,7 +389,6 @@ function PartColorDetailDrawer({
   onSubmitEdit: (payload: any) => void;
   onSelect: (pc: PartColorRow) => void;
 
-  // for catalog editor
   setSaving: (v: boolean) => void;
   setErr: (v: string | null) => void;
   onPatched: (pc: PartColorRow) => void;
@@ -470,7 +476,6 @@ function PartColorDetailDrawer({
             <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{err}</div>
           ) : null}
 
-          {/* top */}
           <div className={cx(card, "p-4")}>
             <div className="flex flex-col gap-4 lg:flex-row">
               <div className="w-full lg:w-[260px]">
@@ -480,9 +485,7 @@ function PartColorDetailDrawer({
                       src={heroSrc}
                       alt=""
                       className="h-full w-full object-contain"
-                      onError={(e) => {
-                        (e.currentTarget as HTMLImageElement).style.display = "none";
-                      }}
+                      onError={(e) => ((e.currentTarget as HTMLImageElement).style.display = "none")}
                     />
                   ) : (
                     <div className="text-xs text-slate-500 font-black">No image</div>
@@ -500,15 +503,14 @@ function PartColorDetailDrawer({
                       <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-bold text-slate-700">
                         {siblings.length} variants for this shape
                       </span>
-                      {selected.part_color_code ? (
-                        <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-extrabold text-slate-900">
-                          ID: {selected.part_color_code}
+                      <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-extrabold text-slate-900">
+                        ID: {selected.part_color_code || "—"}
+                      </span>
+                      {selected.catalog_item ? (
+                        <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-extrabold text-slate-700">
+                          Price: {selected.catalog_item.base_price_override != null ? `$${selected.catalog_item.base_price_override}` : "—"}
                         </span>
-                      ) : (
-                        <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold text-slate-500">
-                          ID: —
-                        </span>
-                      )}
+                      ) : null}
                     </div>
                   </div>
 
@@ -540,7 +542,6 @@ function PartColorDetailDrawer({
             </div>
           </div>
 
-          {/* color picker */}
           {swatches.length > 0 ? (
             <div className={cx(card, "p-3 sm:p-4")}>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -575,7 +576,6 @@ function PartColorDetailDrawer({
                       type="button"
                       onClick={() => onSelect(s.row)}
                       title={s.name}
-                      aria-label={`Select color ${s.name}`}
                       className={cx(
                         "w-full rounded-xl border px-2 py-1.5 text-left transition",
                         "min-h-[44px] flex items-center gap-2",
@@ -585,13 +585,9 @@ function PartColorDetailDrawer({
                       )}
                     >
                       <span
-                        className={cx(
-                          "h-5 w-5 rounded-md border border-black/10 shrink-0",
-                          active ? "outline outline-2 outline-slate-900 outline-offset-1" : ""
-                        )}
+                        className={cx("h-5 w-5 rounded-md border border-black/10 shrink-0", active ? "outline outline-2 outline-slate-900 outline-offset-1" : "")}
                         style={{ background: s.hex ?? "#e5e7eb" }}
                       />
-
                       <span className="min-w-0 flex-1">
                         <span className={cx("block text-xs font-extrabold truncate", active ? "text-slate-900" : "text-slate-800")}>
                           {s.name}
@@ -602,7 +598,6 @@ function PartColorDetailDrawer({
                           <span className="block text-[10px] text-transparent">.</span>
                         )}
                       </span>
-
                       {active ? (
                         <span className="h-4 w-4 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-black shrink-0">
                           ✓
@@ -612,25 +607,23 @@ function PartColorDetailDrawer({
                   );
                 })}
               </div>
-
-              {swatchesFiltered.length === 0 ? <div className="mt-2 text-sm text-slate-600">No matching colors.</div> : null}
             </div>
           ) : null}
 
-          {/* ✅ Pricing editor */}
-          <CatalogMiniEditor
-            selected={selected}
-            saving={saving}
-            setSaving={setSaving}
-            setErr={setErr}
-            onPatched={onPatched}
-          />
+          {/* pricing editor */}
+          <CatalogMiniEditor selected={selected} saving={saving} setSaving={setSaving} setErr={setErr} onPatched={onPatched} />
 
-          {/* edit form */}
           {editing ? (
             <div className={cx(card, "p-4")}>
               <div className="mb-3 text-xs font-black text-slate-600">Edit this PartColor</div>
-              <PartColorForm parts={parts} colors={colors} submitting={saving} initialValues={selected} onSubmit={onSubmitEdit} />
+              <PartColorForm
+                parts={parts}
+                colors={colors}
+                catalogItems={catalogItems}
+                submitting={saving}
+                initialValues={selected}
+                onSubmit={onSubmitEdit}
+              />
             </div>
           ) : null}
         </div>
@@ -647,6 +640,7 @@ export default function PartColorsPage() {
   const [items, setItems] = useState<PartColorRow[]>([]);
   const [parts, setParts] = useState<Part[]>([]);
   const [colors, setColors] = useState<Color[]>([]);
+  const [catalogItems, setCatalogItems] = useState<CatalogItemMini[]>([]);
   const [q, setQ] = useState("");
 
   const [expanded, setExpanded] = useState<Record<number, boolean>>({});
@@ -661,15 +655,17 @@ export default function PartColorsPage() {
 
   async function loadAll() {
     setErr(null);
-    const [pcRes, pRes, cRes] = await Promise.all([
+    const [pcRes, pRes, cRes, catRes] = await Promise.all([
       api.get(ENDPOINTS.partColors),
       api.get(ENDPOINTS.parts),
       api.get(ENDPOINTS.colors),
+      api.get(ENDPOINTS.catalog),
     ]);
 
     setItems(getListData<PartColorRow>(pcRes.data));
     setParts(getListData<Part>(pRes.data));
     setColors(getListData<Color>(cRes.data));
+    setCatalogItems(getListData<CatalogItemMini>(catRes.data));
   }
 
   useEffect(() => {
@@ -771,6 +767,9 @@ export default function PartColorsPage() {
       const res = await api.patch(`${ENDPOINTS.partColors}${selected.id}/`, payload);
       applyPatched(res.data);
       setEditing(false);
+      // also refresh catalog list in case SKU/price changed
+      const catRes = await api.get(ENDPOINTS.catalog);
+      setCatalogItems(getListData<CatalogItemMini>(catRes.data));
     } catch (e: any) {
       setErr(formatApiError(e));
     } finally {
@@ -825,9 +824,7 @@ export default function PartColorsPage() {
         </div>
       </div>
 
-      {err ? (
-        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{err}</div>
-      ) : null}
+      {err ? <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{err}</div> : null}
 
       <div className={card}>
         {grouped.length === 0 ? (
@@ -878,6 +875,11 @@ export default function PartColorsPage() {
                       const idText = pc.part_color_code ? `ID: ${pc.part_color_code}` : "ID: —";
                       const nameText = pc.color?.name ?? "—";
 
+                      const priceBadge =
+                        pc.catalog_item && pc.catalog_item.base_price_override != null
+                          ? `$${pc.catalog_item.base_price_override}`
+                          : null;
+
                       return (
                         <button
                           key={pc.id}
@@ -896,9 +898,10 @@ export default function PartColorsPage() {
                             <div className="text-sm font-extrabold text-slate-900 truncate">
                               {nameText}{" "}
                               {pc.variant ? <span className="text-slate-500 font-bold">• {pc.variant}</span> : null}
-                              {pc.catalog_item ? (
-                                <span className="ml-2 inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-extrabold text-slate-700">
-                                  ${pc.catalog_item.base_price_override ?? "—"}
+
+                              {priceBadge ? (
+                                <span className="ml-2 inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-extrabold text-slate-700">
+                                  {priceBadge}
                                 </span>
                               ) : null}
                             </div>
@@ -917,7 +920,13 @@ export default function PartColorsPage() {
       </div>
 
       <DrawerShell open={createOpen} title="New PartColor" onClose={() => setCreateOpen(false)} width={980}>
-        <PartColorForm parts={parts} colors={colors} submitting={saving} onSubmit={create} />
+        <PartColorForm
+          parts={parts}
+          colors={colors}
+          catalogItems={catalogItems}
+          submitting={saving}
+          onSubmit={create}
+        />
       </DrawerShell>
 
       <PartColorDetailDrawer
@@ -926,6 +935,7 @@ export default function PartColorsPage() {
         allItems={items}
         parts={parts}
         colors={colors}
+        catalogItems={catalogItems}
         saving={saving}
         setSaving={setSaving}
         err={err}
@@ -940,7 +950,11 @@ export default function PartColorsPage() {
         onToggleEdit={() => setEditing((v) => !v)}
         onDelete={removeSelected}
         onSubmitEdit={saveEdit}
-        onPatched={applyPatched}
+        onPatched={(pc) => {
+          applyPatched(pc);
+          // also refresh catalog list because pricing could have changed
+          api.get(ENDPOINTS.catalog).then((res) => setCatalogItems(getListData<CatalogItemMini>(res.data))).catch(() => {});
+        }}
         onSelect={(pc) => {
           setSelected(pc);
           setEditing(false);
