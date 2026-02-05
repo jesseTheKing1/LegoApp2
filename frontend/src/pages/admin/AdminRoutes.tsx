@@ -21,59 +21,39 @@ function AdminTabs() {
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <NavLink to="parts" className={linkClass}>
+      {/* ✅ absolute paths */}
+      <NavLink to="/admin/parts" className={linkClass}>
         Parts
       </NavLink>
-      <NavLink to="colors" className={linkClass}>
+      <NavLink to="/admin/colors" className={linkClass}>
         Colors
       </NavLink>
-      <NavLink to="part-colors" className={linkClass}>
+      <NavLink to="/admin/part-colors" className={linkClass}>
         Part Colors
       </NavLink>
     </div>
   );
 }
 
-/** Layout wrapper for the 3 admin pages */
-function CatalogAdminLayout({ children }: { children: React.ReactNode }) {
+export default function CatalogAdminRoutes() {
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-3 sm:p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <div className="text-sm font-extrabold text-slate-900">
-            Catalog Admin
-          </div>
-          <div className="text-xs text-slate-500 font-semibold">
-            Manage Parts, Colors, and PartColors
-          </div>
-        </div>
-
+      {/* ✅ you wanted to remove the "Catalog Admin / Manage..." header,
+          so we only keep tabs (or delete this too if you want zero header) */}
+      <div className="flex items-center justify-end">
         <AdminTabs />
       </div>
 
-      <div>{children}</div>
-    </div>
-  );
-}
-
-/** -------------------------
- *  ROUTES ENTRYPOINT
- *  Mount this at: /admin/catalog/*
- *  ------------------------- */
-export default function CatalogAdminRoutes() {
-  return (
-    <CatalogAdminLayout>
       <Routes>
-        {/* default */}
-        <Route index element={<Navigate to="parts" replace />} />
+        {/* ✅ when you hit /admin, go to parts */}
+        <Route index element={<Navigate to="/admin/parts" replace />} />
 
         <Route path="parts" element={<PartsAdminPage />} />
         <Route path="colors" element={<ColorsAdminPage />} />
         <Route path="part-colors" element={<PartColorsPage />} />
 
-        {/* fallback */}
-        <Route path="*" element={<Navigate to="parts" replace />} />
+        <Route path="*" element={<Navigate to="/admin/parts" replace />} />
       </Routes>
-    </CatalogAdminLayout>
+    </div>
   );
 }
