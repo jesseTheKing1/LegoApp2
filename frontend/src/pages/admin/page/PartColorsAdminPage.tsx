@@ -21,23 +21,6 @@ import {
 } from "../utils/ui";
 import { PartColorDetailDrawer } from "../components/PartColorDetailDrawer";
 
-function safeHex(hex?: string | null) {
-  if (!hex) return null;
-  const h = String(hex).trim();
-  if (!h) return null;
-  return h.startsWith("#") ? h : `#${h}`;
-}
-
-function buildSuggestedSku(pc: PartColorRow) {
-  const pid = pc.part?.part_id ?? "PART";
-  const cname = pc.color?.name ?? "COLOR";
-  const v = pc.variant ? `-${pc.variant}` : "";
-  return `PC-${pid}-${cname}${v}`.replace(/\s+/g, "_").toUpperCase();
-}
-
-
-/** ---------------- Page ---------------- */
-
 type Group = { part: Part; rows: PartColorRow[] };
 
 export default function PartColorsPage() {
