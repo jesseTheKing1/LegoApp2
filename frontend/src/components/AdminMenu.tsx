@@ -65,6 +65,12 @@ export function AdminMenu({ compact = false }: { compact?: boolean }) {
               >
                 Part Colors <span className="text-slate-400">↗</span>
               </Link>
+              <Link
+                          to="/admin/minifigs"
+                          className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                        >
+                          Minifigs
+                        </Link>
             </div>
 
             <div className="my-2 h-px bg-slate-200" />
