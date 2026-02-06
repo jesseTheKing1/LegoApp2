@@ -65,19 +65,42 @@ export function Header() {
             <div className="p-4">
               {!isAdminRoute ? (
                 <div className="grid gap-2">
-                  <Link
-                    to="/"
-                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-                  >
-                    Home
-                  </Link>
-                  <Link
-                    to="/browse"
-                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-                  >
-                    Browse
-                  </Link>
-                </div>
+                <Link
+                  to="/admin/parts"
+                  className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                >
+                  Parts
+                </Link>
+
+                <Link
+                  to="/admin/colors"
+                  className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                >
+                  Colors
+                </Link>
+
+                <Link
+                  to="/admin/part-colors"
+                  className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                >
+                  Part Colors
+                </Link>
+
+                <Link
+                  to="/admin/minifigs"
+                  className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                >
+                  Minifigs
+                </Link>
+
+                <a
+                  href="/dj-admin/"
+                  className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                >
+                  Django admin
+                </a>
+              </div>
+
               ) : (
                 <div className="grid gap-2">
                   <Link
@@ -112,6 +135,9 @@ export function Header() {
                       className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
                     >
                       Part Colors
+                    </Link>
+                    <Link to="/admin/minifigure">
+                      Minifigure
                     </Link>
                     <a
                       href="/dj-admin/"
