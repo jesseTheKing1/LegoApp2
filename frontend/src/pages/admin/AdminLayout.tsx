@@ -2,10 +2,6 @@
 import React from "react";
 import { Outlet } from "react-router-dom";
 
-/**
- * Headerless AdminLayout.
- * The main App header switches into Admin Mode on /admin routes.
- */
 export default function AdminLayout() {
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-slate-50 text-slate-900">

@@ -1,4 +1,3 @@
-import React from "react";
 import { Me } from "../auth/AuthContext";
 import { Badge } from "../components/ui/Badge";
 import { ButtonLink } from "../components/ui/Button";
@@ -10,7 +9,7 @@ export function HomePage({ me }: { me: Me | null }) {
       <Badge>Inventory • Pricing • Sets • Minifigs</Badge>
 
       <h1 className="mt-4 text-4xl font-black tracking-tight text-slate-900 sm:text-5xl">
-        Track LEGO parts like a pro.
+        Create new sets with existing pieces!
       </h1>
 
       <p className="mt-3 max-w-2xl text-base leading-7 text-slate-600">

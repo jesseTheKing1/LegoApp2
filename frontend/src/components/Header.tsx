@@ -10,6 +10,9 @@ function cx(...c: Array<string | false | null | undefined>) {
   return c.filter(Boolean).join(" ");
 }
 
+const LOGO_URL =
+  "https://pub-d38048540c4d4457ab7891fe983b6fb6.r2.dev/uploads/86757ea5a8144a60bd9b83ee62289b23.webp";
+
 export function Header() {
   const { me, logout, isAdmin } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -168,9 +171,17 @@ export function Header() {
             className="flex flex-shrink-0 items-center gap-2 text-sm font-black tracking-tight text-slate-900"
             title="Home"
           >
-            <span className="grid h-9 w-9 place-items-center rounded-xl bg-slate-900 text-white">
-              L
+            {/* LOGO (replaces the L box) */}
+            <span className="grid h-9 w-9 place-items-center overflow-hidden rounded-xl bg-slate-900">
+              <img
+                src={LOGO_URL}
+                alt="LEGO Inventory"
+                className="h-full w-full object-cover scale-110"
+                loading="eager"
+                decoding="async"
+              />
             </span>
+
             <span className="hidden sm:block">LEGO Inventory</span>
             <span className="sm:hidden">LEGO</span>
           </Link>
