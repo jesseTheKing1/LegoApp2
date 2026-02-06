@@ -21,16 +21,6 @@ function AdminTabs() {
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {/* ✅ absolute paths */}
-      <NavLink to="/admin/parts" className={linkClass}>
-        Parts
-      </NavLink>
-      <NavLink to="/admin/colors" className={linkClass}>
-        Colors
-      </NavLink>
-      <NavLink to="/admin/part-colors" className={linkClass}>
-        Part Colors
-      </NavLink>
     </div>
   );
 }
