@@ -41,12 +41,13 @@ export function Header() {
   const MobileDrawer = mobileOpen
     ? createPortal(
         <div className="fixed inset-0 z-[1000]">
-          {/* Backdrop MUST be fixed and cover the entire screen */}
+          {/* Backdrop */}
           <button
             className="absolute inset-0 bg-black/50"
             onClick={() => setMobileOpen(false)}
             aria-label="Close menu overlay"
           />
+
           {/* Drawer */}
           <div className="absolute right-0 top-0 h-full w-[86vw] max-w-sm bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-200 p-4">
@@ -63,45 +64,35 @@ export function Header() {
             </div>
 
             <div className="p-4">
+              {/* MENU CONTENT */}
               {!isAdminRoute ? (
+                // NORMAL APP MENU
                 <div className="grid gap-2">
-                <Link
-                  to="/admin/parts"
-                  className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-                >
-                  Parts
-                </Link>
+                  <Link
+                    to="/"
+                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                  >
+                    Home
+                  </Link>
+                  <Link
+                    to="/browse"
+                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                  >
+                    Browse
+                  </Link>
 
-                <Link
-                  to="/admin/colors"
-                  className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-                >
-                  Colors
-                </Link>
-
-                <Link
-                  to="/admin/part-colors"
-                  className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-                >
-                  Part Colors
-                </Link>
-
-                <Link
-                  to="/admin/minifigs"
-                  className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-                >
-                  Minifigs
-                </Link>
-
-                <a
-                  href="/dj-admin/"
-                  className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-                >
-                  Django admin
-                </a>
-              </div>
-
+                  {/* Only show Admin entry if user is admin */}
+                  {isAdmin ? (
+                    <Link
+                      to="/admin"
+                      className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800"
+                    >
+                      Admin
+                    </Link>
+                  ) : null}
+                </div>
               ) : (
+                // ADMIN MENU
                 <div className="grid gap-2">
                   <Link
                     to="/"
@@ -109,48 +100,54 @@ export function Header() {
                   >
                     ← Back to app
                   </Link>
+
+                  {isAdmin ? (
+                    <div className="mt-2 rounded-3xl border border-slate-200 bg-slate-50 p-3">
+                      <div className="mb-2 text-xs font-black uppercase tracking-wide text-slate-500">
+                        Admin
+                      </div>
+
+                      <div className="grid gap-2">
+                        <Link
+                          to="/admin/parts"
+                          className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                        >
+                          Parts
+                        </Link>
+                        <Link
+                          to="/admin/colors"
+                          className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                        >
+                          Colors
+                        </Link>
+                        <Link
+                          to="/admin/part-colors"
+                          className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                        >
+                          Part Colors
+                        </Link>
+                        <Link
+                          to="/admin/minifigs"
+                          className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                        >
+                          Minifigs
+                        </Link>
+
+                        <a
+                          href="/dj-admin/"
+                          className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                        >
+                          Django admin
+                        </a>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               )}
 
-              {isAdmin ? (
-                <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50 p-3">
-                  <div className="mb-2 text-xs font-black uppercase tracking-wide text-slate-500">
-                    Admin
-                  </div>
-                  <div className="grid gap-2">
-                    <Link
-                      to="/admin/parts"
-                      className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-                    >
-                      Parts
-                    </Link>
-                    <Link
-                      to="/admin/colors"
-                      className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-                    >
-                      Colors
-                    </Link>
-                    <Link
-                      to="/admin/part-colors"
-                      className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-                    >
-                      Part Colors
-                    </Link>
-                    <Link to="/admin/minifigure">
-                      Minifigure
-                    </Link>
-                    <a
-                      href="/dj-admin/"
-                      className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-                    >
-                      Django admin
-                    </a>
-                  </div>
-                </div>
-              ) : null}
-
               <div className="mt-4 h-px bg-slate-200" />
 
+              {/* AUTH SECTION */}
               <div className="mt-4 grid gap-2">
                 {me ? (
                   <>
@@ -197,7 +194,6 @@ export function Header() {
             className="flex flex-shrink-0 items-center gap-2 text-sm font-black tracking-tight text-slate-900"
             title="Home"
           >
-            {/* LOGO (replaces the L box) */}
             <span className="grid h-9 w-9 place-items-center overflow-hidden rounded-xl bg-slate-900">
               <img
                 src={LOGO_URL}
@@ -212,7 +208,6 @@ export function Header() {
             <span className="sm:hidden">LEGO</span>
           </Link>
 
-          {/* ADMIN MODE pill should remain visible on all sizes */}
           {isAdminRoute ? (
             <div className="flex min-w-0 items-center gap-2">
               <span className="hidden sm:block h-6 w-px bg-slate-200" />
@@ -248,6 +243,9 @@ export function Header() {
               >
                 Browse
               </Link>
+
+              {/* show Admin menu entry in header when NOT on admin routes */}
+              {isAdmin ? <AdminMenu /> : null}
             </>
           ) : (
             <>
@@ -257,8 +255,6 @@ export function Header() {
               {isAdmin ? <AdminMenu compact /> : null}
             </>
           )}
-
-          {!isAdminRoute && isAdmin ? <AdminMenu /> : null}
 
           <div className="ml-2 flex items-center gap-2">
             {me ? (
