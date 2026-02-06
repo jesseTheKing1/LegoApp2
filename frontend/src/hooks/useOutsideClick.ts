@@ -1,33 +1,32 @@
-// useOutsideClick.ts
+// src/hooks/useOutsideClick.ts
 import { useEffect, useRef } from "react";
 
-export function useOutsideClick<T extends HTMLElement>(
-  onOutside: () => void,
-  extraRefs: Array<React.RefObject<HTMLElement>> = []
-) {
+export function useOutsideClick<T extends HTMLElement>(onOutside: () => void) {
   const ref = useRef<T | null>(null);
 
   useEffect(() => {
-    function handler(e: MouseEvent | TouchEvent) {
+    function onPointerDown(e: PointerEvent) {
+      const el = ref.current;
+      if (!el) return;
+
       const target = e.target as Node | null;
       if (!target) return;
 
-      const mainEl = ref.current;
-      const extraEls = extraRefs.map(r => r.current).filter(Boolean) as HTMLElement[];
+      // If click is INSIDE, do nothing
+      if (el.contains(target)) return;
 
-      const insideMain = mainEl ? mainEl.contains(target) : false;
-      const insideExtra = extraEls.some(el => el.contains(target));
-
-      if (!insideMain && !insideExtra) onOutside();
+      // Outside → close
+      onOutside();
     }
 
-    document.addEventListener("mousedown", handler);
-    document.addEventListener("touchstart", handler);
+    // IMPORTANT: do NOT use capture, do NOT preventDefault/stopPropagation
+    document.addEventListener("pointerdown", onPointerDown);
+
     return () => {
-      document.removeEventListener("mousedown", handler);
-      document.removeEventListener("touchstart", handler);
+      document.removeEventListener("pointerdown", onPointerDown);
     };
-  }, [onOutside, extraRefs]);
+  }, [onOutside]);
 
   return ref;
 }
+
