@@ -4,8 +4,9 @@ import { Navigate, Route, Routes } from "react-router-dom";
 
 import PartsAdminPage from "./page/PartColorsAdminPage";       // rename file + import
 import ColorsAdminPage from "./page/ColorsAdminPage";
-import PartColorsPage from "./page/PartColorsAdminPage";       // optional rename for consistency
-
+import PartColorsPage from "./page/PartColorsAdminPage";     
+import MinifigsAdminPage from "./page/MinifigsAdminPage";
+  // optional rename for consistency
 export default function CatalogAdminRoutes() {
   return (
     <div className="space-y-4">
@@ -16,6 +17,7 @@ export default function CatalogAdminRoutes() {
         <Route path="parts" element={<PartsAdminPage />} />
         <Route path="colors" element={<ColorsAdminPage />} />
         <Route path="part-colors" element={<PartColorsPage />} />
+        <Route path="minifigs" element={<MinifigsAdminPage />} />
 
         {/* keep it simple */}
         <Route path="*" element={<Navigate to="parts" replace />} />

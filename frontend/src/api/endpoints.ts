@@ -9,6 +9,9 @@ export const ENDPOINTS = {
   parts: "/api/parts/parts/",
   partColors: "/api/parts/part-colors/",
 
+  minifigs: "/api/minifigs/",
+  themes: "/api/themes/",
+  
   catalog:"/api/catalog/catalog-items/",
 
   presignUpload: "/api/upload/presign/",
