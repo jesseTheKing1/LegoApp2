@@ -279,7 +279,7 @@ export function Header() {
           </div>
         </nav>
 
-        <div className="relative sm:hidden" ref={mobileRef}>
+        <div className="relative sm:hidden">
           <button
             className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white hover:bg-slate-50"
             onClick={() => setMobileOpen((v) => !v)}
