@@ -2,7 +2,7 @@
 import React from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 
-import PartsAdminPage from "./page/PartColorsAdminPage";       // rename file + import
+import PartsAdminPage from "./page/PartsAdinPage"; 
 import ColorsAdminPage from "./page/ColorsAdminPage";
 import PartColorsPage from "./page/PartColorsAdminPage";     
 import MinifigsAdminPage from "./page/MinifigsAdminPage";

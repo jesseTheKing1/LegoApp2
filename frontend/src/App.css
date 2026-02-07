@@ -7,7 +7,7 @@
   --border2: #e2e8f0;
   --cardShadow: 0 12px 30px rgba(2, 6, 23, 0.06);
   --menuShadow: 0 16px 40px rgba(2, 6, 23, 0.12);
-
+  --page-gutter: clamp(14px, 4vw, 24px);
   --radius-sm: 12px;
   --radius-md: 16px;
   --radius-lg: 24px;
@@ -21,6 +21,8 @@
 }
 
 body {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
   margin: 0;
   background: var(--bg);
   color: var(--text);
@@ -31,11 +33,13 @@ body {
 .container {
   max-width: var(--container);
   margin: 0 auto;
-  padding: 0 18px;
+  padding-left: var(--page-gutter);
+  padding-right: var(--page-gutter);
 }
 
+
 .page {
-  padding: 28px 0 44px;
+  padding: 28px var(--page-gutter) 44px;
 }
 
 .loading {
@@ -59,7 +63,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  padding: 14px 0;
+  padding: 14px var(--page-gutter);
 }
 
 .brand {

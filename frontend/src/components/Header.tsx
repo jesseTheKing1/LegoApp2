@@ -90,13 +90,6 @@ export function Header() {
                 </div>
               ) : (
                 <div className="grid gap-2">
-                  <Link
-                    to="/"
-                    onClick={() => setMobileOpen(false)}
-                    className="rounded-2xl border px-4 py-3 text-sm font-semibold"
-                  >
-                    ← Back to app
-                  </Link>
 
                   {isAdmin && (
                     <div className="mt-2 rounded-3xl border bg-slate-50 p-3">
