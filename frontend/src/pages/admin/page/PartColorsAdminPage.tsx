@@ -15,26 +15,41 @@ import { RowThumb, MiniThumb } from "../components/Thumbs";
 import { cx, card, btnPrimary, btnBase, inputBase } from "../utils/ui";
 import { PartColorDetailDrawer } from "../components/PartColorDetailDrawer";
 
-type Group = { part: Part; rows: PartColorRow[] };
+type ShapeGroup = { part: Part; rows: PartColorRow[] };
+type CategoryGroup = { category: string; shapes: ShapeGroup[] };
 
-type CategoryGroup = {
-  category: string;
-  groups: Group[];
-};
-
-// ✅ Safe getter: works even if Part type doesn't define general_category
-function getGeneralCategory(p: Part): string {
-  return String((p as any)?.general_category ?? "").trim();
+function readStr(v: unknown): string {
+  return String(v ?? "").trim();
 }
 
-// ✅ Safe getter: works even if Part type doesn't define actual_category
+// Safe getters (won't explode if your TS Part type is missing these fields)
+function getGeneralCategory(p: Part): string {
+  return readStr((p as any)?.general_category);
+}
+function getSpecificCategory(p: Part): string {
+  return readStr((p as any)?.specific_category);
+}
 function getActualCategory(p: Part): string {
-  return String((p as any)?.actual_category ?? "").trim();
+  return readStr((p as any)?.actual_category);
 }
 
 function getCategoryLabel(p: Part): string {
   const g = getGeneralCategory(p);
   return g || "Uncategorized";
+}
+
+function sortRowsInShape(rows: PartColorRow[]) {
+  rows.sort((a, b) => {
+    const ac = (a.part_color_code ?? "").toLowerCase();
+    const bc = (b.part_color_code ?? "").toLowerCase();
+    if (ac !== bc) return ac.localeCompare(bc);
+
+    const an = (a.color?.name ?? "").toLowerCase();
+    const bn = (b.color?.name ?? "").toLowerCase();
+    if (an !== bn) return an.localeCompare(bn);
+
+    return (a.variant ?? "").localeCompare(b.variant ?? "");
+  });
 }
 
 export default function PartColorsPage() {
@@ -74,77 +89,80 @@ export default function PartColorsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /**
+   * ✅ Grouping:
+   * Category (general_category)
+   *   -> Shape (Part)
+   *      -> Rows (PartColorRow)
+   */
   const groupedByCategory: CategoryGroup[] = useMemo(() => {
-    // 1) group by Part (shape)
-    const partMap = new Map<number, Group>();
+    // A) build ShapeGroups (by part.id)
+    const shapeMap = new Map<number, ShapeGroup>();
 
     for (const pc of items) {
-      const key = pc.part?.id;
-      if (!key || !pc.part) continue;
-      if (!partMap.has(key)) partMap.set(key, { part: pc.part, rows: [] });
-      partMap.get(key)!.rows.push(pc);
+      const part = pc.part;
+      const key = part?.id;
+      if (!key || !part) continue;
+
+      if (!shapeMap.has(key)) shapeMap.set(key, { part, rows: [] });
+      shapeMap.get(key)!.rows.push(pc);
     }
 
-    // 2) sort rows inside each part group
-    for (const g of partMap.values()) {
-      g.rows.sort((a, b) => {
-        const ac = (a.part_color_code ?? "").toLowerCase();
-        const bc = (b.part_color_code ?? "").toLowerCase();
-        if (ac !== bc) return ac.localeCompare(bc);
+    // B) sort rows inside each shape
+    for (const sg of shapeMap.values()) sortRowsInShape(sg.rows);
 
-        const an = (a.color?.name ?? "").toLowerCase();
-        const bn = (b.color?.name ?? "").toLowerCase();
-        if (an !== bn) return an.localeCompare(bn);
-
-        return (a.variant ?? "").localeCompare(b.variant ?? "");
-      });
-    }
-
-    // 3) to array + sort shapes by part_id
-    let partGroups = Array.from(partMap.values()).sort((a, b) =>
+    // C) turn into array and sort shapes by part_id
+    let shapes = Array.from(shapeMap.values()).sort((a, b) =>
       (a.part.part_id ?? "").localeCompare(b.part.part_id ?? "")
     );
 
-    // 4) search filter (safe category reads)
+    // D) apply search:
+    // - if search hits the PART blob (including category fields), keep all rows
+    // - else filter rows by row blob
     const qq = q.trim().toLowerCase();
     if (qq) {
-      partGroups = partGroups
-        .map((g) => {
-          const gc = getGeneralCategory(g.part);
-          const ac = getActualCategory(g.part);
+      shapes = shapes
+        .map((sg) => {
+          const gc = getGeneralCategory(sg.part);
+          const sc = getSpecificCategory(sg.part);
+          const ac = getActualCategory(sg.part);
 
-          const partBlob = `${g.part.part_id ?? ""} ${g.part.name ?? ""} ${gc} ${ac}`.toLowerCase();
+          const partBlob = `${sg.part.part_id ?? ""} ${sg.part.name ?? ""} ${gc} ${sc} ${ac}`.toLowerCase();
           const partHit = partBlob.includes(qq);
 
           const rows = partHit
-            ? g.rows
-            : g.rows.filter((pc) =>
+            ? sg.rows
+            : sg.rows.filter((pc) =>
                 `${pc.part_color_code ?? ""} ${pc.color?.name ?? ""} ${pc.variant ?? ""}`
                   .toLowerCase()
                   .includes(qq)
               );
 
-          return { ...g, rows };
+          return { ...sg, rows };
         })
-        .filter((g) => g.rows.length > 0);
+        .filter((sg) => sg.rows.length > 0);
     }
 
-    // 5) group those part groups by category (general_category)
-    const catMap = new Map<string, Group[]>();
-    for (const g of partGroups) {
-      const cat = getCategoryLabel(g.part);
+    // E) group the shapes by category (general_category)
+    const catMap = new Map<string, ShapeGroup[]>();
+    for (const sg of shapes) {
+      const cat = getCategoryLabel(sg.part);
       if (!catMap.has(cat)) catMap.set(cat, []);
-      catMap.get(cat)!.push(g);
+      catMap.get(cat)!.push(sg);
     }
 
-    // 6) return sorted categories
-    return Array.from(catMap.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([category, groups]) => ({ category, groups }));
+    // F) return categories sorted A->Z, but put "Uncategorized" last (nicer UX)
+    const cats = Array.from(catMap.entries()).sort(([a], [b]) => {
+      if (a === "Uncategorized" && b !== "Uncategorized") return 1;
+      if (b === "Uncategorized" && a !== "Uncategorized") return -1;
+      return a.localeCompare(b);
+    });
+
+    return cats.map(([category, shapes]) => ({ category, shapes }));
   }, [items, q]);
 
   const totalShapeGroups = useMemo(
-    () => groupedByCategory.reduce((sum, cg) => sum + cg.groups.length, 0),
+    () => groupedByCategory.reduce((sum, cg) => sum + cg.shapes.length, 0),
     [groupedByCategory]
   );
 
@@ -155,8 +173,8 @@ export default function PartColorsPage() {
   function expandAll() {
     const all: Record<number, boolean> = {};
     groupedByCategory.forEach((cg) => {
-      cg.groups.forEach((g) => {
-        if (g.part?.id != null) all[g.part.id] = true;
+      cg.shapes.forEach((sg) => {
+        if (sg.part?.id != null) all[sg.part.id] = true;
       });
     });
     setExpanded(all);
@@ -273,14 +291,14 @@ export default function PartColorsPage() {
               <div className="px-4 py-3 bg-slate-50 border-b border-slate-200">
                 <div className="text-xs font-black tracking-wide text-slate-700 uppercase">
                   {cg.category}{" "}
-                  <span className="text-slate-500 font-semibold">({cg.groups.length})</span>
+                  <span className="text-slate-500 font-semibold">({cg.shapes.length})</span>
                 </div>
               </div>
 
-              {/* Part (shape) groups */}
-              {cg.groups.map((g, idx) => {
-                const isOpen = !!expanded[g.part.id];
-                const thumbs = g.rows
+              {/* Shapes within category */}
+              {cg.shapes.map((sg, idx) => {
+                const isOpen = !!expanded[sg.part.id];
+                const thumbs = sg.rows
                   .map((r) => r.thumb_url || r.image_url_1 || r.image_url_2 || null)
                   .filter(Boolean)
                   .slice(0, 4) as string[];
@@ -288,26 +306,26 @@ export default function PartColorsPage() {
                 const showPlaceholders = Math.max(0, 4 - thumbs.length);
 
                 return (
-                  <div key={g.part.id} className={idx === 0 ? "" : "border-t border-slate-200"}>
+                  <div key={sg.part.id} className={idx === 0 ? "" : "border-t border-slate-200"}>
                     <button
                       type="button"
                       className="w-full px-4 py-3 flex items-center gap-3 hover:bg-slate-50 text-left"
-                      onClick={() => toggle(g.part.id)}
+                      onClick={() => toggle(sg.part.id)}
                     >
                       <div className="w-6 text-slate-500 font-black">{isOpen ? "▾" : "▸"}</div>
 
                       <div className="min-w-0 flex-1">
                         <div className="text-sm font-extrabold text-slate-900 break-words">
-                          {g.part.part_id} — {g.part.name}{" "}
-                          <span className="text-slate-500 font-bold">({g.rows.length})</span>
+                          {sg.part.part_id} — {sg.part.name}{" "}
+                          <span className="text-slate-500 font-bold">({sg.rows.length})</span>
                         </div>
 
                         <div className="mt-2 flex items-center gap-2 flex-wrap">
                           {thumbs.map((t, i) => (
-                            <MiniThumb key={`${g.part.id}-t-${i}`} src={t} />
+                            <MiniThumb key={`${sg.part.id}-t-${i}`} src={t} />
                           ))}
                           {Array.from({ length: showPlaceholders }).map((_, i) => (
-                            <MiniThumb key={`${g.part.id}-p-${i}`} src={null} />
+                            <MiniThumb key={`${sg.part.id}-p-${i}`} src={null} />
                           ))}
                           <div className="text-xs text-slate-500 font-semibold">
                             {thumbs.length > 0 ? "preview" : "no images yet"}
@@ -320,7 +338,7 @@ export default function PartColorsPage() {
 
                     {isOpen ? (
                       <div className="border-t border-slate-200">
-                        {g.rows.map((pc, pcIdx) => {
+                        {sg.rows.map((pc, pcIdx) => {
                           const img = pc.thumb_url || pc.image_url_1 || pc.image_url_2 || null;
                           const idText = pc.part_color_code ? `ID: ${pc.part_color_code}` : "ID: —";
                           const nameText = pc.color?.name ?? "—";
