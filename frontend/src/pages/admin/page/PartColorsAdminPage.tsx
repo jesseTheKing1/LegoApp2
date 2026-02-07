@@ -22,9 +22,10 @@ type CategoryGroup = {
 };
 
 function getCategoryLabel(p: Part): string {
-  const g = (p.general_category ?? "").trim();
+  const g = String((p as any)?.general_category ?? "").trim();
   return g || "Uncategorized";
 }
+
 
 export default function PartColorsPage() {
   const [items, setItems] = useState<PartColorRow[]>([]);
