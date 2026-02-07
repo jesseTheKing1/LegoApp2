@@ -17,7 +17,7 @@ import { PartColorDetailDrawer } from "../components/PartColorDetailDrawer";
 type Group = { part: Part; rows: PartColorRow[] };
 
 type CategoryGroup = {
-  category: string; // ✅ uses Part.general_category
+  category: string; // uses Part.general_category
   groups: Group[];
 };
 
@@ -64,7 +64,7 @@ export default function PartColorsPage() {
   }, []);
 
   const groupedByCategory: CategoryGroup[] = useMemo(() => {
-    // 1) Group by Part (shape) first (your current behavior)
+    // 1) Group by Part (shape) first
     const partMap = new Map<number, Group>();
 
     for (const pc of items) {
@@ -89,17 +89,17 @@ export default function PartColorsPage() {
       });
     }
 
-    // 3) Make a sorted array of part groups
+    // 3) Sort part groups by part_id
     let partGroups = Array.from(partMap.values()).sort((a, b) =>
       (a.part.part_id ?? "").localeCompare(b.part.part_id ?? "")
     );
 
-    // 4) Apply search filter (same idea, but include category text too)
+    // 4) Search filter (NO specific_category — matches your Part type)
     const qq = q.trim().toLowerCase();
     if (qq) {
       partGroups = partGroups
         .map((g) => {
-          const partBlob = `${g.part.part_id ?? ""} ${g.part.name ?? ""} ${g.part.general_category ?? ""}}`.toLowerCase();
+          const partBlob = `${g.part.part_id ?? ""} ${g.part.name ?? ""} ${g.part.general_category ?? ""} ${g.part.actual_category ?? ""}`.toLowerCase();
           const partHit = partBlob.includes(qq);
 
           const rows = partHit
@@ -115,7 +115,7 @@ export default function PartColorsPage() {
         .filter((g) => g.rows.length > 0);
     }
 
-    // 5) NEW: Group part groups by general_category
+    // 5) Group part groups by general_category
     const catMap = new Map<string, Group[]>();
     for (const g of partGroups) {
       const cat = getCategoryLabel(g.part);
@@ -215,7 +215,6 @@ export default function PartColorsPage() {
   }
 
   return (
-    // ✅ small page-top breathing room
     <div className="space-y-3 pt-3">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
         <input
@@ -255,7 +254,6 @@ export default function PartColorsPage() {
         ) : (
           groupedByCategory.map((cg, catIdx) => (
             <div key={cg.category} className={catIdx === 0 ? "" : "border-t border-slate-200"}>
-              {/* Category header */}
               <div className="px-4 py-3 bg-slate-50 border-b border-slate-200">
                 <div className="text-xs font-black tracking-wide text-slate-700 uppercase">
                   {cg.category}{" "}
@@ -263,7 +261,6 @@ export default function PartColorsPage() {
                 </div>
               </div>
 
-              {/* Part (shape) groups */}
               {cg.groups.map((g, idx) => {
                 const isOpen = !!expanded[g.part.id];
                 const thumbs = g.rows
