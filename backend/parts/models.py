@@ -33,7 +33,7 @@ class Part(models.Model):
 class PartColor(models.Model):
     part = models.ForeignKey(Part, on_delete=models.CASCADE, related_name="part_colors")
     color = models.ForeignKey(Color, on_delete=models.PROTECT, related_name="part_colors")
-    variant = models.CharField(max_length=80, blank=True)  # printed / pearl / etc.
+    variant = models.CharField(max_length=80, blank=True, default="")
 
     part_color_code = models.CharField(max_length=64, unique=True)
     description = models.CharField(max_length=300, blank=True)

@@ -73,8 +73,11 @@ class PartColorSerializer(serializers.ModelSerializer):
         allow_null=True,
     )
 
-    variant = serializers.CharField(required=False, allow_blank=True)
-
+    variant = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default=""   # ✅ key change
+    )
     class Meta:
         model = PartColor
         fields = [
