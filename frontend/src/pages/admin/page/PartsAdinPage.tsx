@@ -219,6 +219,7 @@ export default function PartsAdminPage() {
   return (
     <div className="space-y-3">
       {/* top bar */}
+      <div style={{padding: 30, fontSize: 32}}>PART COLORS PAGE</div>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
         <input
           className={cx(inputBase, "sm:max-w-md")}
