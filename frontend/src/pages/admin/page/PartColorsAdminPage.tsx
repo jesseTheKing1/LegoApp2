@@ -99,7 +99,7 @@ export default function PartColorsPage() {
     if (qq) {
       partGroups = partGroups
         .map((g) => {
-          const partBlob = `${g.part.part_id ?? ""} ${g.part.name ?? ""} ${g.part.general_category ?? ""} ${g.part.specific_category ?? ""}`.toLowerCase();
+          const partBlob = `${g.part.part_id ?? ""} ${g.part.name ?? ""} ${g.part.general_category ?? ""}}`.toLowerCase();
           const partHit = partBlob.includes(qq);
 
           const rows = partHit
