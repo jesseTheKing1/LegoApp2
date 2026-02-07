@@ -1,8 +1,7 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { useAuth } from "../auth/AuthContext";
-import { useOutsideClick } from "../hooks/useOutsideClick";
 import { AdminMenu } from "./AdminMenu";
 import { Button, ButtonLink } from "./ui/Button";
 
@@ -16,7 +15,6 @@ const LOGO_URL =
 export function Header() {
   const { me, logout, isAdmin } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const mobileRef = useOutsideClick<HTMLDivElement>(() => setMobileOpen(false));
   const loc = useLocation();
 
   useEffect(() => setMobileOpen(false), [loc.pathname]);
@@ -28,7 +26,7 @@ export function Header() {
     return `@${me.username}${me.is_staff ? " • Admin" : ""}`;
   }, [me]);
 
-  // lock scroll when mobile drawer open
+  // lock scroll when drawer open
   useEffect(() => {
     if (!mobileOpen) return;
     const prev = document.body.style.overflow;
@@ -41,21 +39,21 @@ export function Header() {
   const MobileDrawer = mobileOpen
     ? createPortal(
         <div className="fixed inset-0 z-[1000]">
-          {/* Backdrop */}
+          {/* Backdrop (lowest layer) */}
           <button
-            className="absolute inset-0 bg-black/50"
+            className="absolute inset-0 z-0 bg-black/50"
             onClick={() => setMobileOpen(false)}
             aria-label="Close menu overlay"
           />
 
-          {/* Drawer */}
-          <div className="absolute right-0 top-0 h-full w-[86vw] max-w-sm bg-white shadow-2xl">
+          {/* Drawer (highest layer) */}
+          <div className="absolute right-0 top-0 z-10 h-full w-[86vw] max-w-sm bg-white shadow-2xl pointer-events-auto">
             <div className="flex items-center justify-between border-b border-slate-200 p-4">
               <div className="text-sm font-black text-slate-900">
                 {isAdminRoute ? "Admin Menu" : "Menu"}
               </div>
               <button
-                className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white hover:bg-slate-50"
+                className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white"
                 onClick={() => setMobileOpen(false)}
                 aria-label="Close menu"
               >
@@ -64,99 +62,86 @@ export function Header() {
             </div>
 
             <div className="p-4">
-              {/* MENU CONTENT */}
               {!isAdminRoute ? (
-                // NORMAL APP MENU
                 <div className="grid gap-2">
                   <Link
                     to="/"
-                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                    onClick={() => setMobileOpen(false)}
+                    className="rounded-2xl border px-4 py-3 text-sm font-semibold"
                   >
                     Home
                   </Link>
                   <Link
                     to="/browse"
-                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                    onClick={() => setMobileOpen(false)}
+                    className="rounded-2xl border px-4 py-3 text-sm font-semibold"
                   >
                     Browse
                   </Link>
-
-                  {/* Only show Admin entry if user is admin */}
-                  {isAdmin ? (
+                  {isAdmin && (
                     <Link
                       to="/admin"
-                      className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800"
+                      onClick={() => setMobileOpen(false)}
+                      className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white"
                     >
                       Admin
                     </Link>
-                  ) : null}
+                  )}
                 </div>
               ) : (
-                // ADMIN MENU
                 <div className="grid gap-2">
                   <Link
                     to="/"
-                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                    onClick={() => setMobileOpen(false)}
+                    className="rounded-2xl border px-4 py-3 text-sm font-semibold"
                   >
                     ← Back to app
                   </Link>
 
-                  {isAdmin ? (
-                    <div className="mt-2 rounded-3xl border border-slate-200 bg-slate-50 p-3">
-                      <div className="mb-2 text-xs font-black uppercase tracking-wide text-slate-500">
+                  {isAdmin && (
+                    <div className="mt-2 rounded-3xl border bg-slate-50 p-3">
+                      <div className="mb-2 text-xs font-black uppercase text-slate-500">
                         Admin
                       </div>
-
                       <div className="grid gap-2">
-                        <Link
-                          to="/admin/parts"
-                          className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-                        >
-                          Parts
-                        </Link>
-                        <Link
-                          to="/admin/colors"
-                          className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-                        >
-                          Colors
-                        </Link>
-                        <Link
-                          to="/admin/part-colors"
-                          className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-                        >
-                          Part Colors
-                        </Link>
-                        <Link
-                          to="/admin/minifigs"
-                          className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-                        >
-                          Minifigs
-                        </Link>
-
+                        {[
+                          ["Parts", "/admin/parts"],
+                          ["Colors", "/admin/colors"],
+                          ["Part Colors", "/admin/part-colors"],
+                          ["Minifigs", "/admin/minifigs"],
+                        ].map(([label, path]) => (
+                          <Link
+                            key={path}
+                            to={path}
+                            onClick={() => setMobileOpen(false)}
+                            className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold"
+                          >
+                            {label}
+                          </Link>
+                        ))}
                         <a
                           href="/dj-admin/"
-                          className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                          className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold"
                         >
                           Django admin
                         </a>
                       </div>
                     </div>
-                  ) : null}
+                  )}
                 </div>
               )}
 
               <div className="mt-4 h-px bg-slate-200" />
 
-              {/* AUTH SECTION */}
               <div className="mt-4 grid gap-2">
                 {me ? (
                   <>
-                    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900">
+                    <div className="rounded-2xl border px-4 py-3 text-sm font-semibold">
                       {userLabel}
                     </div>
                     <button
-                      className="inline-flex h-10 w-full items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 hover:bg-slate-50"
                       onClick={logout}
+                      className="h-10 rounded-xl border px-4 text-sm font-semibold"
                     >
                       Log out
                     </button>
@@ -165,13 +150,15 @@ export function Header() {
                   <>
                     <Link
                       to="/login"
-                      className="inline-flex h-10 w-full items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                      onClick={() => setMobileOpen(false)}
+                      className="h-10 rounded-xl border px-4 text-sm font-semibold"
                     >
                       Log in
                     </Link>
                     <Link
                       to="/register"
-                      className="inline-flex h-10 w-full items-center justify-center rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-800"
+                      onClick={() => setMobileOpen(false)}
+                      className="h-10 rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white"
                     >
                       Create account
                     </Link>
@@ -186,109 +173,49 @@ export function Header() {
     : null;
 
   return (
-    <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur">
+    <header className="sticky top-0 z-40 border-b bg-white/80 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
-        <div className="flex min-w-0 items-center gap-3">
-          <Link
-            to="/"
-            className="flex flex-shrink-0 items-center gap-2 text-sm font-black tracking-tight text-slate-900"
-            title="Home"
-          >
-            <span className="grid h-9 w-9 place-items-center overflow-hidden rounded-xl bg-slate-900">
-              <img
-                src={LOGO_URL}
-                alt="LEGO Inventory"
-                className="h-full w-full object-cover scale-110"
-                loading="eager"
-                decoding="async"
-              />
-            </span>
+        <Link to="/" className="flex items-center gap-2 font-black">
+          <img src={LOGO_URL} className="h-9 w-9 rounded-xl" />
+          <span className="hidden sm:block">LEGO Inventory</span>
+        </Link>
 
-            <span className="hidden sm:block">LEGO Inventory</span>
-            <span className="sm:hidden">LEGO</span>
-          </Link>
-
-          {isAdminRoute ? (
-            <div className="flex min-w-0 items-center gap-2">
-              <span className="hidden sm:block h-6 w-px bg-slate-200" />
-              <div
-                className={cx(
-                  "inline-flex items-center rounded-xl border border-slate-200 bg-white",
-                  "px-2 py-1 text-[10px] sm:px-3 sm:text-xs",
-                  "font-black uppercase text-slate-900",
-                  "tracking-[0.32em] sm:tracking-[0.28em]",
-                  "max-w-[42vw] sm:max-w-none truncate"
-                )}
-                style={{ textRendering: "geometricPrecision" }}
-                title="Admin mode"
-              >
-                ADMIN MODE
-              </div>
-            </div>
-          ) : null}
-        </div>
-
-        <nav className="hidden items-center gap-2 sm:flex" aria-label="Primary">
+        <nav className="hidden sm:flex items-center gap-2">
           {!isAdminRoute ? (
             <>
-              <Link
-                to="/"
-                className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-100"
-              >
-                Home
-              </Link>
-              <Link
-                to="/browse"
-                className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-100"
-              >
-                Browse
-              </Link>
-
-              {/* show Admin menu entry in header when NOT on admin routes */}
-              {isAdmin ? <AdminMenu /> : null}
+              <Link to="/" className="px-3 py-2 font-semibold">Home</Link>
+              <Link to="/browse" className="px-3 py-2 font-semibold">Browse</Link>
+              {isAdmin && <AdminMenu />}
             </>
           ) : (
             <>
-              <ButtonLink to="/" variant="secondary" size="sm">
-                ← Back to app
-              </ButtonLink>
-              {isAdmin ? <AdminMenu compact /> : null}
+              <ButtonLink to="/" size="sm">← Back</ButtonLink>
+              {isAdmin && <AdminMenu compact />}
             </>
           )}
 
           <div className="ml-2 flex items-center gap-2">
             {me ? (
               <>
-                <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-900">
-                  {userLabel}
-                </span>
-                <Button variant="ghost" onClick={logout}>
-                  Log out
-                </Button>
+                <span className="px-3 py-1 text-xs font-semibold">{userLabel}</span>
+                <Button variant="ghost" onClick={logout}>Log out</Button>
               </>
             ) : (
               <>
-                <ButtonLink to="/login" variant="ghost">
-                  Log in
-                </ButtonLink>
-                <ButtonLink to="/register" variant="primary">
-                  Create account
-                </ButtonLink>
+                <ButtonLink to="/login" variant="ghost">Log in</ButtonLink>
+                <ButtonLink to="/register">Create account</ButtonLink>
               </>
             )}
           </div>
         </nav>
 
-        <div className="relative sm:hidden">
-          <button
-            className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white hover:bg-slate-50"
-            onClick={() => setMobileOpen((v) => !v)}
-            aria-label="Open menu"
-            aria-expanded={mobileOpen}
-          >
-            <span className="text-lg">☰</span>
-          </button>
-        </div>
+        <button
+          className="sm:hidden grid h-10 w-10 place-items-center rounded-xl border"
+          onClick={() => setMobileOpen(true)}
+          aria-label="Open menu"
+        >
+          ☰
+        </button>
       </div>
 
       {MobileDrawer}
