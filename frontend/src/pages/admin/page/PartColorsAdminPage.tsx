@@ -7,6 +7,7 @@ import type { PartColorRow } from "../../../types/partColor";
 import type { CatalogItemMini } from "../../../types/catalog";
 import type { Color } from "../../../types/color";
 import type { Part } from "../../../types/part";
+
 import { getListData } from "../utils/list";
 import { formatApiError } from "../utils/errors";
 import { DrawerShell } from "../components/DrawerShell";
@@ -17,15 +18,24 @@ import { PartColorDetailDrawer } from "../components/PartColorDetailDrawer";
 type Group = { part: Part; rows: PartColorRow[] };
 
 type CategoryGroup = {
-  category: string; // uses Part.general_category
+  category: string;
   groups: Group[];
 };
 
-function getCategoryLabel(p: Part): string {
-  const g = String((p as any)?.general_category ?? "").trim();
-  return g || "Uncategorized";
+// ✅ Safe getter: works even if Part type doesn't define general_category
+function getGeneralCategory(p: Part): string {
+  return String((p as any)?.general_category ?? "").trim();
 }
 
+// ✅ Safe getter: works even if Part type doesn't define actual_category
+function getActualCategory(p: Part): string {
+  return String((p as any)?.actual_category ?? "").trim();
+}
+
+function getCategoryLabel(p: Part): string {
+  const g = getGeneralCategory(p);
+  return g || "Uncategorized";
+}
 
 export default function PartColorsPage() {
   const [items, setItems] = useState<PartColorRow[]>([]);
@@ -65,7 +75,7 @@ export default function PartColorsPage() {
   }, []);
 
   const groupedByCategory: CategoryGroup[] = useMemo(() => {
-    // 1) Group by Part (shape) first
+    // 1) group by Part (shape)
     const partMap = new Map<number, Group>();
 
     for (const pc of items) {
@@ -75,7 +85,7 @@ export default function PartColorsPage() {
       partMap.get(key)!.rows.push(pc);
     }
 
-    // 2) Sort rows within each part group
+    // 2) sort rows inside each part group
     for (const g of partMap.values()) {
       g.rows.sort((a, b) => {
         const ac = (a.part_color_code ?? "").toLowerCase();
@@ -90,17 +100,20 @@ export default function PartColorsPage() {
       });
     }
 
-    // 3) Sort part groups by part_id
+    // 3) to array + sort shapes by part_id
     let partGroups = Array.from(partMap.values()).sort((a, b) =>
       (a.part.part_id ?? "").localeCompare(b.part.part_id ?? "")
     );
 
-    // 4) Search filter (NO specific_category — matches your Part type)
+    // 4) search filter (safe category reads)
     const qq = q.trim().toLowerCase();
     if (qq) {
       partGroups = partGroups
         .map((g) => {
-          const partBlob = `${g.part.part_id ?? ""} ${g.part.name ?? ""} ${g.part.general_category ?? ""} ${g.part.actual_category ?? ""}`.toLowerCase();
+          const gc = getGeneralCategory(g.part);
+          const ac = getActualCategory(g.part);
+
+          const partBlob = `${g.part.part_id ?? ""} ${g.part.name ?? ""} ${gc} ${ac}`.toLowerCase();
           const partHit = partBlob.includes(qq);
 
           const rows = partHit
@@ -116,7 +129,7 @@ export default function PartColorsPage() {
         .filter((g) => g.rows.length > 0);
     }
 
-    // 5) Group part groups by general_category
+    // 5) group those part groups by category (general_category)
     const catMap = new Map<string, Group[]>();
     for (const g of partGroups) {
       const cat = getCategoryLabel(g.part);
@@ -124,7 +137,7 @@ export default function PartColorsPage() {
       catMap.get(cat)!.push(g);
     }
 
-    // 6) Return sorted categories
+    // 6) return sorted categories
     return Array.from(catMap.entries())
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([category, groups]) => ({ category, groups }));
@@ -187,6 +200,7 @@ export default function PartColorsPage() {
       const res = await api.patch(`${ENDPOINTS.partColors}${selected.id}/`, payload);
       applyPatched(res.data);
       setEditing(false);
+
       const catRes = await api.get(ENDPOINTS.catalog);
       setCatalogItems(getListData<CatalogItemMini>(catRes.data));
     } catch (e: any) {
@@ -255,6 +269,7 @@ export default function PartColorsPage() {
         ) : (
           groupedByCategory.map((cg, catIdx) => (
             <div key={cg.category} className={catIdx === 0 ? "" : "border-t border-slate-200"}>
+              {/* Category header */}
               <div className="px-4 py-3 bg-slate-50 border-b border-slate-200">
                 <div className="text-xs font-black tracking-wide text-slate-700 uppercase">
                   {cg.category}{" "}
@@ -262,6 +277,7 @@ export default function PartColorsPage() {
                 </div>
               </div>
 
+              {/* Part (shape) groups */}
               {cg.groups.map((g, idx) => {
                 const isOpen = !!expanded[g.part.id];
                 const thumbs = g.rows
