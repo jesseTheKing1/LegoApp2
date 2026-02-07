@@ -4,24 +4,27 @@ import { ENDPOINTS } from "../../../api/endpoints";
 
 import { PartColorForm } from "../form/PartColorForm";
 import type { PartColorRow } from "../../../types/partColor";
-import type { CatalogItemMini} from "../../../types/catalog";
+import type { CatalogItemMini } from "../../../types/catalog";
 import type { Color } from "../../../types/color";
 import type { Part } from "../../../types/part";
-import { getListData } from "../utils/list"
-import { formatApiError } from "../utils/errors"
+import { getListData } from "../utils/list";
+import { formatApiError } from "../utils/errors";
 import { DrawerShell } from "../components/DrawerShell";
 import { RowThumb, MiniThumb } from "../components/Thumbs";
-import {
-  cx,
-  card,
-  btnPrimary,
-  btnDanger,
-  btnBase,
-  inputBase,
-} from "../utils/ui";
+import { cx, card, btnPrimary, btnBase, inputBase } from "../utils/ui";
 import { PartColorDetailDrawer } from "../components/PartColorDetailDrawer";
 
 type Group = { part: Part; rows: PartColorRow[] };
+
+type CategoryGroup = {
+  category: string; // ✅ uses Part.general_category
+  groups: Group[];
+};
+
+function getCategoryLabel(p: Part): string {
+  const g = (p.general_category ?? "").trim();
+  return g || "Uncategorized";
+}
 
 export default function PartColorsPage() {
   const [items, setItems] = useState<PartColorRow[]>([]);
@@ -60,17 +63,19 @@ export default function PartColorsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const grouped: Group[] = useMemo(() => {
-    const map = new Map<number, Group>();
+  const groupedByCategory: CategoryGroup[] = useMemo(() => {
+    // 1) Group by Part (shape) first (your current behavior)
+    const partMap = new Map<number, Group>();
 
     for (const pc of items) {
       const key = pc.part?.id;
       if (!key || !pc.part) continue;
-      if (!map.has(key)) map.set(key, { part: pc.part, rows: [] });
-      map.get(key)!.rows.push(pc);
+      if (!partMap.has(key)) partMap.set(key, { part: pc.part, rows: [] });
+      partMap.get(key)!.rows.push(pc);
     }
 
-    for (const g of map.values()) {
+    // 2) Sort rows within each part group
+    for (const g of partMap.values()) {
       g.rows.sort((a, b) => {
         const ac = (a.part_color_code ?? "").toLowerCase();
         const bc = (b.part_color_code ?? "").toLowerCase();
@@ -84,25 +89,50 @@ export default function PartColorsPage() {
       });
     }
 
-    let arr = Array.from(map.values()).sort((a, b) => (a.part.part_id ?? "").localeCompare(b.part.part_id ?? ""));
+    // 3) Make a sorted array of part groups
+    let partGroups = Array.from(partMap.values()).sort((a, b) =>
+      (a.part.part_id ?? "").localeCompare(b.part.part_id ?? "")
+    );
 
+    // 4) Apply search filter (same idea, but include category text too)
     const qq = q.trim().toLowerCase();
     if (qq) {
-      arr = arr
+      partGroups = partGroups
         .map((g) => {
-          const partHit = `${g.part.part_id ?? ""} ${g.part.name ?? ""}`.toLowerCase().includes(qq);
+          const partBlob = `${g.part.part_id ?? ""} ${g.part.name ?? ""} ${g.part.general_category ?? ""} ${g.part.specific_category ?? ""}`.toLowerCase();
+          const partHit = partBlob.includes(qq);
+
           const rows = partHit
             ? g.rows
             : g.rows.filter((pc) =>
-                `${pc.part_color_code ?? ""} ${pc.color?.name ?? ""} ${pc.variant ?? ""}`.toLowerCase().includes(qq)
+                `${pc.part_color_code ?? ""} ${pc.color?.name ?? ""} ${pc.variant ?? ""}`
+                  .toLowerCase()
+                  .includes(qq)
               );
+
           return { ...g, rows };
         })
         .filter((g) => g.rows.length > 0);
     }
 
-    return arr;
+    // 5) NEW: Group part groups by general_category
+    const catMap = new Map<string, Group[]>();
+    for (const g of partGroups) {
+      const cat = getCategoryLabel(g.part);
+      if (!catMap.has(cat)) catMap.set(cat, []);
+      catMap.get(cat)!.push(g);
+    }
+
+    // 6) Return sorted categories
+    return Array.from(catMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([category, groups]) => ({ category, groups }));
   }, [items, q]);
+
+  const totalShapeGroups = useMemo(
+    () => groupedByCategory.reduce((sum, cg) => sum + cg.groups.length, 0),
+    [groupedByCategory]
+  );
 
   function toggle(partPk: number) {
     setExpanded((prev) => ({ ...prev, [partPk]: !prev[partPk] }));
@@ -110,8 +140,10 @@ export default function PartColorsPage() {
 
   function expandAll() {
     const all: Record<number, boolean> = {};
-    grouped.forEach((g) => {
-      if (g.part?.id != null) all[g.part.id] = true;
+    groupedByCategory.forEach((cg) => {
+      cg.groups.forEach((g) => {
+        if (g.part?.id != null) all[g.part.id] = true;
+      });
     });
     setExpanded(all);
   }
@@ -154,7 +186,6 @@ export default function PartColorsPage() {
       const res = await api.patch(`${ENDPOINTS.partColors}${selected.id}/`, payload);
       applyPatched(res.data);
       setEditing(false);
-      // also refresh catalog list in case SKU/price changed
       const catRes = await api.get(ENDPOINTS.catalog);
       setCatalogItems(getListData<CatalogItemMini>(catRes.data));
     } catch (e: any) {
@@ -184,13 +215,14 @@ export default function PartColorsPage() {
   }
 
   return (
-    <div className="space-y-3">
+    // ✅ small page-top breathing room
+    <div className="space-y-3 pt-3">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
         <input
           className={cx(inputBase, "sm:max-w-md")}
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Search shape, color, variant, or your ID..."
+          placeholder="Search category, shape, color, variant, or your ID..."
           autoComplete="off"
         />
 
@@ -207,102 +239,127 @@ export default function PartColorsPage() {
         </div>
 
         <div className="text-xs text-slate-500 font-semibold sm:ml-auto">
-          {grouped.length} shapes • {items.length} rows
+          {totalShapeGroups} shapes • {items.length} rows
         </div>
       </div>
 
-      {err ? <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{err}</div> : null}
+      {err ? (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {err}
+        </div>
+      ) : null}
 
       <div className={card}>
-        {grouped.length === 0 ? (
+        {groupedByCategory.length === 0 ? (
           <div className="p-4 text-sm text-slate-600">No results.</div>
         ) : (
-          grouped.map((g, idx) => {
-            const isOpen = !!expanded[g.part.id];
-            const thumbs = g.rows
-              .map((r) => r.thumb_url || r.image_url_1 || r.image_url_2 || null)
-              .filter(Boolean)
-              .slice(0, 4) as string[];
-
-            const showPlaceholders = Math.max(0, 4 - thumbs.length);
-
-            return (
-              <div key={g.part.id} className={idx === 0 ? "" : "border-t border-slate-200"}>
-                <button
-                  type="button"
-                  className="w-full px-4 py-3 flex items-center gap-3 hover:bg-slate-50 text-left"
-                  onClick={() => toggle(g.part.id)}
-                >
-                  <div className="w-6 text-slate-500 font-black">{isOpen ? "▾" : "▸"}</div>
-
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-extrabold text-slate-900 break-words">
-                      {g.part.part_id} — {g.part.name}{" "}
-                      <span className="text-slate-500 font-bold">({g.rows.length})</span>
-                    </div>
-
-                    <div className="mt-2 flex items-center gap-2 flex-wrap">
-                      {thumbs.map((t, i) => (
-                        <MiniThumb key={`${g.part.id}-t-${i}`} src={t} />
-                      ))}
-                      {Array.from({ length: showPlaceholders }).map((_, i) => (
-                        <MiniThumb key={`${g.part.id}-p-${i}`} src={null} />
-                      ))}
-                      <div className="text-xs text-slate-500 font-semibold">{thumbs.length > 0 ? "preview" : "no images yet"}</div>
-                    </div>
-                  </div>
-
-                  <div className="text-xs text-slate-500 font-semibold">{isOpen ? "hide" : "show"}</div>
-                </button>
-
-                {isOpen ? (
-                  <div className="border-t border-slate-200">
-                    {g.rows.map((pc, pcIdx) => {
-                      const img = pc.thumb_url || pc.image_url_1 || pc.image_url_2 || null;
-                      const idText = pc.part_color_code ? `ID: ${pc.part_color_code}` : "ID: —";
-                      const nameText = pc.color?.name ?? "—";
-
-                      const priceBadge =
-                        pc.catalog_item && pc.catalog_item.base_price_override != null
-                          ? `$${pc.catalog_item.base_price_override}`
-                          : null;
-
-                      return (
-                        <button
-                          key={pc.id}
-                          type="button"
-                          className={cx(
-                            "w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-slate-50",
-                            pcIdx === 0 ? "" : "border-t border-slate-100"
-                          )}
-                          onClick={() => openDetail(pc)}
-                        >
-                          <RowThumb src={img} />
-
-                          <div className="hidden sm:block w-[240px] text-xs font-semibold text-slate-600 truncate">{idText}</div>
-
-                          <div className="min-w-0 flex-1">
-                            <div className="text-sm font-extrabold text-slate-900 truncate">
-                              {nameText}{" "}
-                              {pc.variant ? <span className="text-slate-500 font-bold">• {pc.variant}</span> : null}
-
-                              {priceBadge ? (
-                                <span className="ml-2 inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-extrabold text-slate-700">
-                                  {priceBadge}
-                                </span>
-                              ) : null}
-                            </div>
-
-                            <div className="sm:hidden text-xs text-slate-500 font-semibold truncate">{idText}</div>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                ) : null}
+          groupedByCategory.map((cg, catIdx) => (
+            <div key={cg.category} className={catIdx === 0 ? "" : "border-t border-slate-200"}>
+              {/* Category header */}
+              <div className="px-4 py-3 bg-slate-50 border-b border-slate-200">
+                <div className="text-xs font-black tracking-wide text-slate-700 uppercase">
+                  {cg.category}{" "}
+                  <span className="text-slate-500 font-semibold">({cg.groups.length})</span>
+                </div>
               </div>
-            );
-          })
+
+              {/* Part (shape) groups */}
+              {cg.groups.map((g, idx) => {
+                const isOpen = !!expanded[g.part.id];
+                const thumbs = g.rows
+                  .map((r) => r.thumb_url || r.image_url_1 || r.image_url_2 || null)
+                  .filter(Boolean)
+                  .slice(0, 4) as string[];
+
+                const showPlaceholders = Math.max(0, 4 - thumbs.length);
+
+                return (
+                  <div key={g.part.id} className={idx === 0 ? "" : "border-t border-slate-200"}>
+                    <button
+                      type="button"
+                      className="w-full px-4 py-3 flex items-center gap-3 hover:bg-slate-50 text-left"
+                      onClick={() => toggle(g.part.id)}
+                    >
+                      <div className="w-6 text-slate-500 font-black">{isOpen ? "▾" : "▸"}</div>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-extrabold text-slate-900 break-words">
+                          {g.part.part_id} — {g.part.name}{" "}
+                          <span className="text-slate-500 font-bold">({g.rows.length})</span>
+                        </div>
+
+                        <div className="mt-2 flex items-center gap-2 flex-wrap">
+                          {thumbs.map((t, i) => (
+                            <MiniThumb key={`${g.part.id}-t-${i}`} src={t} />
+                          ))}
+                          {Array.from({ length: showPlaceholders }).map((_, i) => (
+                            <MiniThumb key={`${g.part.id}-p-${i}`} src={null} />
+                          ))}
+                          <div className="text-xs text-slate-500 font-semibold">
+                            {thumbs.length > 0 ? "preview" : "no images yet"}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="text-xs text-slate-500 font-semibold">{isOpen ? "hide" : "show"}</div>
+                    </button>
+
+                    {isOpen ? (
+                      <div className="border-t border-slate-200">
+                        {g.rows.map((pc, pcIdx) => {
+                          const img = pc.thumb_url || pc.image_url_1 || pc.image_url_2 || null;
+                          const idText = pc.part_color_code ? `ID: ${pc.part_color_code}` : "ID: —";
+                          const nameText = pc.color?.name ?? "—";
+
+                          const priceBadge =
+                            pc.catalog_item && pc.catalog_item.base_price_override != null
+                              ? `$${pc.catalog_item.base_price_override}`
+                              : null;
+
+                          return (
+                            <button
+                              key={pc.id}
+                              type="button"
+                              className={cx(
+                                "w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-slate-50",
+                                pcIdx === 0 ? "" : "border-t border-slate-100"
+                              )}
+                              onClick={() => openDetail(pc)}
+                            >
+                              <RowThumb src={img} />
+
+                              <div className="hidden sm:block w-[240px] text-xs font-semibold text-slate-600 truncate">
+                                {idText}
+                              </div>
+
+                              <div className="min-w-0 flex-1">
+                                <div className="text-sm font-extrabold text-slate-900 truncate">
+                                  {nameText}{" "}
+                                  {pc.variant ? (
+                                    <span className="text-slate-500 font-bold">• {pc.variant}</span>
+                                  ) : null}
+
+                                  {priceBadge ? (
+                                    <span className="ml-2 inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-extrabold text-slate-700">
+                                      {priceBadge}
+                                    </span>
+                                  ) : null}
+                                </div>
+
+                                <div className="sm:hidden text-xs text-slate-500 font-semibold truncate">
+                                  {idText}
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          ))
         )}
       </div>
 
@@ -339,8 +396,10 @@ export default function PartColorsPage() {
         onSubmitEdit={saveEdit}
         onPatched={(pc) => {
           applyPatched(pc);
-          // also refresh catalog list because pricing could have changed
-          api.get(ENDPOINTS.catalog).then((res) => setCatalogItems(getListData<CatalogItemMini>(res.data))).catch(() => {});
+          api
+            .get(ENDPOINTS.catalog)
+            .then((res) => setCatalogItems(getListData<CatalogItemMini>(res.data)))
+            .catch(() => {});
         }}
         onSelect={(pc) => {
           setSelected(pc);

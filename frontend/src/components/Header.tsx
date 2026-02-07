@@ -5,12 +5,12 @@ import { useAuth } from "../auth/AuthContext";
 import { AdminMenu } from "./AdminMenu";
 import { Button, ButtonLink } from "./ui/Button";
 
+const LOGO_URL =
+  "https://pub-d38048540c4d4457ab7891fe983b6fb6.r2.dev/uploads/86757ea5a8144a60bd9b83ee62289b23.webp";
+
 function cx(...c: Array<string | false | null | undefined>) {
   return c.filter(Boolean).join(" ");
 }
-
-const LOGO_URL =
-  "https://pub-d38048540c4d4457ab7891fe983b6fb6.r2.dev/uploads/86757ea5a8144a60bd9b83ee62289b23.webp";
 
 export function Header() {
   const { me, logout, isAdmin } = useAuth();
@@ -39,16 +39,24 @@ export function Header() {
   const MobileDrawer = mobileOpen
     ? createPortal(
         <div className="fixed inset-0 z-[1000]">
-          {/* Backdrop (lowest layer) */}
+          {/* Backdrop */}
           <button
             className="absolute inset-0 z-0 bg-black/50"
             onClick={() => setMobileOpen(false)}
             aria-label="Close menu overlay"
           />
 
-          {/* Drawer (highest layer) */}
-          <div className="absolute right-0 top-0 z-10 h-full w-[86vw] max-w-sm bg-white shadow-2xl pointer-events-auto">
-            <div className="flex items-center justify-between border-b border-slate-200 p-4">
+          {/* Drawer */}
+          <div
+            className={cx(
+              "absolute right-0 top-0 z-10 h-full w-[86vw] max-w-sm bg-white shadow-2xl pointer-events-auto",
+              // ✅ FIX: add safe-area padding + a minimum top pad for non-notch devices
+              "pt-[max(12px,env(safe-area-inset-top))] pb-[env(safe-area-inset-bottom)]"
+            )}
+            role="dialog"
+            aria-modal="true"
+          >
+            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
               <div className="text-sm font-black text-slate-900">
                 {isAdminRoute ? "Admin Menu" : "Menu"}
               </div>
@@ -90,7 +98,6 @@ export function Header() {
                 </div>
               ) : (
                 <div className="grid gap-2">
-
                   {isAdmin && (
                     <div className="mt-2 rounded-3xl border bg-slate-50 p-3">
                       <div className="mb-2 text-xs font-black uppercase text-slate-500">
@@ -112,6 +119,7 @@ export function Header() {
                             {label}
                           </Link>
                         ))}
+
                         <a
                           href="/dj-admin/"
                           className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold"
@@ -169,20 +177,26 @@ export function Header() {
     <header className="sticky top-0 z-40 border-b bg-white/80 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
         <Link to="/" className="flex items-center gap-2 font-black">
-          <img src={LOGO_URL} className="h-9 w-9 rounded-xl" />
+          <img src={LOGO_URL} className="h-9 w-9 rounded-xl" alt="Logo" />
           <span className="hidden sm:block">LEGO Inventory</span>
         </Link>
 
         <nav className="hidden sm:flex items-center gap-2">
           {!isAdminRoute ? (
             <>
-              <Link to="/" className="px-3 py-2 font-semibold">Home</Link>
-              <Link to="/browse" className="px-3 py-2 font-semibold">Browse</Link>
+              <Link to="/" className="px-3 py-2 font-semibold">
+                Home
+              </Link>
+              <Link to="/browse" className="px-3 py-2 font-semibold">
+                Browse
+              </Link>
               {isAdmin && <AdminMenu />}
             </>
           ) : (
             <>
-              <ButtonLink to="/" size="sm">← Back</ButtonLink>
+              <ButtonLink to="/" size="sm">
+                ← Back
+              </ButtonLink>
               {isAdmin && <AdminMenu compact />}
             </>
           )}
@@ -191,11 +205,15 @@ export function Header() {
             {me ? (
               <>
                 <span className="px-3 py-1 text-xs font-semibold">{userLabel}</span>
-                <Button variant="ghost" onClick={logout}>Log out</Button>
+                <Button variant="ghost" onClick={logout}>
+                  Log out
+                </Button>
               </>
             ) : (
               <>
-                <ButtonLink to="/login" variant="ghost">Log in</ButtonLink>
+                <ButtonLink to="/login" variant="ghost">
+                  Log in
+                </ButtonLink>
                 <ButtonLink to="/register">Create account</ButtonLink>
               </>
             )}
