@@ -1,3 +1,4 @@
+// src/pages/admin/form/PartColorForm.tsx
 import React, { useMemo, useRef, useState } from "react";
 import { uploadImageToR2 } from "../../../lib/r2Uploads";
 import type { Color } from "../../../types/color";
@@ -59,17 +60,14 @@ export function PartColorForm({
 }) {
   const initialPartId = (initialValues as any)?.part_id ?? initialValues?.part?.id ?? "";
   const initialColorId = (initialValues as any)?.color_id ?? initialValues?.color?.id ?? "";
-  const initialCatalogId =
-    (initialValues as any)?.catalog_item_id ??
-    (initialValues as any)?.catalog_item?.id ??
-    "";
+  const initialCatalogId = (initialValues as any)?.catalog_item_id ?? (initialValues as any)?.catalog_item?.id ?? "";
 
   const [partId, setPartId] = useState<number | "">(initialPartId || "");
   const [colorId, setColorId] = useState<number | "">(initialColorId || "");
   const [catalogId, setCatalogId] = useState<number | "">(initialCatalogId || "");
 
   const [code, setCode] = useState(initialValues?.part_color_code ?? "");
-  const [variant, setVariant] = useState(initialValues?.variant ?? "");
+  const [variant, setVariant] = useState((initialValues as any)?.variant ?? "");
   const [description, setDescription] = useState(initialValues?.description ?? "");
 
   const [img1, setImg1] = useState(initialValues?.image_url_1 ?? "");
@@ -87,17 +85,10 @@ export function PartColorForm({
   const part = useMemo(() => parts.find((p) => p.id === Number(partId)) ?? null, [parts, partId]);
   const color = useMemo(() => colors.find((c) => c.id === Number(colorId)) ?? null, [colors, colorId]);
 
-  const swatchHex = safeHex(color?.hex ?? null) ?? "#e5e7eb";
+  const swatchHex = safeHex((color as any)?.hex ?? null) ?? "#e5e7eb";
 
   const canSave = useMemo(() => {
-    return (
-      !!code.trim() &&
-      !!partId &&
-      !!colorId &&
-      !submitting &&
-      !uploading1 &&
-      !uploading2
-    );
+    return !!code.trim() && !!partId && !!colorId && !submitting && !uploading1 && !uploading2;
   }, [code, partId, colorId, submitting, uploading1, uploading2]);
 
   function resetFileInput(field: UploadField) {
@@ -154,7 +145,7 @@ export function PartColorForm({
       color_id: Number(colorId),
       part_color_code: code.trim(),
       variant: variant.trim() || undefined,
-      description: description.trim() || undefined,
+      description: String(description ?? "").trim() || undefined,
       image_url_1: img1.trim() || undefined,
       image_url_2: img2.trim() || undefined,
       catalog_item_id: catalogId === "" ? null : Number(catalogId),
@@ -199,7 +190,6 @@ export function PartColorForm({
             </label>
           </div>
 
-          {/* optional catalog attach */}
           {catalogItems ? (
             <label className="space-y-1">
               <div className={labelText}>Catalog Item (pricing)</div>
@@ -259,7 +249,7 @@ export function PartColorForm({
               <div className={labelText}>Description</div>
               <input
                 className={inputBase}
-                value={description}
+                value={String(description ?? "")}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="optional notes"
                 autoComplete="off"
@@ -349,7 +339,8 @@ function ImageField({
       <div className="mb-2 text-xs font-medium text-slate-600">{title}</div>
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-        <input className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-200 focus:border-slate-300"
+        <input
+          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-200 focus:border-slate-300"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           placeholder="https://..."
@@ -384,9 +375,7 @@ function ImageField({
       </div>
 
       {error ? (
-        <div className="mt-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-          {error}
-        </div>
+        <div className="mt-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</div>
       ) : null}
 
       <div className="mt-3">

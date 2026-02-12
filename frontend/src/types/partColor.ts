@@ -1,3 +1,4 @@
+// src/types/partColor.ts
 import type { Part } from "./part";
 import type { Color } from "./color";
 import type { CatalogItemMini } from "./catalog";
@@ -9,7 +10,9 @@ export interface PartColor {
   part: Part;
   color: Color;
 
-  variant: string; // serializer default "" so treat as string
+  // ✅ variant is optional/nullable in practice (backend default is "")
+  variant?: string | null;
+
   part_color_code: string;
 
   description?: string | null;
@@ -25,9 +28,9 @@ export interface PartColor {
  * Matches serializer write-only id fields: part_id, color_id, catalog_item_id
  */
 export interface PartColorPayload {
-  part_id: number;          // maps to Part via source="part"
-  color_id: number;         // maps to Color via source="color"
-  variant?: string;         // optional; backend default ""
+  part_id: number; // maps to Part via source="part"
+  color_id: number; // maps to Color via source="color"
+  variant?: string; // optional; backend default ""
   part_color_code: string;
   description?: string | null;
   image_url_1?: string | null;
@@ -38,10 +41,8 @@ export interface PartColorPayload {
 }
 
 /**
- * UI row type (optional)
- * If you already use PartColorRow everywhere, you can alias it:
+ * UI row type
  */
 export type PartColorRow = PartColor & {
-  // optional UI-only helpers
   thumb_url?: string | null;
 };

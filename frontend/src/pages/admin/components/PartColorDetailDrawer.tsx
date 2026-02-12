@@ -1,3 +1,4 @@
+// src/pages/admin/components/PartColorDetailDrawer.tsx
 import React, { useEffect, useMemo, useState } from "react";
 
 import { DrawerShell } from "./DrawerShell";
@@ -80,6 +81,7 @@ export function PartColorDetailDrawer({
     return m;
   }, [colors]);
 
+  // ✅ Color swatches (one "best row" per color, still)
   const swatches = useMemo(() => {
     const map = new Map<
       number,
@@ -134,18 +136,60 @@ export function PartColorDetailDrawer({
   const partLine = `${selected?.part?.part_id ?? "—"} — ${selected?.part?.name ?? "—"}`;
   const colorLine = `${selected?.color?.name ?? "—"}${selected?.variant ? ` • ${selected.variant}` : ""}`;
 
+  // ✅ NEW: variants list for the currently selected color (same part)
+  const selectedColorId = selected?.color?.id ?? null;
+
+  const variantsForSelectedColor = useMemo(() => {
+    if (!selectedColorId) return [];
+    return siblings.filter((x) => x.color?.id === selectedColorId);
+  }, [siblings, selectedColorId]);
+
+  const variantOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const out: Array<{ label: string; key: string }> = [];
+
+    for (const row of variantsForSelectedColor) {
+      const v = (row.variant ?? "").trim();
+      const key = v ? v.toLowerCase() : "__none__";
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ label: v || "(no variant)", key });
+    }
+
+    out.sort((a, b) => {
+      if (a.key === "__none__" && b.key !== "__none__") return -1;
+      if (b.key === "__none__" && a.key !== "__none__") return 1;
+      return a.label.localeCompare(b.label);
+    });
+
+    return out;
+  }, [variantsForSelectedColor]);
+
+  const selectedVariantKey = useMemo(() => {
+    const v = (selected?.variant ?? "").trim();
+    return v ? v.toLowerCase() : "__none__";
+  }, [selected]);
+
+  function pickVariant(key: string) {
+    if (!selectedColorId) return;
+
+    const match = variantsForSelectedColor.find((r) => {
+      const v = (r.variant ?? "").trim();
+      const k = v ? v.toLowerCase() : "__none__";
+      return k === key;
+    });
+
+    if (match) onSelect(match);
+  }
+
   return (
     <DrawerShell open={open} title={drawerTitle} onClose={onClose} width={980}>
       {!selected ? (
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
-          No selection.
-        </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">No selection.</div>
       ) : (
         <div className="space-y-4">
           {err ? (
-            <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {err}
-            </div>
+            <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{err}</div>
           ) : null}
 
           <div className={cx(card, "p-4")}>
@@ -211,6 +255,7 @@ export function PartColorDetailDrawer({
             </div>
           </div>
 
+          {/* ✅ Choose a color */}
           {swatches.length > 0 ? (
             <div className={cx(card, "p-3 sm:p-4")}>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -253,7 +298,12 @@ export function PartColorDetailDrawer({
                         style={{ background: s.hex ?? "#e5e7eb" }}
                       />
                       <span className="min-w-0 flex-1">
-                        <span className={cx("block text-xs font-extrabold truncate", active ? "text-slate-900" : "text-slate-800")}>
+                        <span
+                          className={cx(
+                            "block text-xs font-extrabold truncate",
+                            active ? "text-slate-900" : "text-slate-800"
+                          )}
+                        >
                           {s.name}
                         </span>
                       </span>
@@ -269,13 +319,39 @@ export function PartColorDetailDrawer({
             </div>
           ) : null}
 
-          <CatalogMiniEditor
-            selected={selected}
-            saving={saving}
-            setSaving={setSaving}
-            setErr={setErr}
-            onPatched={onPatched}
-          />
+          {/* ✅ NEW: Variant picker for selected color */}
+          {variantOptions.length > 0 ? (
+            <div className={cx(card, "p-3 sm:p-4")}>
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-xs font-black text-slate-600">Variants</div>
+                <div className="text-xs text-slate-500 font-semibold">{variantOptions.length} options</div>
+              </div>
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                {variantOptions.map((v) => {
+                  const active = v.key === selectedVariantKey;
+                  return (
+                    <button
+                      key={v.key}
+                      type="button"
+                      onClick={() => pickVariant(v.key)}
+                      className={cx(
+                        "rounded-full border px-3 py-1.5 text-xs font-extrabold",
+                        active
+                          ? "border-slate-900 bg-slate-900 text-white"
+                          : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                      )}
+                      title={`Switch to ${v.label}`}
+                    >
+                      {v.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+
+          <CatalogMiniEditor selected={selected} saving={saving} setSaving={setSaving} setErr={setErr} onPatched={onPatched} />
 
           {editing ? (
             <div className={cx(card, "p-4")}>
