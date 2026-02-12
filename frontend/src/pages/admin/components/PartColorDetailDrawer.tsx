@@ -7,7 +7,7 @@ import { RowThumb } from "./Thumbs";
 import { PartColorForm } from "../form/PartColorForm";
 import { CatalogMiniEditor } from "./CatalogMiniEditor";
 
-import { cx, card, btnPrimary, btnDanger, inputBase } from "../utils/ui";
+import { cx, card, btnPrimary, btnDanger, btnBase, inputBase } from "../utils/ui";
 
 import type { PartColorRow } from "../../../types/partColor";
 import type { CatalogItemMini } from "../../../types/catalog";
@@ -19,6 +19,44 @@ function safeHex(hex?: string | null) {
   const h = String(hex).trim();
   if (!h) return null;
   return h.startsWith("#") ? h : `#${h}`;
+}
+
+function fmtMoney(v: unknown) {
+  const n = typeof v === "number" ? v : v == null ? null : Number(v);
+  if (n == null || Number.isNaN(n)) return null;
+  return `$${n.toFixed(2)}`;
+}
+
+async function copyToClipboard(text: string) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    // fallback
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      return ok;
+    } catch {
+      return false;
+    }
+  }
+}
+
+function pillClass(active: boolean) {
+  return cx(
+    "rounded-full border px-3 py-1.5 text-xs font-extrabold",
+    active
+      ? "border-slate-900 bg-slate-900 text-white"
+      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+  );
 }
 
 export function PartColorDetailDrawer({
@@ -60,10 +98,20 @@ export function PartColorDetailDrawer({
   onPatched: (pc: PartColorRow) => void;
 }) {
   const [colorQ, setColorQ] = useState("");
+  const [copied, setCopied] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!open) setColorQ("");
+    if (!open) {
+      setColorQ("");
+      setCopied(null);
+    }
   }, [open]);
+
+  useEffect(() => {
+    if (!copied) return;
+    const t = setTimeout(() => setCopied(null), 1200);
+    return () => clearTimeout(t);
+  }, [copied]);
 
   const partPk = selected?.part?.id;
 
@@ -81,7 +129,7 @@ export function PartColorDetailDrawer({
     return m;
   }, [colors]);
 
-  // ✅ Color swatches (one "best row" per color, still)
+  // One "best" row per color for swatches (still fine)
   const swatches = useMemo(() => {
     const map = new Map<
       number,
@@ -91,8 +139,8 @@ export function PartColorDetailDrawer({
     const score = (r: PartColorRow) => {
       let s = 0;
       if (r.thumb_url || r.image_url_1 || r.image_url_2) s += 10;
-      if (!r.variant) s += 2;
-      if (r.part_color_code) s += 1;
+      if (!(r.variant ?? "").trim()) s += 2;
+      if ((r.part_color_code ?? "").trim()) s += 1;
       return s;
     };
 
@@ -125,18 +173,20 @@ export function PartColorDetailDrawer({
     return swatches.filter((s) => (s.name ?? "").toLowerCase().includes(qq));
   }, [swatches, colorQ]);
 
-  const heroSrc = selected?.image_url_1 || selected?.thumb_url || selected?.image_url_2 || null;
-
   const drawerTitle = useMemo(() => {
     if (!selected?.part) return "PartColor";
     const pid = selected.part.part_id ?? "Part";
-    return `${pid} • PartColor Details`;
+    return `${pid} • PartColor`;
   }, [selected]);
 
-  const partLine = `${selected?.part?.part_id ?? "—"} — ${selected?.part?.name ?? "—"}`;
-  const colorLine = `${selected?.color?.name ?? "—"}${selected?.variant ? ` • ${selected.variant}` : ""}`;
+  const heroSrc = selected?.image_url_1 || selected?.thumb_url || selected?.image_url_2 || null;
 
-  // ✅ NEW: variants list for the currently selected color (same part)
+  // ✅ Pricing display (read-only) + "needs pricing" flag
+  const price = fmtMoney((selected as any)?.catalog_item?.base_price_override);
+  const hasPricing = (selected as any)?.catalog_item?.base_price_override != null;
+  const sku = (selected as any)?.catalog_item?.sku ?? null;
+
+  // ✅ Variant picker for currently selected color
   const selectedColorId = selected?.color?.id ?? null;
 
   const variantsForSelectedColor = useMemo(() => {
@@ -182,41 +232,158 @@ export function PartColorDetailDrawer({
     if (match) onSelect(match);
   }
 
+  async function copyPartId() {
+    const txt = selected?.part?.part_id ?? "";
+    if (!txt) return;
+    const ok = await copyToClipboard(txt);
+    setCopied(ok ? "part_id" : "copy-failed");
+  }
+
+  async function copyYourId() {
+    const txt = selected?.part_color_code ?? "";
+    if (!txt) return;
+    const ok = await copyToClipboard(txt);
+    setCopied(ok ? "pc_id" : "copy-failed");
+  }
+
+  async function copySku() {
+    const txt = sku ?? "";
+    if (!txt) return;
+    const ok = await copyToClipboard(txt);
+    setCopied(ok ? "sku" : "copy-failed");
+  }
+
   return (
     <DrawerShell open={open} title={drawerTitle} onClose={onClose} width={980}>
       {!selected ? (
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">No selection.</div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
+          No selection.
+        </div>
       ) : (
         <div className="space-y-4">
           {err ? (
-            <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{err}</div>
+            <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {err}
+            </div>
           ) : null}
 
+          {/* ✅ TOP: clean "summary" block */}
           <div className={cx(card, "p-4")}>
-            <div className="flex flex-col gap-4 lg:flex-row">
-              <div className="w-full lg:w-[260px]">
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 overflow-hidden aspect-square flex items-center justify-center">
-                  {heroSrc ? (
-                    <img
-                      src={heroSrc}
-                      alt=""
-                      className="h-full w-full object-contain"
-                      onError={(e) => ((e.currentTarget as HTMLImageElement).style.display = "none")}
-                    />
-                  ) : (
-                    <div className="text-xs text-slate-500 font-black">No image</div>
-                  )}
-                </div>
+            <div className="grid gap-4 lg:grid-cols-[260px_1fr]">
+              {/* left: hero */}
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 overflow-hidden aspect-square flex items-center justify-center">
+                {heroSrc ? (
+                  <img
+                    src={heroSrc}
+                    alt=""
+                    className="h-full w-full object-contain"
+                    onError={(e) => ((e.currentTarget as HTMLImageElement).style.display = "none")}
+                  />
+                ) : (
+                  <div className="text-xs text-slate-500 font-black">No image</div>
+                )}
               </div>
 
-              <div className="min-w-0 flex-1">
+              {/* right: info */}
+              <div className="min-w-0">
                 <div className="flex items-start gap-3">
                   <RowThumb src={selected.thumb_url || selected.image_url_1 || selected.image_url_2 || null} />
+
                   <div className="min-w-0 flex-1">
-                    <div className="text-base font-extrabold text-slate-900 truncate">{partLine}</div>
-                    <div className="mt-1 text-sm font-bold text-slate-700 truncate">{colorLine}</div>
+                    <div className="text-base font-extrabold text-slate-900 truncate">
+                      {selected.part?.part_id ?? "—"} — {selected.part?.name ?? "—"}
+                    </div>
+
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-bold text-slate-700">
+                        {selected.color?.name ?? "—"}
+                      </span>
+
+                      {(selected.variant ?? "").trim() ? (
+                        <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-xs font-extrabold text-slate-700">
+                          {selected.variant}
+                        </span>
+                      ) : (
+                        <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-xs font-bold text-slate-500">
+                          no variant
+                        </span>
+                      )}
+
+                      {/* ✅ pricing badge */}
+                      {hasPricing ? (
+                        <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-extrabold text-emerald-800">
+                          Price: {price}
+                        </span>
+                      ) : (
+                        <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-extrabold text-amber-800">
+                          Needs pricing
+                        </span>
+                      )}
+                    </div>
+
+                    {/* ✅ IDs row (copyable) */}
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2">
+                        <div className="text-[11px] font-black text-slate-500">Part ID</div>
+                        <div className="mt-0.5 flex items-center justify-between gap-2">
+                          <div className="text-sm font-extrabold text-slate-900 truncate">
+                            {selected.part?.part_id ?? "—"}
+                          </div>
+                          <button
+                            type="button"
+                            className={cx(btnBase, "h-9 px-3")}
+                            onClick={copyPartId}
+                            disabled={!selected.part?.part_id}
+                          >
+                            {copied === "part_id" ? "Copied" : "Copy"}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2">
+                        <div className="text-[11px] font-black text-slate-500">Your PartColor ID</div>
+                        <div className="mt-0.5 flex items-center justify-between gap-2">
+                          <div className="text-sm font-extrabold text-slate-900 truncate">
+                            {selected.part_color_code ?? "—"}
+                          </div>
+                          <button
+                            type="button"
+                            className={cx(btnBase, "h-9 px-3")}
+                            onClick={copyYourId}
+                            disabled={!selected.part_color_code}
+                          >
+                            {copied === "pc_id" ? "Copied" : "Copy"}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* ✅ catalog quick view */}
+                    <div className="mt-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-[11px] font-black text-slate-500">Catalog</div>
+                        {sku ? (
+                          <button type="button" className={cx(btnBase, "h-8 px-3")} onClick={copySku}>
+                            {copied === "sku" ? "Copied" : "Copy SKU"}
+                          </button>
+                        ) : null}
+                      </div>
+                      <div className="mt-1 text-sm font-semibold text-slate-800">
+                        {sku ? (
+                          <>
+                            SKU: <span className="font-extrabold">{sku}</span>{" "}
+                            <span className="text-slate-500">
+                              {price ? `• ${price}` : "• no price set"}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-slate-600">No catalog item attached</span>
+                        )}
+                      </div>
+                    </div>
                   </div>
 
+                  {/* actions */}
                   <div className="shrink-0 flex items-center gap-2">
                     <button type="button" className={btnPrimary} onClick={onToggleEdit} disabled={saving}>
                       {editing ? "Stop editing" : "Edit"}
@@ -255,18 +422,18 @@ export function PartColorDetailDrawer({
             </div>
           </div>
 
-          {/* ✅ Choose a color */}
+          {/* ✅ Mid: choose color + variants as compact chips */}
           {swatches.length > 0 ? (
             <div className={cx(card, "p-3 sm:p-4")}>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div className="text-xs font-black text-slate-600">Choose a color</div>
+                <div className="text-xs font-black text-slate-600">Switch color / variant</div>
 
                 {swatches.length >= 16 ? (
                   <input
                     className={cx(inputBase, "sm:w-[280px]")}
                     value={colorQ}
                     onChange={(e) => setColorQ(e.target.value)}
-                    placeholder="Search..."
+                    placeholder="Search colors..."
                     autoComplete="off"
                   />
                 ) : null}
@@ -275,7 +442,6 @@ export function PartColorDetailDrawer({
               <div className="mt-3 grid gap-1.5 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8">
                 {swatchesFiltered.map((s) => {
                   const active = selected.color?.id === s.colorId;
-
                   return (
                     <button
                       key={s.colorId}
@@ -316,46 +482,46 @@ export function PartColorDetailDrawer({
                   );
                 })}
               </div>
+
+              {/* variants row */}
+              {variantOptions.length > 0 ? (
+                <div className="mt-3 border-t border-slate-200 pt-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-xs font-black text-slate-600">Variants</div>
+                    <div className="text-xs text-slate-500 font-semibold">{variantOptions.length}</div>
+                  </div>
+
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {variantOptions.map((v) => (
+                      <button
+                        key={v.key}
+                        type="button"
+                        onClick={() => pickVariant(v.key)}
+                        className={pillClass(v.key === selectedVariantKey)}
+                        title={`Switch to ${v.label}`}
+                      >
+                        {v.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
           ) : null}
 
-          {/* ✅ NEW: Variant picker for selected color */}
-          {variantOptions.length > 0 ? (
-            <div className={cx(card, "p-3 sm:p-4")}>
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-xs font-black text-slate-600">Variants</div>
-                <div className="text-xs text-slate-500 font-semibold">{variantOptions.length} options</div>
-              </div>
-
-              <div className="mt-3 flex flex-wrap gap-2">
-                {variantOptions.map((v) => {
-                  const active = v.key === selectedVariantKey;
-                  return (
-                    <button
-                      key={v.key}
-                      type="button"
-                      onClick={() => pickVariant(v.key)}
-                      className={cx(
-                        "rounded-full border px-3 py-1.5 text-xs font-extrabold",
-                        active
-                          ? "border-slate-900 bg-slate-900 text-white"
-                          : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                      )}
-                      title={`Switch to ${v.label}`}
-                    >
-                      {v.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ) : null}
-
+          {/* ✅ Pricing editor (keep as-is, but now price is visible above too) */}
           <CatalogMiniEditor selected={selected} saving={saving} setSaving={setSaving} setErr={setErr} onPatched={onPatched} />
 
+          {/* ✅ Edit form collapses neatly */}
           {editing ? (
             <div className={cx(card, "p-4")}>
-              <div className="mb-3 text-xs font-black text-slate-600">Edit this PartColor</div>
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div className="text-xs font-black text-slate-600">Edit this PartColor</div>
+                <div className="text-xs text-slate-500 font-semibold">
+                  {saving ? "Saving…" : "Ready"}
+                </div>
+              </div>
+
               <PartColorForm
                 parts={parts}
                 colors={colors}
