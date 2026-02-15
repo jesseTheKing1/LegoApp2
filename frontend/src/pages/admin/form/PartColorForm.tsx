@@ -1,10 +1,14 @@
 // src/pages/admin/form/PartColorForm.tsx
 import React, { useMemo, useRef, useState } from "react";
 import { uploadImageToR2 } from "../../../lib/r2Uploads";
+
 import type { Color } from "../../../types/color";
 import type { Part } from "../../../types/part";
 import type { CatalogItemMini } from "../../../types/catalog";
 import type { PartColorRow } from "../../../types/partColor";
+
+import { PartPicker } from "../components/PartPicker";
+import { cx, inputBase, btnBase } from "../utils/ui";
 
 type UploadField = "img1" | "img2";
 
@@ -24,15 +28,23 @@ function formatErr(e: any) {
   );
 }
 
-const inputBase =
-  "w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none " +
-  "focus:ring-2 focus:ring-slate-200 focus:border-slate-300";
-
 const selectBase =
   "w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none " +
   "focus:ring-2 focus:ring-slate-200 focus:border-slate-300";
 
 const labelText = "text-xs font-medium text-slate-600";
+
+function normalize(s: unknown) {
+  return String(s ?? "").trim();
+}
+
+function moneyLabel(ci: CatalogItemMini) {
+  const v = (ci as any)?.base_price_override;
+  if (v == null) return "";
+  const n = typeof v === "number" ? v : Number(v);
+  if (Number.isNaN(n)) return "";
+  return ` — $${n}`;
+}
 
 export function PartColorForm({
   parts,
@@ -44,7 +56,7 @@ export function PartColorForm({
 }: {
   parts: Part[];
   colors: Color[];
-  catalogItems?: CatalogItemMini[]; // optional so you can reuse form elsewhere
+  catalogItems?: CatalogItemMini[];
   initialValues?: Partial<PartColorRow>;
   submitting?: boolean;
   onSubmit: (payload: {
@@ -58,37 +70,47 @@ export function PartColorForm({
     catalog_item_id?: number | null;
   }) => Promise<void> | void;
 }) {
+  // ---- initial ids (supports both nested read objects and write ids) ----
   const initialPartId = (initialValues as any)?.part_id ?? initialValues?.part?.id ?? "";
   const initialColorId = (initialValues as any)?.color_id ?? initialValues?.color?.id ?? "";
   const initialCatalogId = (initialValues as any)?.catalog_item_id ?? (initialValues as any)?.catalog_item?.id ?? "";
 
+  // ---- form state ----
   const [partId, setPartId] = useState<number | "">(initialPartId || "");
   const [colorId, setColorId] = useState<number | "">(initialColorId || "");
   const [catalogId, setCatalogId] = useState<number | "">(initialCatalogId || "");
 
-  const [code, setCode] = useState(initialValues?.part_color_code ?? "");
-  const [variant, setVariant] = useState((initialValues as any)?.variant ?? "");
-  const [description, setDescription] = useState(initialValues?.description ?? "");
+  const [code, setCode] = useState(normalize(initialValues?.part_color_code ?? ""));
+  const [variant, setVariant] = useState(normalize((initialValues as any)?.variant ?? ""));
+  const [description, setDescription] = useState(normalize(initialValues?.description ?? ""));
 
-  const [img1, setImg1] = useState(initialValues?.image_url_1 ?? "");
-  const [img2, setImg2] = useState(initialValues?.image_url_2 ?? "");
+  const [img1, setImg1] = useState(normalize(initialValues?.image_url_1 ?? ""));
+  const [img2, setImg2] = useState(normalize(initialValues?.image_url_2 ?? ""));
 
+  // ---- upload state ----
   const [uploading1, setUploading1] = useState(false);
   const [uploading2, setUploading2] = useState(false);
-
   const [uploadErr1, setUploadErr1] = useState<string | null>(null);
   const [uploadErr2, setUploadErr2] = useState<string | null>(null);
 
   const fileRef1 = useRef<HTMLInputElement | null>(null);
   const fileRef2 = useRef<HTMLInputElement | null>(null);
 
+  // ---- lookups ----
   const part = useMemo(() => parts.find((p) => p.id === Number(partId)) ?? null, [parts, partId]);
   const color = useMemo(() => colors.find((c) => c.id === Number(colorId)) ?? null, [colors, colorId]);
-
   const swatchHex = safeHex((color as any)?.hex ?? null) ?? "#e5e7eb";
 
+  // ---- validations ----
   const canSave = useMemo(() => {
-    return !!code.trim() && !!partId && !!colorId && !submitting && !uploading1 && !uploading2;
+    return (
+      !!code.trim() &&
+      !!partId &&
+      !!colorId &&
+      !submitting &&
+      !uploading1 &&
+      !uploading2
+    );
   }, [code, partId, colorId, submitting, uploading1, uploading2]);
 
   function resetFileInput(field: UploadField) {
@@ -145,7 +167,7 @@ export function PartColorForm({
       color_id: Number(colorId),
       part_color_code: code.trim(),
       variant: variant.trim() || undefined,
-      description: String(description ?? "").trim() || undefined,
+      description: description.trim() || undefined,
       image_url_1: img1.trim() || undefined,
       image_url_2: img2.trim() || undefined,
       catalog_item_id: catalogId === "" ? null : Number(catalogId),
@@ -156,21 +178,17 @@ export function PartColorForm({
     <form onSubmit={submit} className="space-y-3">
       <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="p-4 sm:p-5 space-y-4">
+          {/* Part + Color */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label className="space-y-1">
               <div className={labelText}>Part</div>
-              <select
-                className={selectBase}
+              <PartPicker
+                parts={parts}
                 value={partId}
-                onChange={(e) => setPartId(e.target.value ? Number(e.target.value) : "")}
-              >
-                <option value="">Select part…</option>
-                {parts.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.part_id} — {p.name}
-                  </option>
-                ))}
-              </select>
+                onChange={setPartId}
+                disabled={!!submitting}
+                placeholder="Search part… (3001, brick, plate, category)"
+              />
             </label>
 
             <label className="space-y-1">
@@ -179,6 +197,7 @@ export function PartColorForm({
                 className={selectBase}
                 value={colorId}
                 onChange={(e) => setColorId(e.target.value ? Number(e.target.value) : "")}
+                disabled={!!submitting}
               >
                 <option value="">Select color…</option>
                 {colors.map((c) => (
@@ -190,6 +209,7 @@ export function PartColorForm({
             </label>
           </div>
 
+          {/* Catalog attach */}
           {catalogItems ? (
             <label className="space-y-1">
               <div className={labelText}>Catalog Item (pricing)</div>
@@ -197,21 +217,23 @@ export function PartColorForm({
                 className={selectBase}
                 value={catalogId}
                 onChange={(e) => setCatalogId(e.target.value ? Number(e.target.value) : "")}
+                disabled={!!submitting}
               >
                 <option value="">None</option>
                 {catalogItems.map((ci) => (
                   <option key={ci.id} value={ci.id}>
                     {ci.sku}
-                    {ci.base_price_override != null ? ` — $${ci.base_price_override}` : ""}
+                    {moneyLabel(ci)}
                   </option>
                 ))}
               </select>
               <div className="text-[11px] text-slate-500 font-semibold">
-                You can attach an existing pricing record here, or create one from the detail drawer.
+                Attach an existing pricing record here, or create one from the detail drawer.
               </div>
             </label>
           ) : null}
 
+          {/* Preview */}
           <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
             <div className="h-8 w-8 rounded-xl border border-slate-200 shadow-sm" style={{ background: swatchHex }} />
             <div className="min-w-0">
@@ -222,6 +244,7 @@ export function PartColorForm({
             </div>
           </div>
 
+          {/* ID */}
           <label className="space-y-1">
             <div className={labelText}>Your PartColor ID</div>
             <input
@@ -230,9 +253,14 @@ export function PartColorForm({
               onChange={(e) => setCode(e.target.value)}
               placeholder="3001-black-plain"
               autoComplete="off"
+              disabled={!!submitting}
             />
+            <div className="text-[11px] text-slate-500 font-semibold">
+              Use a stable ID you can search later (ex: shape-color-variant).
+            </div>
           </label>
 
+          {/* Variant + Description */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label className="space-y-1">
               <div className={labelText}>Variant</div>
@@ -242,21 +270,27 @@ export function PartColorForm({
                 onChange={(e) => setVariant(e.target.value)}
                 placeholder="printed / pearl / etc."
                 autoComplete="off"
+                disabled={!!submitting}
               />
+              <div className="text-[11px] text-slate-500 font-semibold">
+                Optional. Leave blank for the “default” version of this color.
+              </div>
             </label>
 
             <label className="space-y-1">
               <div className={labelText}>Description</div>
               <input
                 className={inputBase}
-                value={String(description ?? "")}
+                value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="optional notes"
                 autoComplete="off"
+                disabled={!!submitting}
               />
             </label>
           </div>
 
+          {/* Images */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <ImageField
               title="Image URL 1"
@@ -266,6 +300,7 @@ export function PartColorForm({
               error={uploadErr1}
               onPickClick={() => fileRef1.current?.click()}
               onClear={() => setImg1("")}
+              disabled={!!submitting}
             />
             <input
               ref={fileRef1}
@@ -286,6 +321,7 @@ export function PartColorForm({
               error={uploadErr2}
               onPickClick={() => fileRef2.current?.click()}
               onClear={() => setImg2("")}
+              disabled={!!submitting}
             />
             <input
               ref={fileRef2}
@@ -301,18 +337,24 @@ export function PartColorForm({
         </div>
       </div>
 
-      <button
-        type="submit"
-        disabled={!canSave}
-        className={[
-          "w-full rounded-xl px-4 py-3 text-sm font-semibold text-white shadow-sm",
-          "bg-slate-900 hover:bg-slate-800 active:bg-slate-950",
-          "disabled:opacity-50 disabled:cursor-not-allowed",
-          "sm:w-auto sm:min-w-[180px]",
-        ].join(" ")}
-      >
-        {submitting ? "Saving…" : "Save"}
-      </button>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="text-[11px] text-slate-500 font-semibold">
+          {uploading1 || uploading2 ? "Uploading…" : " "}
+        </div>
+
+        <button
+          type="submit"
+          disabled={!canSave}
+          className={[
+            "w-full rounded-xl px-4 py-3 text-sm font-semibold text-white shadow-sm",
+            "bg-slate-900 hover:bg-slate-800 active:bg-slate-950",
+            "disabled:opacity-50 disabled:cursor-not-allowed",
+            "sm:w-auto sm:min-w-[180px]",
+          ].join(" ")}
+        >
+          {submitting ? "Saving…" : "Save"}
+        </button>
+      </div>
     </form>
   );
 }
@@ -325,6 +367,7 @@ function ImageField({
   error,
   onPickClick,
   onClear,
+  disabled,
 }: {
   title: string;
   url: string;
@@ -333,49 +376,52 @@ function ImageField({
   error: string | null;
   onPickClick: () => void;
   onClear: () => void;
+  disabled?: boolean;
 }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-      <div className="mb-2 text-xs font-medium text-slate-600">{title}</div>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="text-xs font-medium text-slate-600">{title}</div>
+        {url ? (
+          <button
+            type="button"
+            onClick={onClear}
+            disabled={disabled || uploading}
+            className={cx(btnBase, "h-8 px-3")}
+          >
+            Clear
+          </button>
+        ) : null}
+      </div>
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <input
-          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-200 focus:border-slate-300"
+          className={inputBase}
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           placeholder="https://..."
           autoComplete="off"
+          disabled={disabled || uploading}
         />
 
         <button
           type="button"
           onClick={onPickClick}
-          disabled={uploading}
-          className={[
+          disabled={disabled || uploading}
+          className={cx(
             "rounded-xl px-3 py-2 text-sm font-semibold shadow-sm",
             "border border-slate-200 bg-white text-slate-900 hover:bg-slate-50",
-            "disabled:opacity-60 disabled:cursor-not-allowed",
-          ].join(" ")}
+            "disabled:opacity-60 disabled:cursor-not-allowed"
+          )}
         >
           {uploading ? "Uploading…" : "Upload"}
-        </button>
-
-        <button
-          type="button"
-          onClick={onClear}
-          disabled={!url || uploading}
-          className={[
-            "rounded-xl px-3 py-2 text-sm font-semibold shadow-sm",
-            "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
-            "disabled:opacity-60 disabled:cursor-not-allowed",
-          ].join(" ")}
-        >
-          Clear
         </button>
       </div>
 
       {error ? (
-        <div className="mt-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</div>
+        <div className="mt-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+          {error}
+        </div>
       ) : null}
 
       <div className="mt-3">
