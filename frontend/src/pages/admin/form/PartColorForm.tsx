@@ -180,16 +180,16 @@ export function PartColorForm({
         <div className="p-4 sm:p-5 space-y-4">
           {/* Part + Color */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <label className="space-y-1">
+            <div className="space-y-1">
               <div className={labelText}>Part</div>
               <PartPicker
                 parts={parts}
                 value={partId}
-                onChange={setPartId}
+                onChange={(v) => setPartId(v)}
                 disabled={!!submitting}
                 placeholder="Search part… (3001, brick, plate, category)"
               />
-            </label>
+            </div>
 
             <label className="space-y-1">
               <div className={labelText}>Color</div>
