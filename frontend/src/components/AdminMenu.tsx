@@ -65,12 +65,22 @@ export function AdminMenu({ compact = false }: { compact?: boolean }) {
               >
                 Part Colors <span className="text-slate-400">↗</span>
               </Link>
+
               <Link
-                          to="/admin/minifigs"
-                          className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-                        >
-                          Minifigs
-                        </Link>
+                to="/admin/themes"
+                className="flex items-center justify-between rounded-2xl px-3 py-2.5 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                onClick={close}
+              >
+                Themes <span className="text-slate-400">↗</span>
+              </Link>
+
+              <Link
+                to="/admin/minifigs"
+                className="flex items-center justify-between rounded-2xl px-3 py-2.5 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                onClick={close}
+              >
+                Minifigs <span className="text-slate-400">↗</span>
+              </Link>
             </div>
 
             <div className="my-2 h-px bg-slate-200" />

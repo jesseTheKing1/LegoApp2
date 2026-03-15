@@ -18,6 +18,7 @@ export default function CatalogAdminRoutes() {
         <Route path="colors" element={<ColorsAdminPage />} />
         <Route path="part-colors" element={<PartColorsPage />} />
         <Route path="minifigs" element={<MinifigsAdminPage />} />
+        <Route path="minifigs" element={<MinifigsAdminPage />} />
 
         {/* keep it simple */}
         <Route path="*" element={<Navigate to="parts" replace />} />

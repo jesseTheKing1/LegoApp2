@@ -17,20 +17,24 @@ export function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const loc = useLocation();
 
-  useEffect(() => setMobileOpen(false), [loc.pathname]);
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [loc.pathname]);
 
-  const isAdminRoute = loc.pathname === "/admin" || loc.pathname.startsWith("/admin/");
+  const isAdminRoute =
+    loc.pathname === "/admin" || loc.pathname.startsWith("/admin/");
 
   const userLabel = useMemo(() => {
     if (!me) return "";
     return `@${me.username}${me.is_staff ? " • Admin" : ""}`;
   }, [me]);
 
-  // lock scroll when drawer open
   useEffect(() => {
     if (!mobileOpen) return;
+
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+
     return () => {
       document.body.style.overflow = prev;
     };
@@ -39,18 +43,15 @@ export function Header() {
   const MobileDrawer = mobileOpen
     ? createPortal(
         <div className="fixed inset-0 z-[1000]">
-          {/* Backdrop */}
           <button
             className="absolute inset-0 z-0 bg-black/50"
             onClick={() => setMobileOpen(false)}
             aria-label="Close menu overlay"
           />
 
-          {/* Drawer */}
           <div
             className={cx(
               "absolute right-0 top-0 z-10 h-full w-[86vw] max-w-sm bg-white shadow-2xl pointer-events-auto",
-              // ✅ FIX: add safe-area padding + a minimum top pad for non-notch devices
               "pt-[max(12px,env(safe-area-inset-top))] pb-[env(safe-area-inset-bottom)]"
             )}
             role="dialog"
@@ -79,6 +80,7 @@ export function Header() {
                   >
                     Home
                   </Link>
+
                   <Link
                     to="/browse"
                     onClick={() => setMobileOpen(false)}
@@ -86,6 +88,7 @@ export function Header() {
                   >
                     Browse
                   </Link>
+
                   {isAdmin && (
                     <Link
                       to="/admin"
@@ -103,11 +106,13 @@ export function Header() {
                       <div className="mb-2 text-xs font-black uppercase text-slate-500">
                         Admin
                       </div>
+
                       <div className="grid gap-2">
                         {[
                           ["Parts", "/admin/parts"],
                           ["Colors", "/admin/colors"],
                           ["Part Colors", "/admin/part-colors"],
+                          ["Themes", "/admin/themes"],
                           ["Minifigs", "/admin/minifigs"],
                         ].map(([label, path]) => (
                           <Link
@@ -123,6 +128,7 @@ export function Header() {
                         <a
                           href="/dj-admin/"
                           className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold"
+                          onClick={() => setMobileOpen(false)}
                         >
                           Django admin
                         </a>
@@ -140,6 +146,7 @@ export function Header() {
                     <div className="rounded-2xl border px-4 py-3 text-sm font-semibold">
                       {userLabel}
                     </div>
+
                     <button
                       onClick={logout}
                       className="h-10 rounded-xl border px-4 text-sm font-semibold"
@@ -156,6 +163,7 @@ export function Header() {
                     >
                       Log in
                     </Link>
+
                     <Link
                       to="/register"
                       onClick={() => setMobileOpen(false)}
@@ -187,9 +195,11 @@ export function Header() {
               <Link to="/" className="px-3 py-2 font-semibold">
                 Home
               </Link>
+
               <Link to="/browse" className="px-3 py-2 font-semibold">
                 Browse
               </Link>
+
               {isAdmin && <AdminMenu />}
             </>
           ) : (
@@ -197,6 +207,7 @@ export function Header() {
               <ButtonLink to="/" size="sm">
                 ← Back
               </ButtonLink>
+
               {isAdmin && <AdminMenu compact />}
             </>
           )}
@@ -204,7 +215,10 @@ export function Header() {
           <div className="ml-2 flex items-center gap-2">
             {me ? (
               <>
-                <span className="px-3 py-1 text-xs font-semibold">{userLabel}</span>
+                <span className="px-3 py-1 text-xs font-semibold">
+                  {userLabel}
+                </span>
+
                 <Button variant="ghost" onClick={logout}>
                   Log out
                 </Button>
@@ -214,6 +228,7 @@ export function Header() {
                 <ButtonLink to="/login" variant="ghost">
                   Log in
                 </ButtonLink>
+
                 <ButtonLink to="/register">Create account</ButtonLink>
               </>
             )}
@@ -221,7 +236,7 @@ export function Header() {
         </nav>
 
         <button
-          className="sm:hidden grid h-10 w-10 place-items-center rounded-xl border"
+          className="grid h-10 w-10 place-items-center rounded-xl border sm:hidden"
           onClick={() => setMobileOpen(true)}
           aria-label="Open menu"
         >
