@@ -2,25 +2,26 @@
 import React from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 
-import PartsAdminPage from "./page/PartsAdinPage"; 
+
 import ColorsAdminPage from "./page/ColorsAdminPage";
-import PartColorsPage from "./page/PartColorsAdminPage";     
+import PartColorsPage from "./page/PartColorsAdminPage";
+import ThemesAdminPage from "./page/ThemesAdminPage";
 import MinifigsAdminPage from "./page/MinifigsAdminPage";
-  // optional rename for consistency
+import PartsAdminPage from "./page/PartsAdinPage";
+
 export default function CatalogAdminRoutes() {
   return (
     <div className="space-y-4">
       <Routes>
-        {/* ✅ when you hit /admin, go to /admin/parts */}
-        <Route index element={<Navigate to="parts" replace />} />
+        <Route index element={<Navigate to="/admin/parts" replace />} />
 
         <Route path="parts" element={<PartsAdminPage />} />
         <Route path="colors" element={<ColorsAdminPage />} />
         <Route path="part-colors" element={<PartColorsPage />} />
-        <Route path="minifigs" element={<MinifigsAdminPage />} />ß
+        <Route path="themes" element={<ThemesAdminPage />} />
+        <Route path="minifigs" element={<MinifigsAdminPage />} />
 
-        {/* keep it simple */}
-        <Route path="*" element={<Navigate to="parts" replace />} />
+        <Route path="*" element={<Navigate to="/admin/parts" replace />} />
       </Routes>
     </div>
   );
