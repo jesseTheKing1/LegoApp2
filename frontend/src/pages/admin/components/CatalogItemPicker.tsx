@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
-import api from "../api/client";
-import { ENDPOINTS } from "../api/endpoints";
-import type { CatalogLookupItem } from "../types/catalogLookup";
+import api from "../../../api/client";
+import { ENDPOINTS } from "../../../api/endpoints";
+import type { CatalogLookupItem } from "../../../types/catalogLookup";
 import { formatApiError } from "src/pages/admin/utils/errors";
 
 function cx(...c: Array<string | false | null | undefined>) {
