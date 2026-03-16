@@ -11,6 +11,8 @@ import type {
   SetMinifigRequirementPayload,
 } from "../../../types/set";
 
+import { PartColorSearchPicker } from "../components/PartColorSearchPicker";
+
 function formatErr(e: any) {
   return (
     e?.message ||
@@ -486,22 +488,14 @@ export function SetForm({
                         <div className="p-4 grid grid-cols-1 gap-4 lg:grid-cols-12">
                           <label className="space-y-1.5 lg:col-span-6">
                             <div className={labelText}>Part color</div>
-                            <select
-                              className={selectBase}
-                              value={row.part_color_id || ""}
-                              onChange={(e) =>
+                            <PartColorSearchPicker
+                              value={row.part_color_id}
+                              onChange={(id) =>
                                 patchPartRequirement(index, {
-                                  part_color_id: e.target.value ? Number(e.target.value) : 0,
+                                  part_color_id: id,
                                 })
                               }
-                            >
-                              <option value="">Select part color…</option>
-                              {partColors.map((pc) => (
-                                <option key={pc.id} value={pc.id}>
-                                  {partColorLabel(pc)}
-                                </option>
-                              ))}
-                            </select>
+                            />
                           </label>
 
                           <label className="space-y-1.5 lg:col-span-2">

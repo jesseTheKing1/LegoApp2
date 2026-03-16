@@ -35,6 +35,9 @@ export type LegoSet = {
   catalog_item?: CatalogItemMini | null;
   part_requirements?: SetPartRequirement[];
   minifig_requirements?: SetMinifigRequirement[];
+  total_part_rows?: number;
+  total_part_quantity?: number;
+  computed_parts_value?: string;
   created_at?: string;
   updated_at?: string;
 };
