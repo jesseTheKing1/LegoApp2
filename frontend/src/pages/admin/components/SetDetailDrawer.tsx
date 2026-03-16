@@ -41,12 +41,13 @@ export function SetDetailDrawer({
   onDeleted: () => void;
 }) {
   if (!selected) return null;
+  const setItem = selected;
 
   async function submit(payload: SetPayload) {
     setSaving(true);
     setErr(null);
     try {
-      const res = await api.patch(`${ENDPOINTS.sets}${selected.id}/`, payload);
+      const res = await api.patch(`${ENDPOINTS.sets}${setItem.id}/`, payload);
       onPatched(res.data as LegoSet);
     } catch (e) {
       setErr(formatApiError(e));
@@ -56,13 +57,13 @@ export function SetDetailDrawer({
   }
 
   async function remove() {
-    const ok = window.confirm(`Delete set "${selected.name}"?`);
+    const ok = window.confirm(`Delete set "${setItem.name}"?`);
     if (!ok) return;
 
     setSaving(true);
     setErr(null);
     try {
-      await api.delete(`${ENDPOINTS.sets}${selected.id}/`);
+      await api.delete(`${ENDPOINTS.sets}${setItem.id}/`);
       onDeleted();
     } catch (e) {
       setErr(formatApiError(e));
@@ -74,7 +75,7 @@ export function SetDetailDrawer({
   return (
     <DrawerShell
       open={open}
-      title={`Edit Set — ${selected.set_num}`}
+      title={`Edit Set — ${setItem.set_num}`}
       onClose={onClose}
       width={1440}
     >
@@ -101,7 +102,7 @@ export function SetDetailDrawer({
           catalogItems={catalogItems}
           partColors={partColors}
           minifigs={minifigs}
-          initialValues={selected}
+          initialValues={setItem}
           submitting={saving}
           onSubmit={submit}
         />
