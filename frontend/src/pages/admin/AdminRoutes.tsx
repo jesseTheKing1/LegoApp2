@@ -22,6 +22,7 @@ export default function CatalogAdminRoutes() {
         <Route path="colors" element={<ColorsAdminPage />} />
         <Route path="part-colors" element={<PartColorsPage />} />
         <Route path="themes" element={<ThemesAdminPage />} />
+        <Route path="sets" element={<SetsAdminPage />} />
         <Route path="minifigs" element={<MinifigsAdminPage />} />
         <Route path="inventory" element={<InventoryDashboardPage />} />
         <Route path="inventory/records" element={<InventoryRecordsPage />} />

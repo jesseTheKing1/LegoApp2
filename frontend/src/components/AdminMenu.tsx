@@ -65,6 +65,9 @@ export function AdminMenu({ compact = false }: { compact?: boolean }) {
               <Link to="/admin/minifigs" className={linkClass} onClick={close}>
                 Minifigs <span className="text-slate-400">↗</span>
               </Link>
+              <Link to="/admin/sets" className={linkClass} onClick={close}>
+                Sets <span className="text-slate-400">↗</span>
+              </Link>
             </div>
 
             <div className="my-2 h-px bg-slate-200" />

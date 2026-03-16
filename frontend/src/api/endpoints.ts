@@ -15,6 +15,8 @@ export const ENDPOINTS = {
   catalog:"/api/catalog/catalog-items/",
   catalogLookup: "/api/catalog/catalog-items/lookup/",
 
+  sets: "/api/sets/",
+  
   inventoryDashboard: "/api/inventory/dashboard/",
   inventoryLocations: "/api/inventory/locations/",
   inventoryRecords: "/api/inventory/records/",
