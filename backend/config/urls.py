@@ -9,5 +9,6 @@ urlpatterns = [
     path("api/upload/", include("core.urls")),
     path("api/catalog/", include("catalog.urls")),
     path("api/", include("minifigs.urls")),
+    path("api/inventory/", include("inventory.urls")),
 
 ]
