@@ -5,8 +5,7 @@ import type {
   InventoryRecordPayload,
 } from "../../../types/inventory";
 import type { CatalogLookupItem } from "../../../types/catalogLookup";
-import { CatalogItemPicker } from "src/components/CatalogItemPicker";
-
+import { CatalogItemPicker } from "../components/CatalogItemPicker";
 const inputBase =
   "w-full rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none focus:ring-4 focus:ring-slate-200/70";
 const selectBase = inputBase;
