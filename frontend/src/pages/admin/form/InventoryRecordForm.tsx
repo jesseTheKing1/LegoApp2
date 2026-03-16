@@ -1,10 +1,11 @@
-import React, { useState } from "react";
-import type { CatalogItemMini } from "../../../types/catalog";
+import React, { useMemo, useState } from "react";
 import type {
   InventoryLocation,
   InventoryRecord,
   InventoryRecordPayload,
 } from "../../../types/inventory";
+import type { CatalogLookupItem } from "../../../types/catalogLookup";
+import { CatalogItemPicker } from "src/components/CatalogItemPicker";
 
 const inputBase =
   "w-full rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none focus:ring-4 focus:ring-slate-200/70";
@@ -31,20 +32,37 @@ const SOURCES: InventoryRecordPayload["source_type"][] = [
 
 export function InventoryRecordForm({
   initialValues,
-  catalogItems,
   locations,
   submitting,
   onSubmit,
 }: {
   initialValues?: Partial<InventoryRecord>;
-  catalogItems: CatalogItemMini[];
   locations: InventoryLocation[];
   submitting?: boolean;
   onSubmit: (payload: InventoryRecordPayload) => Promise<void> | void;
 }) {
-  const [catalogItemId, setCatalogItemId] = useState<number | "">(
-    initialValues?.catalog_item?.id ?? ""
+  const initialLookupValue: CatalogLookupItem | null = initialValues?.catalog_item
+  ? {
+      id: initialValues.catalog_item.id,
+      sku: initialValues.catalog_item.sku,
+      product_type: "catalog",
+      display_name: initialValues.catalog_item.sku,
+      subtitle: "",
+      display_image_url: "",
+      current_price: initialValues.catalog_item.base_price_override ?? null,
+      pricing_source: initialValues.catalog_item.force_override
+        ? "forced_override"
+        : initialValues.catalog_item.base_price_override != null
+        ? "manual_override"
+        : "",
+      is_active: initialValues.catalog_item.is_active,
+    }
+  : null;
+
+  const [selectedCatalogItem, setSelectedCatalogItem] = useState<CatalogLookupItem | null>(
+    initialLookupValue
   );
+
   const [locationId, setLocationId] = useState<number | "">(
     initialValues?.location?.id ?? ""
   );
@@ -64,18 +82,21 @@ export function InventoryRecordForm({
   const [isSellable, setIsSellable] = useState(initialValues?.is_sellable ?? true);
   const [isActive, setIsActive] = useState(initialValues?.is_active ?? true);
 
-  const canSave =
-    catalogItemId !== "" &&
-    locationId !== "" &&
-    quantityReserved <= quantityOnHand &&
-    !submitting;
+  const canSave = useMemo(() => {
+    return (
+      !!selectedCatalogItem?.id &&
+      locationId !== "" &&
+      quantityReserved <= quantityOnHand &&
+      !submitting
+    );
+  }, [selectedCatalogItem, locationId, quantityReserved, quantityOnHand, submitting]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (catalogItemId === "" || locationId === "") return;
+    if (!selectedCatalogItem?.id || locationId === "") return;
 
     await onSubmit({
-      catalog_item_id: Number(catalogItemId),
+      catalog_item_id: selectedCatalogItem.id,
       location_id: Number(locationId),
       condition,
       source_type: sourceType,
@@ -93,21 +114,13 @@ export function InventoryRecordForm({
     <form onSubmit={submit} className="space-y-4">
       <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <label className="space-y-1.5 lg:col-span-2">
+          <div className="space-y-1.5 lg:col-span-2">
             <div className={labelText}>Catalog Item</div>
-            <select
-              className={selectBase}
-              value={catalogItemId}
-              onChange={(e) => setCatalogItemId(e.target.value ? Number(e.target.value) : "")}
-            >
-              <option value="">Select catalog item…</option>
-              {catalogItems.map((ci) => (
-                <option key={ci.id} value={ci.id}>
-                  {ci.sku}
-                </option>
-              ))}
-            </select>
-          </label>
+            <CatalogItemPicker
+              value={selectedCatalogItem}
+              onChange={setSelectedCatalogItem}
+            />
+          </div>
 
           <label className="space-y-1.5">
             <div className={labelText}>Location</div>
@@ -208,12 +221,20 @@ export function InventoryRecordForm({
           </label>
 
           <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-900">
-            <input type="checkbox" checked={isSellable} onChange={(e) => setIsSellable(e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={isSellable}
+              onChange={(e) => setIsSellable(e.target.checked)}
+            />
             Sellable
           </label>
 
           <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-900">
-            <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={isActive}
+              onChange={(e) => setIsActive(e.target.checked)}
+            />
             Active
           </label>
         </div>

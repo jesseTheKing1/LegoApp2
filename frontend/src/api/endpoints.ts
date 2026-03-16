@@ -13,6 +13,7 @@ export const ENDPOINTS = {
   themes: "/api/themes/",
   
   catalog:"/api/catalog/catalog-items/",
+  catalogLookup: "/api/catalog/catalog-items/lookup/",
 
   inventoryDashboard: "/api/inventory/dashboard/",
   inventoryLocations: "/api/inventory/locations/",
