@@ -40,6 +40,22 @@ export function Header() {
     };
   }, [mobileOpen]);
 
+  const publicMobileLinks = [
+    ["Home", "/"],
+    ["Browse", "/browse"],
+  ] as const;
+
+  const adminMobileLinks = [
+    ["Parts", "/admin/parts"],
+    ["Colors", "/admin/colors"],
+    ["Part Colors", "/admin/part-colors"],
+    ["Themes", "/admin/themes"],
+    ["Minifigs", "/admin/minifigs"],
+    ["Inventory Dashboard", "/admin/inventory"],
+    ["Inventory Records", "/admin/inventory/records"],
+    ["Inventory Locations", "/admin/inventory/locations"],
+  ] as const;
+
   const MobileDrawer = mobileOpen
     ? createPortal(
         <div className="fixed inset-0 z-[1000]">
@@ -61,6 +77,7 @@ export function Header() {
               <div className="text-sm font-black text-slate-900">
                 {isAdminRoute ? "Admin Menu" : "Menu"}
               </div>
+
               <button
                 className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white"
                 onClick={() => setMobileOpen(false)}
@@ -73,21 +90,16 @@ export function Header() {
             <div className="p-4">
               {!isAdminRoute ? (
                 <div className="grid gap-2">
-                  <Link
-                    to="/"
-                    onClick={() => setMobileOpen(false)}
-                    className="rounded-2xl border px-4 py-3 text-sm font-semibold"
-                  >
-                    Home
-                  </Link>
-
-                  <Link
-                    to="/browse"
-                    onClick={() => setMobileOpen(false)}
-                    className="rounded-2xl border px-4 py-3 text-sm font-semibold"
-                  >
-                    Browse
-                  </Link>
+                  {publicMobileLinks.map(([label, path]) => (
+                    <Link
+                      key={path}
+                      to={path}
+                      onClick={() => setMobileOpen(false)}
+                      className="rounded-2xl border px-4 py-3 text-sm font-semibold"
+                    >
+                      {label}
+                    </Link>
+                  ))}
 
                   {isAdmin && (
                     <Link
@@ -104,17 +116,11 @@ export function Header() {
                   {isAdmin && (
                     <div className="mt-2 rounded-3xl border bg-slate-50 p-3">
                       <div className="mb-2 text-xs font-black uppercase text-slate-500">
-                        Admin
+                        Catalog
                       </div>
 
                       <div className="grid gap-2">
-                        {[
-                          ["Parts", "/admin/parts"],
-                          ["Colors", "/admin/colors"],
-                          ["Part Colors", "/admin/part-colors"],
-                          ["Themes", "/admin/themes"],
-                          ["Minifigs", "/admin/minifigs"],
-                        ].map(([label, path]) => (
+                        {adminMobileLinks.slice(0, 5).map(([label, path]) => (
                           <Link
                             key={path}
                             to={path}
@@ -124,15 +130,36 @@ export function Header() {
                             {label}
                           </Link>
                         ))}
-
-                        <a
-                          href="/dj-admin/"
-                          className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold"
-                          onClick={() => setMobileOpen(false)}
-                        >
-                          Django admin
-                        </a>
                       </div>
+
+                      <div className="my-3 h-px bg-slate-200" />
+
+                      <div className="mb-2 text-xs font-black uppercase text-slate-500">
+                        Inventory
+                      </div>
+
+                      <div className="grid gap-2">
+                        {adminMobileLinks.slice(5).map(([label, path]) => (
+                          <Link
+                            key={path}
+                            to={path}
+                            onClick={() => setMobileOpen(false)}
+                            className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold"
+                          >
+                            {label}
+                          </Link>
+                        ))}
+                      </div>
+
+                      <div className="my-3 h-px bg-slate-200" />
+
+                      <a
+                        href="/dj-admin/"
+                        className="block rounded-2xl bg-white px-4 py-3 text-sm font-semibold"
+                        onClick={() => setMobileOpen(false)}
+                      >
+                        Django admin
+                      </a>
                     </div>
                   )}
                 </div>
@@ -189,7 +216,7 @@ export function Header() {
           <span className="hidden sm:block">LEGO Inventory</span>
         </Link>
 
-        <nav className="hidden sm:flex items-center gap-2">
+        <nav className="hidden items-center gap-2 sm:flex">
           {!isAdminRoute ? (
             <>
               <Link to="/" className="px-3 py-2 font-semibold">

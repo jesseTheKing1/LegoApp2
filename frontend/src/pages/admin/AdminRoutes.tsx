@@ -8,6 +8,9 @@ import PartColorsPage from "./page/PartColorsAdminPage";
 import ThemesAdminPage from "./page/ThemesAdminPage";
 import MinifigsAdminPage from "./page/MinifigsAdminPage";
 import PartsAdminPage from "./page/PartsAdinPage";
+import InventoryDashboardPage from "./page/InventoryDashboardPage";
+import InventoryLocationsPage from "./page/InventoryLocationsPage";
+import InventoryRecordsPage from "./page/InventoryRecordsPage";
 
 export default function CatalogAdminRoutes() {
   return (
@@ -20,6 +23,9 @@ export default function CatalogAdminRoutes() {
         <Route path="part-colors" element={<PartColorsPage />} />
         <Route path="themes" element={<ThemesAdminPage />} />
         <Route path="minifigs" element={<MinifigsAdminPage />} />
+        <Route path="inventory" element={<InventoryDashboardPage />} />
+        <Route path="inventory/records" element={<InventoryRecordsPage />} />
+        <Route path="inventory/locations" element={<InventoryLocationsPage />} />
 
         <Route path="*" element={<Navigate to="/admin/parts" replace />} />
       </Routes>

@@ -14,5 +14,9 @@ export const ENDPOINTS = {
   
   catalog:"/api/catalog/catalog-items/",
 
+  inventoryDashboard: "/api/inventory/dashboard/",
+  inventoryLocations: "/api/inventory/locations/",
+  inventoryRecords: "/api/inventory/records/",
+
   presignUpload: "/api/upload/presign/",
 };

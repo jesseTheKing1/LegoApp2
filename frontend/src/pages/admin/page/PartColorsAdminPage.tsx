@@ -1,3 +1,4 @@
+// src/pages/admin/page/PartColorsPage.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import api from "../../../api/client";
 import { ENDPOINTS } from "../../../api/endpoints";
@@ -17,6 +18,9 @@ import { PartColorDetailDrawer } from "../components/PartColorDetailDrawer";
 
 type ShapeGroup = { part: Part; rows: PartColorRow[] };
 type CategoryGroup = { category: string; shapes: ShapeGroup[] };
+
+type VariantGroup = { variantLabel: string; rows: PartColorRow[] };
+type ColorGroup = { colorId: number; colorName: string; groups: VariantGroup[] };
 
 function readStr(v: unknown) {
   return String(v ?? "").trim();
@@ -49,6 +53,52 @@ function sortRows(rows: PartColorRow[]) {
 
     return (a.variant ?? "").localeCompare(b.variant ?? "");
   });
+}
+
+// ✅ NEW: group rows within a shape by Color -> Variant
+function groupRowsByColorThenVariant(rows: PartColorRow[]): ColorGroup[] {
+  const colorMap = new Map<number, { colorName: string; variantMap: Map<string, PartColorRow[]> }>();
+
+  for (const r of rows) {
+    const cid = r.color?.id;
+    if (!cid) continue;
+
+    const cname = r.color?.name ?? "—";
+    const v = (r.variant ?? "").trim();
+    const vKey = v ? v.toLowerCase() : "__none__";
+
+    if (!colorMap.has(cid)) colorMap.set(cid, { colorName: cname, variantMap: new Map() });
+
+    const entry = colorMap.get(cid)!;
+    if (!entry.variantMap.has(vKey)) entry.variantMap.set(vKey, []);
+    entry.variantMap.get(vKey)!.push(r);
+  }
+
+  const colorGroups: ColorGroup[] = [];
+
+  for (const [colorId, entry] of colorMap.entries()) {
+    const groups: VariantGroup[] = [];
+
+    for (const [vKey, vRows] of entry.variantMap.entries()) {
+      sortRows(vRows);
+      const first = vRows[0];
+      const variantLabel =
+        vKey === "__none__" ? "(no variant)" : (first?.variant ?? "").trim() || "(no variant)";
+      groups.push({ variantLabel, rows: vRows });
+    }
+
+    // (no variant) first, then alpha
+    groups.sort((a, b) => {
+      if (a.variantLabel === "(no variant)" && b.variantLabel !== "(no variant)") return -1;
+      if (b.variantLabel === "(no variant)" && a.variantLabel !== "(no variant)") return 1;
+      return a.variantLabel.localeCompare(b.variantLabel);
+    });
+
+    colorGroups.push({ colorId, colorName: entry.colorName, groups });
+  }
+
+  colorGroups.sort((a, b) => a.colorName.localeCompare(b.colorName));
+  return colorGroups;
 }
 
 export default function PartColorsPage() {
@@ -122,7 +172,7 @@ export default function PartColorsPage() {
       shapeMap.get(pid)!.rows.push(pc);
     }
 
-    // B) sort rows inside each shape
+    // B) sort rows inside each shape (stable sorting for grouping)
     for (const sg of shapeMap.values()) sortRows(sg.rows);
 
     // C) shapes array sorted by part_id
@@ -163,7 +213,7 @@ export default function PartColorsPage() {
       catMap.get(cat)!.push(sg);
     }
 
-    // F) sort categories (Uncategorized last), shapes already sorted
+    // F) sort categories (Uncategorized last)
     const cats = Array.from(catMap.entries()).sort(([a], [b]) => {
       if (a === "Uncategorized" && b !== "Uncategorized") return 1;
       if (b === "Uncategorized" && a !== "Uncategorized") return -1;
@@ -310,9 +360,7 @@ export default function PartColorsPage() {
       </div>
 
       {err ? (
-        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {err}
-        </div>
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{err}</div>
       ) : null}
 
       <div className={card}>
@@ -384,54 +432,83 @@ export default function PartColorsPage() {
                           <div className="text-xs text-slate-500 font-semibold">{isOpen ? "hide" : "show"}</div>
                         </button>
 
-                        {/* Rows only render when shape is open */}
+                        {/* ✅ Rows render grouped by Color -> Variant */}
                         {isOpen ? (
                           <div className="border-t border-slate-200">
-                            {sg.rows.map((pc, pcIdx) => {
-                              const img = pc.thumb_url || pc.image_url_1 || pc.image_url_2 || null;
-                              const idText = pc.part_color_code ? `ID: ${pc.part_color_code}` : "ID: —";
-                              const nameText = pc.color?.name ?? "—";
-
-                              const priceBadge =
-                                pc.catalog_item && pc.catalog_item.base_price_override != null
-                                  ? `$${pc.catalog_item.base_price_override}`
-                                  : null;
-
-                              return (
-                                <button
-                                  key={pc.id}
-                                  type="button"
-                                  className={cx(
-                                    "w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-slate-50",
-                                    pcIdx === 0 ? "" : "border-t border-slate-100"
-                                  )}
-                                  onClick={() => openDetail(pc)}
-                                >
-                                  <RowThumb src={img} />
-
-                                  <div className="hidden sm:block w-[240px] text-xs font-semibold text-slate-600 truncate">
-                                    {idText}
+                            {groupRowsByColorThenVariant(sg.rows).map((cg2, cgIdx) => (
+                              <div key={cg2.colorId} className={cgIdx === 0 ? "" : "border-t border-slate-200"}>
+                                {/* Color header */}
+                                <div className="px-4 py-2 bg-slate-50 text-xs font-black text-slate-700 flex items-center justify-between">
+                                  <div className="truncate">{cg2.colorName}</div>
+                                  <div className="text-slate-500 font-semibold">
+                                    {cg2.groups.reduce((sum, g) => sum + g.rows.length, 0)} rows
                                   </div>
+                                </div>
 
-                                  <div className="min-w-0 flex-1">
-                                    <div className="text-sm font-extrabold text-slate-900 truncate">
-                                      {nameText}{" "}
-                                      {pc.variant ? (
-                                        <span className="text-slate-500 font-bold">• {pc.variant}</span>
-                                      ) : null}
+                                {/* Variant groups */}
+                                {cg2.groups.map((vg, vgIdx) => (
+                                  <div
+                                    key={`${cg2.colorId}-${vg.variantLabel}`}
+                                    className={vgIdx === 0 ? "" : "border-t border-slate-100"}
+                                  >
+                                    {cg2.groups.length > 1 ? (
+                                      <div className="px-4 py-2 text-xs font-bold text-slate-600">
+                                        {vg.variantLabel}{" "}
+                                        <span className="text-slate-400 font-semibold">({vg.rows.length})</span>
+                                      </div>
+                                    ) : null}
 
-                                      {priceBadge ? (
-                                        <span className="ml-2 inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-extrabold text-slate-700">
-                                          {priceBadge}
-                                        </span>
-                                      ) : null}
-                                    </div>
+                                    {vg.rows.map((pc, pcIdx) => {
+                                      const img = pc.thumb_url || pc.image_url_1 || pc.image_url_2 || null;
+                                      const idText = pc.part_color_code ? `ID: ${pc.part_color_code}` : "ID: —";
+                                      const nameText = pc.color?.name ?? "—";
 
-                                    <div className="sm:hidden text-xs text-slate-500 font-semibold truncate">{idText}</div>
+                                      const priceBadge =
+                                        pc.catalog_item && pc.catalog_item.base_price_override != null
+                                          ? `$${pc.catalog_item.base_price_override}`
+                                          : null;
+
+                                      return (
+                                        <button
+                                          key={pc.id}
+                                          type="button"
+                                          className={cx(
+                                            "w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-slate-50",
+                                            pcIdx === 0 ? "" : "border-t border-slate-100"
+                                          )}
+                                          onClick={() => openDetail(pc)}
+                                        >
+                                          <RowThumb src={img} />
+
+                                          <div className="hidden sm:block w-[240px] text-xs font-semibold text-slate-600 truncate">
+                                            {idText}
+                                          </div>
+
+                                          <div className="min-w-0 flex-1">
+                                            <div className="text-sm font-extrabold text-slate-900 truncate">
+                                              {nameText}{" "}
+                                              {pc.variant ? (
+                                                <span className="text-slate-500 font-bold">• {pc.variant}</span>
+                                              ) : null}
+
+                                              {priceBadge ? (
+                                                <span className="ml-2 inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-extrabold text-slate-700">
+                                                  {priceBadge}
+                                                </span>
+                                              ) : null}
+                                            </div>
+
+                                            <div className="sm:hidden text-xs text-slate-500 font-semibold truncate">
+                                              {idText}
+                                            </div>
+                                          </div>
+                                        </button>
+                                      );
+                                    })}
                                   </div>
-                                </button>
-                              );
-                            })}
+                                ))}
+                              </div>
+                            ))}
                           </div>
                         ) : null}
                       </div>
