@@ -55,6 +55,7 @@ INSTALLED_APPS = [
     'minifigs',
     'catalog',
     'inventory',
+    'sets',
 ]
 
 MIDDLEWARE = [
