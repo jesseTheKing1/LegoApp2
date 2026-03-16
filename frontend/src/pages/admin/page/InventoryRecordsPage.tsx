@@ -28,15 +28,13 @@ export default function InventoryRecordsPage() {
 
   async function loadAll() {
     setErr(null);
-    const [recordsRes, locationsRes, catalogRes] = await Promise.all([
+    const [recordsRes, locationsRes] = await Promise.all([
       api.get(ENDPOINTS.inventoryRecords),
       api.get(ENDPOINTS.inventoryLocations),
-      api.get(ENDPOINTS.catalog),
     ]);
 
     setItems(getListData<InventoryRecord>(recordsRes.data));
     setLocations(getListData<InventoryLocation>(locationsRes.data));
-    setCatalogItems(getListData<CatalogItemMini>(catalogRes.data));
   }
 
   useEffect(() => {
