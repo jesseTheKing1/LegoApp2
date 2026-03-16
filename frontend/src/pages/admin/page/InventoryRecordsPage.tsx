@@ -157,7 +157,6 @@ export default function InventoryRecordsPage() {
 
       <DrawerShell open={createOpen} title="New Inventory Record" onClose={() => setCreateOpen(false)} width={1200}>
         <InventoryRecordForm
-          catalogItems={catalogItems}
           locations={locations}
           submitting={saving}
           onSubmit={create}
@@ -176,7 +175,6 @@ export default function InventoryRecordsPage() {
         {selected ? (
           <InventoryRecordForm
             initialValues={selected}
-            catalogItems={catalogItems}
             locations={locations}
             submitting={saving}
             onSubmit={update}
