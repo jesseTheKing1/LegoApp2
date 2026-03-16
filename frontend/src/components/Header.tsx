@@ -46,15 +46,16 @@ export function Header() {
   ] as const;
 
   const adminMobileLinks = [
-    ["Parts", "/admin/parts"],
-    ["Colors", "/admin/colors"],
-    ["Part Colors", "/admin/part-colors"],
-    ["Themes", "/admin/themes"],
-    ["Minifigs", "/admin/minifigs"],
-    ["Inventory Dashboard", "/admin/inventory"],
-    ["Inventory Records", "/admin/inventory/records"],
-    ["Inventory Locations", "/admin/inventory/locations"],
-  ] as const;
+  ["Parts", "/admin/parts"],
+  ["Colors", "/admin/colors"],
+  ["Part Colors", "/admin/part-colors"],
+  ["Themes", "/admin/themes"],
+  ["Minifigs", "/admin/minifigs"],
+  ["Sets", "/admin/sets"],
+  ["Inventory Dashboard", "/admin/inventory"],
+  ["Inventory Records", "/admin/inventory/records"],
+  ["Inventory Locations", "/admin/inventory/locations"],
+] as const;
 
   const MobileDrawer = mobileOpen
     ? createPortal(
@@ -120,7 +121,7 @@ export function Header() {
                       </div>
 
                       <div className="grid gap-2">
-                        {adminMobileLinks.slice(0, 5).map(([label, path]) => (
+                        {adminMobileLinks.slice(0, 6).map(([label, path]) => (
                           <Link
                             key={path}
                             to={path}
@@ -139,7 +140,7 @@ export function Header() {
                       </div>
 
                       <div className="grid gap-2">
-                        {adminMobileLinks.slice(5).map(([label, path]) => (
+                        {adminMobileLinks.slice(6).map(([label, path]) => (
                           <Link
                             key={path}
                             to={path}
