@@ -24,12 +24,21 @@ class Set(models.Model):
         blank=True,
     )
 
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        null=True,
+        blank=True,)
+    updated_at = models.DateTimeField(
+        auto_now=True, 
+        null=True,
+        blank=True,)
+
     class Meta:
         ordering = ["set_num", "name"]
 
     def __str__(self):
-        return f"{self.set_num} - {self.name}"
-        
+        return f"{self.set_num} - {self.name}"  
+
 class SetPartRequirement(models.Model):
 
 
