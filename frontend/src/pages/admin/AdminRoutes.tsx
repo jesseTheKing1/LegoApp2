@@ -11,6 +11,7 @@ import PartsAdminPage from "./page/PartsAdinPage";
 import InventoryDashboardPage from "./page/InventoryDashboardPage";
 import InventoryLocationsPage from "./page/InventoryLocationsPage";
 import InventoryRecordsPage from "./page/InventoryRecordsPage";
+import SetsAdminPage from "./page/SetsAdminPage";
 
 export default function CatalogAdminRoutes() {
   return (
