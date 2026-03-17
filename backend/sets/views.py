@@ -8,11 +8,20 @@ from .serializers import (
 
 
 class SetViewSet(viewsets.ModelViewSet):
-    queryset = Set.objects.all()
+    queryset = (
+        Set.objects
+        .select_related("theme", "catalog_item")
+        .prefetch_related(
+            "parts",
+            "parts__part_color",
+            "parts__part_color__part",
+            "parts__part_color__color",
+            "minifigs",
+            "minifigs__minifig",
+        )
+    )
     serializer_class = SetSerializer
     lookup_field = "set_num"
-
-
 class SetPartViewSet(viewsets.ModelViewSet):
     queryset = SetPart.objects.select_related("part_color", "set")
     serializer_class = SetPartSerializer
