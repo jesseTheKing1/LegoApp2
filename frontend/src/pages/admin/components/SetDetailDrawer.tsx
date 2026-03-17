@@ -100,7 +100,6 @@ export function SetDetailDrawer({
         <SetForm
           themes={themes}
           catalogItems={catalogItems}
-          partColors={partColors}
           minifigs={minifigs}
           initialValues={setItem}
           submitting={saving}
