@@ -26,15 +26,12 @@ export function PartColorSearchPicker({
 }) {
   const [q, setQ] = useState("");
   const [results, setResults] = useState<PartColor[]>([]);
+  const [selectedItem, setSelectedItem] = useState<PartColor | null>(null);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
-  const selected = useMemo(
-    () => results.find((x) => x.id === value) ?? null,
-    [results, value]
-  );
-
+  // CLOSE DROPDOWN
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
       if (!rootRef.current) return;
@@ -42,11 +39,43 @@ export function PartColorSearchPicker({
         setOpen(false);
       }
     }
-
     document.addEventListener("mousedown", onDocClick);
     return () => document.removeEventListener("mousedown", onDocClick);
   }, []);
 
+  // FETCH SELECTED ITEM IF NOT IN RESULTS
+  useEffect(() => {
+    if (!value) {
+      setSelectedItem(null);
+      return;
+    }
+
+    const existing = results.find((x) => x.id === value);
+    if (existing) {
+      setSelectedItem(existing);
+      return;
+    }
+
+    let active = true;
+
+    async function fetchSelected() {
+      try {
+        const res = await api.get(`${ENDPOINTS.partColors}${value}/`);
+        if (!active) return;
+        setSelectedItem(res.data as PartColor);
+      } catch {
+        // fail silently
+      }
+    }
+
+    fetchSelected();
+
+    return () => {
+      active = false;
+    };
+  }, [value, results]);
+
+  // SEARCH API
   useEffect(() => {
     let active = true;
 
@@ -56,7 +85,9 @@ export function PartColorSearchPicker({
         const res = await api.get(ENDPOINTS.partColors, {
           params: q.trim() ? { q } : {},
         });
+
         if (!active) return;
+
         setResults(getListData<PartColor>(res.data).slice(0, 25));
       } finally {
         if (active) setLoading(false);
@@ -70,22 +101,27 @@ export function PartColorSearchPicker({
     };
   }, [q]);
 
+  const displayValue = useMemo(() => {
+    if (open) return q;
+    if (selectedItem) return partColorLabel(selectedItem);
+    return "";
+  }, [open, q, selectedItem]);
+
   return (
     <div className="relative" ref={rootRef}>
       <input
-        className="w-full rounded-2xl border border-slate-200/90 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-300 focus:ring-4 focus:ring-slate-200/70"
-        value={q}
+        className="w-full rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+        value={displayValue}
         onChange={(e) => {
           setQ(e.target.value);
           setOpen(true);
         }}
         onFocus={() => setOpen(true)}
-        placeholder={selected ? partColorLabel(selected) : "Search part color..."}
-        autoComplete="off"
+        placeholder="Search part color..."
       />
 
-      {open ? (
-        <div className="absolute z-50 mt-2 max-h-80 w-full overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl">
+      {open && (
+        <div className="absolute z-50 mt-2 max-h-80 w-full overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-xl">
           {loading ? (
             <div className="px-4 py-3 text-sm text-slate-500">Searching…</div>
           ) : results.length === 0 ? (
@@ -93,37 +129,43 @@ export function PartColorSearchPicker({
           ) : (
             <div className="p-2">
               {results.map((pc) => {
-                const img = pc.image_url_1 || pc.image_url_2 || pc.part?.image_url || "";
+                const img =
+                  pc.image_url_1 ||
+                  pc.image_url_2 ||
+                  pc.part?.image_url ||
+                  "";
+
                 return (
                   <button
                     key={pc.id}
                     type="button"
                     onClick={() => {
                       onChange(pc.id);
-                      setQ(partColorLabel(pc));
+                      setSelectedItem(pc);
+                      setQ("");
                       setOpen(false);
                     }}
-                    className="flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left hover:bg-slate-50"
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2 hover:bg-slate-50"
                   >
-                    <div className="h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+                    <div className="h-14 w-14 overflow-hidden rounded-xl border bg-slate-50">
                       {img ? (
-                        <img src={img} alt="" className="h-full w-full object-contain" />
+                        <img
+                          src={img}
+                          className="h-full w-full object-contain"
+                        />
                       ) : (
-                        <div className="grid h-full w-full place-items-center text-[10px] font-bold text-slate-400">
+                        <div className="grid h-full place-items-center text-xs text-slate-400">
                           No image
                         </div>
                       )}
                     </div>
 
                     <div className="min-w-0">
-                      <div className="truncate text-sm font-bold text-slate-900">
-                        {pc.part?.name || "Unnamed Part"}
+                      <div className="truncate font-semibold text-slate-900">
+                        {pc.part?.name}
                       </div>
-                      <div className="truncate text-xs font-semibold text-slate-500">
+                      <div className="text-xs text-slate-500">
                         {pc.part?.part_id} • {pc.color?.name}
-                      </div>
-                      <div className="truncate text-xs text-slate-400">
-                        {pc.part_color_code}
                       </div>
                     </div>
                   </button>
@@ -132,7 +174,7 @@ export function PartColorSearchPicker({
             </div>
           )}
         </div>
-      ) : null}
+      )}
     </div>
   );
 }
