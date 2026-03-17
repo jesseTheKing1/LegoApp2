@@ -1,23 +1,23 @@
-from rest_framework.viewsets import ModelViewSet
-from .models import Set
-from .serializers import SetSerializer
+from rest_framework import viewsets
+from .models import Set, SetPart, SetMinifig
+from .serializers import (
+    SetSerializer,
+    SetPartSerializer,
+    SetMinifigSerializer,
+)
 
 
-class SetViewSet(ModelViewSet):
-    queryset = (
-        Set.objects
-        .select_related("theme", "catalog_item")
-        .prefetch_related(
-            "part_requirements",
-            "part_requirements__part_color",
-            "part_requirements__part_color__part",
-            "part_requirements__part_color__color",
-            "part_requirements__part_color__catalog_item",
-            "minifig_requirements",
-            "minifig_requirements__minifig",
-            "minifig_requirements__minifig__theme",
-            "minifig_requirements__minifig__catalog_item",
-        )
-        .all()
-    )
+class SetViewSet(viewsets.ModelViewSet):
+    queryset = Set.objects.all()
     serializer_class = SetSerializer
+    lookup_field = "set_num"
+
+
+class SetPartViewSet(viewsets.ModelViewSet):
+    queryset = SetPart.objects.select_related("part_color", "set")
+    serializer_class = SetPartSerializer
+
+
+class SetMinifigViewSet(viewsets.ModelViewSet):
+    queryset = SetMinifig.objects.select_related("minifig", "set")
+    serializer_class = SetMinifigSerializer

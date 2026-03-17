@@ -14,7 +14,7 @@ class Set(models.Model):
         blank=True,
     )
 
-    piece_count = models.PositiveIntegerField(default=0)
+    official_piece_count = models.PositiveIntegerField(default=0)
 
     catalog_item = models.OneToOneField(
         "catalog.CatalogItem",
@@ -24,34 +24,27 @@ class Set(models.Model):
         blank=True,
     )
 
-    created_at = models.DateTimeField(
-        auto_now_add=True,
-        null=True,
-        blank=True,)
-    updated_at = models.DateTimeField(
-        auto_now=True, 
-        null=True,
-        blank=True,)
+    created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
 
     class Meta:
         ordering = ["set_num", "name"]
 
     def __str__(self):
-        return f"{self.set_num} - {self.name}"  
-
-class SetPartRequirement(models.Model):
+        return f"{self.set_num} - {self.name}"
 
 
+class SetPart(models.Model):
     set = models.ForeignKey(
         Set,
         on_delete=models.CASCADE,
-        related_name="part_requirements",
+        related_name="parts",
     )
 
     part_color = models.ForeignKey(
         "parts.PartColor",
         on_delete=models.PROTECT,
-        related_name="set_part_requirements",
+        related_name="set_parts",
     )
 
     quantity = models.PositiveIntegerField(default=1)
@@ -59,10 +52,10 @@ class SetPartRequirement(models.Model):
     instruction_page = models.PositiveIntegerField(null=True, blank=True)
     sort_order = models.PositiveIntegerField(default=0)
 
+    bag_number = models.CharField(max_length=20, blank=True)
+
     is_visible = models.BooleanField(default=True)
     is_structural = models.BooleanField(default=False)
-    is_exact_color_required = models.BooleanField(default=True)
-    is_required = models.BooleanField(default=True)
 
     notes = models.CharField(max_length=200, blank=True)
 
@@ -71,31 +64,31 @@ class SetPartRequirement(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=["set", "part_color", "instruction_page", "sort_order"],
-                name="uniq_set_part_requirement_row"
+                name="uniq_set_part_row",
             )
         ]
 
     def __str__(self):
-        return f"{self.set.name} → {self.part_color} x{self.quantity}"  
+        return f"{self.set.name} → {self.part_color} x{self.quantity}"
 
-class SetMinifigRequirement(models.Model):
+
+class SetMinifig(models.Model):
     set = models.ForeignKey(
         Set,
         on_delete=models.CASCADE,
-        related_name="minifig_requirements",
+        related_name="minifigs",
     )
 
     minifig = models.ForeignKey(
         "minifigs.Minifig",
         on_delete=models.PROTECT,
-        related_name="set_minifig_requirements",
+        related_name="set_entries",
     )
 
     quantity = models.PositiveIntegerField(default=1)
     sort_order = models.PositiveIntegerField(default=0)
 
-    is_required = models.BooleanField(default=True)
-    is_exact_required = models.BooleanField(default=True)
+    bag_number = models.CharField(max_length=20, blank=True)
 
     notes = models.CharField(max_length=200, blank=True)
 
@@ -104,7 +97,7 @@ class SetMinifigRequirement(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=["set", "minifig", "sort_order"],
-                name="uniq_set_minifig_requirement_row"
+                name="uniq_set_minifig_row",
             )
         ]
 
