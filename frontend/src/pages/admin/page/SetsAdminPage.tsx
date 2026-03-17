@@ -82,8 +82,8 @@ export default function SetsAdminPage() {
 
   const stats = useMemo(() => {
     const withPrice = items.filter((x) => x.catalog_item?.base_price_override != null).length;
-    const withParts = items.filter((x) => (x.part_requirements?.length ?? 0) > 0).length;
-    const withMinifigs = items.filter((x) => (x.minifig_requirements?.length ?? 0) > 0).length;
+    const withParts = items.filter((x) => (x.parts?.length ?? 0) > 0).length;
+    const withMinifigs = items.filter((x) => (x.minifigs?.length ?? 0) > 0).length;
     const withoutTheme = items.filter((x) => !x.theme?.id).length;
 
     return {
@@ -216,8 +216,8 @@ export default function SetsAdminPage() {
                     ? `$${item.catalog_item.base_price_override}`
                     : null;
 
-                const partCount = item.part_requirements?.length ?? 0;
-                const minifigCount = item.minifig_requirements?.length ?? 0;
+                const partCount = item.parts?.length ?? 0;
+                const minifigCount = item.minifigs?.length ?? 0;
 
                 return (
                   <button
@@ -264,7 +264,7 @@ export default function SetsAdminPage() {
                         </span>
 
                         <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] font-bold text-slate-700">
-                          {item.piece_count || 0} pieces
+                          {item.official_piece_count || 0} pieces
                         </span>
 
                         <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] font-bold text-slate-700">
@@ -297,7 +297,6 @@ export default function SetsAdminPage() {
         <SetForm
           themes={themes}
           catalogItems={catalogItems}
-          partColors={partColors}
           minifigs={minifigs}
           submitting={saving}
           onSubmit={create}
