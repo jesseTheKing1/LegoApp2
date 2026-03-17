@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from "react";
 import type { CatalogItemMini } from "../../../types/catalog";
 import type { Theme, Minifig } from "../../../types/minifig";
-import type { PartColor } from "../../../types/partColor";
 import type {
   LegoSet,
   SetPayload,
@@ -10,6 +9,18 @@ import type {
 } from "../../../types/set";
 
 import { PartColorSearchPicker } from "../components/PartColorSearchPicker";
+
+type PartRow = SetPartPayload & {
+  _rowId: string;
+};
+
+type MinifigRow = SetMinifigPayload & {
+  _rowId: string;
+};
+
+function makeRowId(prefix: string) {
+  return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
+}
 
 export function SetForm({
   themes,
@@ -41,8 +52,9 @@ export function SetForm({
     initialValues?.catalog_item?.id ?? ""
   );
 
-  const [parts, setParts] = useState<SetPartPayload[]>(
+  const [parts, setParts] = useState<PartRow[]>(
     (initialValues?.parts ?? []).map((row, i) => ({
+      _rowId: makeRowId(`part-${i}`),
       part_color_id: row.part_color.id,
       quantity: row.quantity,
       instruction_page: row.instruction_page,
@@ -54,8 +66,9 @@ export function SetForm({
     }))
   );
 
-  const [minifigsState, setMinifigs] = useState<SetMinifigPayload[]>(
+  const [minifigsState, setMinifigs] = useState<MinifigRow[]>(
     (initialValues?.minifigs ?? []).map((row, i) => ({
+      _rowId: makeRowId(`minifig-${i}`),
       minifig_id: row.minifig.id,
       quantity: row.quantity,
       sort_order: row.sort_order ?? i,
@@ -68,12 +81,22 @@ export function SetForm({
     return !!setNum.trim() && !!name.trim() && !submitting;
   }, [setNum, name, submitting]);
 
-  // ---------- PARTS ----------
+  const totalPartQty = useMemo(() => {
+    return parts.reduce((sum, row) => sum + (Number(row.quantity) || 0), 0);
+  }, [parts]);
+
+  const totalMinifigQty = useMemo(() => {
+    return minifigsState.reduce(
+      (sum, row) => sum + (Number(row.quantity) || 0),
+      0
+    );
+  }, [minifigsState]);
 
   function addPart() {
     setParts((prev) => [
       ...prev,
       {
+        _rowId: makeRowId("part"),
         part_color_id: 0,
         quantity: 1,
         instruction_page: null,
@@ -86,22 +109,21 @@ export function SetForm({
     ]);
   }
 
-  function updatePart(i: number, patch: Partial<SetPartPayload>) {
+  function updatePart(rowId: string, patch: Partial<PartRow>) {
     setParts((prev) =>
-      prev.map((row, idx) => (idx === i ? { ...row, ...patch } : row))
+      prev.map((row) => (row._rowId === rowId ? { ...row, ...patch } : row))
     );
   }
 
-  function removePart(i: number) {
-    setParts((prev) => prev.filter((_, idx) => idx !== i));
+  function removePart(rowId: string) {
+    setParts((prev) => prev.filter((row) => row._rowId !== rowId));
   }
-
-  // ---------- MINIFIGS ----------
 
   function addMinifig() {
     setMinifigs((prev) => [
       ...prev,
       {
+        _rowId: makeRowId("minifig"),
         minifig_id: 0,
         quantity: 1,
         sort_order: prev.length,
@@ -111,17 +133,15 @@ export function SetForm({
     ]);
   }
 
-  function updateMinifig(i: number, patch: Partial<SetMinifigPayload>) {
+  function updateMinifig(rowId: string, patch: Partial<MinifigRow>) {
     setMinifigs((prev) =>
-      prev.map((row, idx) => (idx === i ? { ...row, ...patch } : row))
+      prev.map((row) => (row._rowId === rowId ? { ...row, ...patch } : row))
     );
   }
 
-  function removeMinifig(i: number) {
-    setMinifigs((prev) => prev.filter((_, idx) => idx !== i));
+  function removeMinifig(rowId: string) {
+    setMinifigs((prev) => prev.filter((row) => row._rowId !== rowId));
   }
-
-  // ---------- SUBMIT ----------
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -129,21 +149,21 @@ export function SetForm({
     const payload: SetPayload = {
       set_num: setNum.trim(),
       name: name.trim(),
-      image_url: imageUrl || undefined,
-      official_piece_count: pieceCount,
+      image_url: imageUrl.trim() || undefined,
+      official_piece_count: Number(pieceCount) || 0,
       theme_id: themeId || null,
       catalog_item_id: catalogId || null,
 
       parts: parts
         .filter((p) => p.part_color_id)
-        .map((p, i) => ({
+        .map(({ _rowId, ...p }, i) => ({
           ...p,
           sort_order: i,
         })),
 
       minifigs: minifigsState
         .filter((m) => m.minifig_id)
-        .map((m, i) => ({
+        .map(({ _rowId, ...m }, i) => ({
           ...m,
           sort_order: i,
         })),
@@ -152,134 +172,470 @@ export function SetForm({
     await onSubmit(payload);
   }
 
-  // ---------- UI ----------
-
   return (
     <form onSubmit={submit} className="space-y-6">
-      {/* BASIC INFO */}
-      <div>
-        <input
-          value={setNum}
-          onChange={(e) => setSetNum(e.target.value)}
-          placeholder="Set Number"
-        />
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Set Name"
-        />
-        <input
-          type="number"
-          value={pieceCount}
-          onChange={(e) => setPieceCount(Number(e.target.value))}
-          placeholder="Piece Count"
-        />
-      </div>
+      {/* Header Summary */}
+      <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white px-6 py-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h2 className="text-xl font-bold tracking-tight text-slate-900">
+                Set Details
+              </h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Manage set info, included parts, and minifigs.
+              </p>
+            </div>
 
-      {/* PARTS */}
-      <div>
-        <h3>Parts</h3>
-        <button type="button" onClick={addPart}>
-          + Add Part
-        </button>
-
-        {parts.map((row, i) => (
-          <div key={i}>
-            <PartColorSearchPicker
-              value={row.part_color_id}
-              onChange={(id) => updatePart(i, { part_color_id: id })}
-            />
-
-            <input
-              type="number"
-              value={row.quantity}
-              onChange={(e) =>
-                updatePart(i, { quantity: Number(e.target.value) })
-              }
-            />
-
-            <input
-              placeholder="Bag"
-              value={row.bag_number}
-              onChange={(e) =>
-                updatePart(i, { bag_number: e.target.value })
-              }
-            />
-
-            <label>
-              Visible
-              <input
-                type="checkbox"
-                checked={row.is_visible}
-                onChange={(e) =>
-                  updatePart(i, { is_visible: e.target.checked })
-                }
-              />
-            </label>
-
-            <label>
-              Structural
-              <input
-                type="checkbox"
-                checked={row.is_structural}
-                onChange={(e) =>
-                  updatePart(i, { is_structural: e.target.checked })
-                }
-              />
-            </label>
-
-            <button onClick={() => removePart(i)}>Remove</button>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <SummaryPill label="Part Rows" value={parts.length} />
+              <SummaryPill label="Part Qty" value={totalPartQty} />
+              <SummaryPill label="Minifig Rows" value={minifigsState.length} />
+              <SummaryPill label="Piece Count" value={pieceCount || 0} />
+            </div>
           </div>
-        ))}
-      </div>
+        </div>
 
-      {/* MINIFIGS */}
-      <div>
-        <h3>Minifigs</h3>
-        <button type="button" onClick={addMinifig}>
-          + Add Minifig
-        </button>
+        <div className="p-6">
+          <div className="grid gap-5 lg:grid-cols-12">
+            <Field label="Set Number" className="lg:col-span-3">
+              <TextInput
+                value={setNum}
+                onChange={(e) => setSetNum(e.target.value)}
+                placeholder="75313"
+              />
+            </Field>
 
-        {minifigsState.map((row, i) => (
-          <div key={i}>
-            <select
-              value={row.minifig_id}
-              onChange={(e) =>
-                updateMinifig(i, { minifig_id: Number(e.target.value) })
-              }
-            >
-              <option value="">Select</option>
-              {minifigs.map((mf) => (
-                <option key={mf.id} value={mf.id}>
-                  {mf.name}
-                </option>
+            <Field label="Set Name" className="lg:col-span-5">
+              <TextInput
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="AT-AT"
+              />
+            </Field>
+
+            <Field label="Official Piece Count" className="lg:col-span-2">
+              <TextInput
+                type="number"
+                value={pieceCount}
+                onChange={(e) => setPieceCount(Number(e.target.value))}
+                placeholder="6785"
+              />
+            </Field>
+
+            <Field label="Theme" className="lg:col-span-2">
+              <SelectInput
+                value={themeId}
+                onChange={(e) =>
+                  setThemeId(e.target.value ? Number(e.target.value) : "")
+                }
+              >
+                <option value="">No theme</option>
+                {themes.map((theme) => (
+                  <option key={theme.id} value={theme.id}>
+                    {theme.name}
+                  </option>
+                ))}
+              </SelectInput>
+            </Field>
+
+            <Field label="Catalog Item" className="lg:col-span-4">
+              <SelectInput
+                value={catalogId}
+                onChange={(e) =>
+                  setCatalogId(e.target.value ? Number(e.target.value) : "")
+                }
+              >
+                <option value="">No catalog item</option>
+                {catalogItems.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.sku}
+                  </option>
+                ))}
+              </SelectInput>
+            </Field>
+
+            <Field label="Image URL" className="lg:col-span-8">
+              <TextInput
+                value={imageUrl}
+                onChange={(e) => setImageUrl(e.target.value)}
+                placeholder="https://..."
+              />
+            </Field>
+
+            {imageUrl ? (
+              <div className="lg:col-span-12">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Image Preview
+                  </div>
+                  <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-3">
+                    <img
+                      src={imageUrl}
+                      alt={name || "Set preview"}
+                      className="max-h-64 rounded-xl object-contain"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).style.display =
+                          "none";
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </section>
+
+      {/* Parts */}
+      <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-col gap-4 border-b border-slate-200 bg-slate-50/70 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="text-lg font-bold text-slate-900">Parts</h3>
+            <p className="mt-1 text-sm text-slate-500">
+              Add exact part and color combinations used in this set.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={addPart}
+            className="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700"
+          >
+            + Add Part
+          </button>
+        </div>
+
+        <div className="p-6">
+          {parts.length === 0 ? (
+            <EmptyState text="No parts added yet." />
+          ) : (
+            <div className="space-y-4">
+              {parts.map((row, index) => (
+                <div
+                  key={row._rowId}
+                  className="rounded-3xl border border-slate-200 bg-slate-50 p-4 shadow-sm"
+                >
+                  <div className="mb-4 flex items-center justify-between">
+                    <div className="text-sm font-bold text-slate-800">
+                      Part Row {index + 1}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removePart(row._rowId)}
+                      className="rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50"
+                    >
+                      Remove
+                    </button>
+                  </div>
+
+                  <div className="grid gap-4 xl:grid-cols-12">
+                    <Field label="Piece" className="xl:col-span-5">
+                      <PartColorSearchPicker
+                        value={row.part_color_id || 0}
+                        onChange={(id) =>
+                          updatePart(row._rowId, { part_color_id: id })
+                        }
+                      />
+                    </Field>
+
+                    <Field label="Quantity" className="xl:col-span-2">
+                      <TextInput
+                        type="number"
+                        min={1}
+                        value={row.quantity}
+                        onChange={(e) =>
+                          updatePart(row._rowId, {
+                            quantity: Number(e.target.value),
+                          })
+                        }
+                      />
+                    </Field>
+
+                    <Field label="Bag Number" className="xl:col-span-2">
+                      <TextInput
+                        value={row.bag_number}
+                        onChange={(e) =>
+                          updatePart(row._rowId, {
+                            bag_number: e.target.value,
+                          })
+                        }
+                        placeholder="1"
+                      />
+                    </Field>
+
+                    <Field label="Instruction Page" className="xl:col-span-3">
+                      <TextInput
+                        type="number"
+                        value={row.instruction_page ?? ""}
+                        onChange={(e) =>
+                          updatePart(row._rowId, {
+                            instruction_page: e.target.value
+                              ? Number(e.target.value)
+                              : null,
+                          })
+                        }
+                        placeholder="Optional"
+                      />
+                    </Field>
+
+                    <Field label="Notes" className="xl:col-span-8">
+                      <TextInput
+                        value={row.notes}
+                        onChange={(e) =>
+                          updatePart(row._rowId, { notes: e.target.value })
+                        }
+                        placeholder="Optional notes about this piece"
+                      />
+                    </Field>
+
+                    <div className="xl:col-span-4">
+                      <label className="mb-2 block text-sm font-semibold text-slate-700">
+                        Options
+                      </label>
+                      <div className="flex flex-wrap gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                        <ToggleBox
+                          label="Visible"
+                          checked={row.is_visible}
+                          onChange={(checked) =>
+                            updatePart(row._rowId, { is_visible: checked })
+                          }
+                        />
+                        <ToggleBox
+                          label="Structural"
+                          checked={row.is_structural}
+                          onChange={(checked) =>
+                            updatePart(row._rowId, { is_structural: checked })
+                          }
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
               ))}
-            </select>
+            </div>
+          )}
+        </div>
+      </section>
 
-            <input
-              type="number"
-              value={row.quantity}
-              onChange={(e) =>
-                updateMinifig(i, { quantity: Number(e.target.value) })
-              }
-            />
-
-            <input
-              placeholder="Bag"
-              value={row.bag_number}
-              onChange={(e) =>
-                updateMinifig(i, { bag_number: e.target.value })
-              }
-            />
-
-            <button onClick={() => removeMinifig(i)}>Remove</button>
+      {/* Minifigs */}
+      <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-col gap-4 border-b border-slate-200 bg-slate-50/70 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="text-lg font-bold text-slate-900">Minifigs</h3>
+            <p className="mt-1 text-sm text-slate-500">
+              Add the minifigs included in this set.
+            </p>
           </div>
-        ))}
-      </div>
 
-      <button disabled={!canSave}>
-        {submitting ? "Saving..." : "Save Set"}
-      </button>
+          <button
+            type="button"
+            onClick={addMinifig}
+            className="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700"
+          >
+            + Add Minifig
+          </button>
+        </div>
+
+        <div className="p-6">
+          {minifigsState.length === 0 ? (
+            <EmptyState text="No minifigs added yet." />
+          ) : (
+            <div className="space-y-4">
+              {minifigsState.map((row, index) => (
+                <div
+                  key={row._rowId}
+                  className="rounded-3xl border border-slate-200 bg-slate-50 p-4 shadow-sm"
+                >
+                  <div className="mb-4 flex items-center justify-between">
+                    <div className="text-sm font-bold text-slate-800">
+                      Minifig Row {index + 1}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeMinifig(row._rowId)}
+                      className="rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50"
+                    >
+                      Remove
+                    </button>
+                  </div>
+
+                  <div className="grid gap-4 xl:grid-cols-12">
+                    <Field label="Minifig" className="xl:col-span-6">
+                      <SelectInput
+                        value={row.minifig_id || ""}
+                        onChange={(e) =>
+                          updateMinifig(row._rowId, {
+                            minifig_id: e.target.value
+                              ? Number(e.target.value)
+                              : 0,
+                          })
+                        }
+                      >
+                        <option value="">Select a minifig</option>
+                        {minifigs.map((mf) => (
+                          <option key={mf.id} value={mf.id}>
+                            {mf.name}
+                          </option>
+                        ))}
+                      </SelectInput>
+                    </Field>
+
+                    <Field label="Quantity" className="xl:col-span-2">
+                      <TextInput
+                        type="number"
+                        min={1}
+                        value={row.quantity}
+                        onChange={(e) =>
+                          updateMinifig(row._rowId, {
+                            quantity: Number(e.target.value),
+                          })
+                        }
+                      />
+                    </Field>
+
+                    <Field label="Bag Number" className="xl:col-span-2">
+                      <TextInput
+                        value={row.bag_number}
+                        onChange={(e) =>
+                          updateMinifig(row._rowId, {
+                            bag_number: e.target.value,
+                          })
+                        }
+                        placeholder="1"
+                      />
+                    </Field>
+
+                    <Field label="Notes" className="xl:col-span-12">
+                      <TextInput
+                        value={row.notes}
+                        onChange={(e) =>
+                          updateMinifig(row._rowId, { notes: e.target.value })
+                        }
+                        placeholder="Optional notes about this minifig"
+                      />
+                    </Field>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* Save Bar */}
+      <div className="sticky bottom-0 z-20 rounded-3xl border border-slate-200 bg-white/95 p-4 shadow-lg backdrop-blur">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-sm text-slate-500">
+            <span className="font-semibold text-slate-800">{parts.length}</span>{" "}
+            part rows •{" "}
+            <span className="font-semibold text-slate-800">
+              {minifigsState.length}
+            </span>{" "}
+            minifig rows
+          </div>
+
+          <button
+            type="submit"
+            disabled={!canSave}
+            className="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-6 py-3 text-sm font-bold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {submitting ? "Saving..." : "Save Set"}
+          </button>
+        </div>
+      </div>
     </form>
+  );
+}
+
+function Field({
+  label,
+  children,
+  className = "",
+}: {
+  label: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={className}>
+      <label className="mb-2 block text-sm font-semibold text-slate-700">
+        {label}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+function TextInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <input
+      {...props}
+      className={[
+        "w-full rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none transition",
+        "placeholder:text-slate-400 focus:border-slate-400 focus:ring-4 focus:ring-slate-200/70",
+        props.className || "",
+      ].join(" ")}
+    />
+  );
+}
+
+function SelectInput(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
+  return (
+    <select
+      {...props}
+      className={[
+        "w-full rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none transition",
+        "focus:border-slate-400 focus:ring-4 focus:ring-slate-200/70",
+        props.className || "",
+      ].join(" ")}
+    />
+  );
+}
+
+function SummaryPill({
+  label,
+  value,
+}: {
+  label: string;
+  value: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+      <div className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
+        {label}
+      </div>
+      <div className="mt-1 text-base font-bold text-slate-900">{value}</div>
+    </div>
+  );
+}
+
+function EmptyState({ text }: { text: string }) {
+  return (
+    <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-sm font-medium text-slate-500">
+      {text}
+    </div>
+  );
+}
+
+function ToggleBox({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="h-4 w-4 rounded border-slate-300"
+      />
+      {label}
+    </label>
   );
 }
