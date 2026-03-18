@@ -1,9 +1,11 @@
 from rest_framework import viewsets
+
 from .models import Set, SetPart, SetMinifig
 from .serializers import (
-    SetSerializer,
-    SetPartSerializer,
-    SetMinifigSerializer,
+    SetReadSerializer,
+    SetWriteSerializer,
+    SetPartReadSerializer,
+    SetMinifigReadSerializer,
 )
 
 
@@ -20,13 +22,22 @@ class SetViewSet(viewsets.ModelViewSet):
             "minifigs__minifig",
         )
     )
-    serializer_class = SetSerializer
     lookup_field = "set_num"
+
+    def get_serializer_class(self):
+        if self.action in ["list", "retrieve"]:
+            return SetReadSerializer
+        return SetWriteSerializer
+
+
 class SetPartViewSet(viewsets.ModelViewSet):
-    queryset = SetPart.objects.select_related("part_color", "set")
-    serializer_class = SetPartSerializer
+    queryset = (
+        SetPart.objects
+        .select_related("set", "part_color", "part_color__part", "part_color__color")
+    )
+    serializer_class = SetPartReadSerializer
 
 
 class SetMinifigViewSet(viewsets.ModelViewSet):
-    queryset = SetMinifig.objects.select_related("minifig", "set")
-    serializer_class = SetMinifigSerializer
+    queryset = SetMinifig.objects.select_related("set", "minifig")
+    serializer_class = SetMinifigReadSerializer
