@@ -47,6 +47,15 @@ class SetViewSet(viewsets.ModelViewSet):
             print("SETS CREATE PAYLOAD:", request.data)
             raise
 
+
+class SetPartViewSet(viewsets.ModelViewSet):
+    queryset = (
+        SetPart.objects
+        .select_related("set", "part_color", "part_color__part", "part_color__color")
+    )
+    serializer_class = SetPartReadSerializer
+
+
 class SetMinifigViewSet(viewsets.ModelViewSet):
     queryset = SetMinifig.objects.select_related("set", "minifig")
     serializer_class = SetMinifigReadSerializer
