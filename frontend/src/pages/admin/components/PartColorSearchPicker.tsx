@@ -17,6 +17,23 @@ function partColorLabel(pc: PartColor) {
     .join(" — ");
 }
 
+function matchesQuery(pc: PartColor, rawQuery: string) {
+  const q = rawQuery.trim().toLowerCase();
+  if (!q) return true;
+
+  const fields = [
+    pc.part?.part_id,
+    pc.part?.name,
+    pc.color?.name,
+    pc.part_color_code,
+    pc.variant,
+  ]
+    .filter(Boolean)
+    .map((v) => String(v).toLowerCase());
+
+  return fields.some((field) => field.includes(q));
+}
+
 export function PartColorSearchPicker({
   value,
   onChange,
@@ -31,7 +48,6 @@ export function PartColorSearchPicker({
   const [loading, setLoading] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
-  // CLOSE DROPDOWN
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
       if (!rootRef.current) return;
@@ -39,11 +55,11 @@ export function PartColorSearchPicker({
         setOpen(false);
       }
     }
+
     document.addEventListener("mousedown", onDocClick);
     return () => document.removeEventListener("mousedown", onDocClick);
   }, []);
 
-  // FETCH SELECTED ITEM IF NOT IN RESULTS
   useEffect(() => {
     if (!value) {
       setSelectedItem(null);
@@ -64,7 +80,7 @@ export function PartColorSearchPicker({
         if (!active) return;
         setSelectedItem(res.data as PartColor);
       } catch {
-        // fail silently
+        // ignore
       }
     }
 
@@ -75,20 +91,35 @@ export function PartColorSearchPicker({
     };
   }, [value, results]);
 
-  // SEARCH API
   useEffect(() => {
     let active = true;
 
     async function run() {
       setLoading(true);
       try {
+        const query = q.trim();
+
         const res = await api.get(ENDPOINTS.partColors, {
-          params: q.trim() ? { q } : {},
+          params: query
+            ? {
+                q: query,
+                search: query,
+              }
+            : {},
         });
 
         if (!active) return;
 
-        setResults(getListData<PartColor>(res.data).slice(0, 25));
+        const apiItems = getListData<PartColor>(res.data);
+
+        // Local filtering makes the picker behave correctly
+        // even if backend search is weak or partially configured.
+        const filtered = apiItems.filter((pc) => matchesQuery(pc, query));
+
+        setResults(filtered.slice(0, 25));
+      } catch {
+        if (!active) return;
+        setResults([]);
       } finally {
         if (active) setLoading(false);
       }
@@ -117,7 +148,8 @@ export function PartColorSearchPicker({
           setOpen(true);
         }}
         onFocus={() => setOpen(true)}
-        placeholder="Search part color..."
+        placeholder="Search part id, name, or color..."
+        autoComplete="off"
       />
 
       {open && (
@@ -145,27 +177,31 @@ export function PartColorSearchPicker({
                       setQ("");
                       setOpen(false);
                     }}
-                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2 hover:bg-slate-50"
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left hover:bg-slate-50"
                   >
-                    <div className="h-14 w-14 overflow-hidden rounded-xl border bg-slate-50">
+                    <div className="h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
                       {img ? (
                         <img
                           src={img}
+                          alt=""
                           className="h-full w-full object-contain"
                         />
                       ) : (
-                        <div className="grid h-full place-items-center text-xs text-slate-400">
+                        <div className="grid h-full w-full place-items-center text-[10px] font-bold text-slate-400">
                           No image
                         </div>
                       )}
                     </div>
 
                     <div className="min-w-0">
-                      <div className="truncate font-semibold text-slate-900">
-                        {pc.part?.name}
+                      <div className="truncate text-sm font-bold text-slate-900">
+                        {pc.part?.name || "Unnamed Part"}
                       </div>
-                      <div className="text-xs text-slate-500">
-                        {pc.part?.part_id} • {pc.color?.name}
+                      <div className="truncate text-xs font-semibold text-slate-500">
+                        {pc.part?.part_id || "No ID"} • {pc.color?.name || "No Color"}
+                      </div>
+                      <div className="truncate text-xs text-slate-400">
+                        {pc.part_color_code || ""}
                       </div>
                     </div>
                   </button>

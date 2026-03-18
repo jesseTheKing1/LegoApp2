@@ -1,0 +1,407 @@
+Goal for set
+lego sets are in a box inside of a buch of bags. when the user gets on the site they will register their existing sets and then have the options 
+
+1 want to include minifigures 
+2 wants all pieces to be exact or does not care about the color the part just has to match
+
+becuase the user has the option to include thier current inventory (loosepieces or sets collections) i need the sets to be well documented. meaning I would like the site to show what pieces go where and where they are coming from opon order. example so part 001 is coming from set001, part 002 is coming from set002 and the rest of the pieces are coming from my store and where the pieces go what instruction page and bag 
+
+partColor should be in a bagNumber. 
+partColor needs to be visable / not visable oprtion.
+partColor needs to show up on a page number
+partColor needs to be part of the main struction option.
+
+this is some of the code i already have. let me know if this strucure works and what i need to cahnge to make this work
+
+
+// BACKEND 
+from django.db import models
+
+class Color(models.Model):
+    lego_id = models.IntegerField(unique=True, null=True, blank=True)
+    name = models.CharField(max_length=80, unique=True)
+    hex = models.CharField(max_length=7, blank=True)  # "#RRGGBB"
+    is_transparent = models.BooleanField(default=False)
+    is_metallic = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+class Part(models.Model):
+
+    part_id = models.CharField(max_length=50, unique=True)
+    name = models.CharField( max_length=200)
+    general_category = models.CharField(max_length=120, blank=True)
+    specific_category = models.CharField(max_length=120, blank=True)
+    #new this is general shape
+    #lego has different part numbers on pieces that share the same shape
+    actual_category = models.CharField(max_length=50)
+    image_url = models.URLField(blank=True)
+
+    class Meta:
+        ordering = ["part_id"]
+
+    def __str__(self):
+        return f"{self.part_id} - {self.name}"
+
+class PartColor(models.Model):
+    part = models.ForeignKey(Part, on_delete=models.CASCADE, related_name="part_colors")
+    color = models.ForeignKey(Color, on_delete=models.PROTECT, related_name="part_colors")
+    variant = models.CharField(max_length=80, blank=True, default="")
+
+    part_color_code = models.CharField(max_length=64, unique=True)
+    description = models.CharField(max_length=300, blank=True)
+    image_url_1 = models.URLField(blank=True)
+    image_url_2 = models.URLField(blank=True)
+
+    catalog_item = models.OneToOneField(
+        "catalog.CatalogItem",
+        on_delete=models.PROTECT,
+        related_name="part_color",
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        ordering = ["part__part_id", "color__name", "variant"]
+        constraints = [
+            models.UniqueConstraint(fields=["part", "color", "variant"], name="uniq_part_color_variant")
+        ]
+
+    def __str__(self):
+        v = f" ({self.variant})" if self.variant else ""
+        return f"{self.part.part_id} - {self.color.name}{v}"
+
+from rest_framework import serializers
+from .models import Color, Part, PartColor
+from catalog.models import CatalogItem
+
+
+class CatalogItemMiniSerializer(serializers.ModelSerializer):
+    """Small read-only view of the catalog item (good for embedding in PartColor)."""
+    class Meta:
+        model = CatalogItem
+        fields = [
+            "id",
+            "sku",
+            "is_active",
+            "base_price_override",
+            "force_override",
+            "notes",
+        ]
+
+
+class ColorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Color
+        fields = [
+            "id",
+            "lego_id",
+            "name",
+            "hex",
+            "is_transparent",
+            "is_metallic",
+        ]
+
+
+class PartSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Part
+        fields = [
+            "id",
+            "part_id",
+            "name",
+            "general_category",
+            "specific_category",
+            "actual_category",
+            "image_url",
+        ]
+
+
+class PartColorSerializer(serializers.ModelSerializer):
+    # read-only nested objects (nice for frontend rendering)
+    part = PartSerializer(read_only=True)
+    color = ColorSerializer(read_only=True)
+
+    # write-only IDs (nice for create/update)
+    part_id = serializers.PrimaryKeyRelatedField(
+        queryset=Part.objects.all(),
+        source="part",
+        write_only=True,
+    )
+    color_id = serializers.PrimaryKeyRelatedField(
+        queryset=Color.objects.all(),
+        source="color",
+        write_only=True,
+    )
+
+    # READ: include catalog item info on GET
+    catalog_item = CatalogItemMiniSerializer(read_only=True)
+
+    # WRITE: attach/detach catalog item by id on POST/PATCH
+    catalog_item_id = serializers.PrimaryKeyRelatedField(
+        queryset=CatalogItem.objects.all(),
+        source="catalog_item",
+        write_only=True,
+        required=False,
+        allow_null=True,
+    )
+
+    variant = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default=""   # ✅ key change
+    )
+    class Meta:
+        model = PartColor
+        fields = [
+            "id",
+            "part",
+            "color",
+            "part_id",
+            "color_id",
+            "variant",
+            "part_color_code",
+            "description",
+            "image_url_1",
+            "image_url_2",
+            "catalog_item",
+            "catalog_item_id",
+        ]
+
+    def validate_part_color_code(self, value: str):
+        v = (value or "").strip()
+        if not v:
+            raise serializers.ValidationError("part_color_code cannot be blank.")
+        return v
+from rest_framework import viewsets, filters
+from .models import Color, Part, PartColor
+from .serializers import ColorSerializer, PartSerializer, PartColorSerializer
+from .permissions import IsAdminOrReadOnly
+
+
+class ColorViewSet(viewsets.ModelViewSet):
+    queryset = Color.objects.all()
+    serializer_class = ColorSerializer
+    permission_classes = [IsAdminOrReadOnly]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ["name", "lego_id", "hex"]
+    ordering_fields = ["name", "lego_id"]
+    ordering = ["name"]
+
+
+class PartViewSet(viewsets.ModelViewSet):
+    queryset = Part.objects.all()
+    serializer_class = PartSerializer
+    permission_classes = [IsAdminOrReadOnly]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ["part_id", "name", "general_category", "specific_category", "actual_category"]
+    ordering_fields = ["part_id", "name", "actual_category"]
+    ordering = ["part_id"]
+
+
+class PartColorViewSet(viewsets.ModelViewSet):
+    queryset = PartColor.objects.select_related("part", "color").all()
+    serializer_class = PartColorSerializer
+    permission_classes = [IsAdminOrReadOnly]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = [
+        "part_color_code", "variant", "description",
+        "part__part_id", "part__name", "part__actual_category",
+        "color__name", "color__hex",
+    ]
+    ordering_fields = ["id", "part_color_code", "variant", "part__part_id", "color__name"]
+    ordering = ["part__part_id", "color__name", "variant"]
+
+
+
+from django.db import models
+
+
+class Set(models.Model):
+    set_num = models.CharField(max_length=50, unique=True)
+    name = models.CharField(max_length=200)
+    image_url = models.URLField(max_length=200, blank=True)
+
+    theme = models.ForeignKey(
+        "minifigs.Theme",
+        on_delete=models.SET_NULL,
+        related_name="sets",
+        null=True,
+        blank=True,
+    )
+
+    official_piece_count = models.PositiveIntegerField(default=0)
+
+    catalog_item = models.OneToOneField(
+        "catalog.CatalogItem",
+        on_delete=models.PROTECT,
+        related_name="set",
+        null=True,
+        blank=True,
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
+
+    class Meta:
+        ordering = ["set_num", "name"]
+
+    def __str__(self):
+        return f"{self.set_num} - {self.name}"
+
+
+class SetPart(models.Model):
+    set = models.ForeignKey(
+        Set,
+        on_delete=models.CASCADE,
+        related_name="parts",
+    )
+
+    part_color = models.ForeignKey(
+        "parts.PartColor",
+        on_delete=models.PROTECT,
+        related_name="set_parts",
+    )
+
+    quantity = models.PositiveIntegerField(default=1)
+
+    instruction_page = models.PositiveIntegerField(null=True, blank=True)
+    sort_order = models.PositiveIntegerField(default=0)
+
+    bag_number = models.CharField(max_length=20, blank=True)
+
+    is_visible = models.BooleanField(default=True)
+    is_structural = models.BooleanField(default=False)
+
+    notes = models.CharField(max_length=200, blank=True)
+
+    class Meta:
+        ordering = ["instruction_page", "sort_order", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["set", "part_color", "instruction_page", "sort_order"],
+                name="uniq_set_part_row",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.set.name} → {self.part_color} x{self.quantity}"
+
+
+class SetMinifig(models.Model):
+    set = models.ForeignKey(
+        Set,
+        on_delete=models.CASCADE,
+        related_name="minifigs",
+    )
+
+    minifig = models.ForeignKey(
+        "minifigs.Minifig",
+        on_delete=models.PROTECT,
+        related_name="set_entries",
+    )
+
+    quantity = models.PositiveIntegerField(default=1)
+    sort_order = models.PositiveIntegerField(default=0)
+
+    bag_number = models.CharField(max_length=20, blank=True)
+
+    notes = models.CharField(max_length=200, blank=True)
+
+    class Meta:
+        ordering = ["sort_order", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["set", "minifig", "sort_order"],
+                name="uniq_set_minifig_row",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.set.name} → {self.minifig.name} x{self.quantity}"
+
+        from rest_framework import serializers
+from .models import Set, SetPart, SetMinifig
+from parts.serializers import PartColorSerializer
+from minifigs.serializers import MinifigSerializer
+
+
+class SetPartSerializer(serializers.ModelSerializer):
+    part_color_detail = PartColorSerializer(source="part_color", read_only=True)
+
+    class Meta:
+        model = SetPart
+        fields = [
+            "id",
+            "part_color",
+            "part_color_detail",
+            "quantity",
+            "instruction_page",
+            "sort_order",
+            "bag_number",
+            "is_visible",
+            "is_structural",
+            "notes",
+        ]
+
+
+class SetMinifigSerializer(serializers.ModelSerializer):
+    minifig_detail = MinifigSerializer(source="minifig", read_only=True)
+
+    class Meta:
+        model = SetMinifig
+        fields = [
+            "id",
+            "minifig",
+            "minifig_detail",
+            "quantity",
+            "sort_order",
+            "bag_number",
+            "notes",
+        ]
+
+
+class SetSerializer(serializers.ModelSerializer):
+    parts = SetPartSerializer(many=True, read_only=True)
+    minifigs = SetMinifigSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Set
+        fields = [
+            "id",
+            "set_num",
+            "name",
+            "image_url",
+            "theme",
+            "official_piece_count",
+            "parts",
+            "minifigs",
+        ]
+
+from rest_framework import viewsets
+from .models import Set, SetPart, SetMinifig
+from .serializers import (
+    SetSerializer,
+    SetPartSerializer,
+    SetMinifigSerializer,
+)
+
+
+class SetViewSet(viewsets.ModelViewSet):
+    queryset = Set.objects.all()
+    serializer_class = SetSerializer
+    lookup_field = "set_num"
+
+
+class SetPartViewSet(viewsets.ModelViewSet):
+    queryset = SetPart.objects.select_related("part_color", "set")
+    serializer_class = SetPartSerializer
+
+
+class SetMinifigViewSet(viewsets.ModelViewSet):
+    queryset = SetMinifig.objects.select_related("minifig", "set")
+    serializer_class = SetMinifigSerializer

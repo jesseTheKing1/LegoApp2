@@ -6,6 +6,7 @@ import type {
   SetPayload,
   SetPartPayload,
   SetMinifigPayload,
+  ColorMatchMode,
 } from "../../../types/set";
 
 import { PartColorSearchPicker } from "../components/PartColorSearchPicker";
@@ -40,28 +41,22 @@ export function SetForm({
   const [setNum, setSetNum] = useState(initialValues?.set_num ?? "");
   const [name, setName] = useState(initialValues?.name ?? "");
   const [imageUrl, setImageUrl] = useState(initialValues?.image_url ?? "");
-  const [pieceCount, setPieceCount] = useState(
-    initialValues?.official_piece_count ?? 0
-  );
+  const [pieceCount, setPieceCount] = useState(initialValues?.official_piece_count ?? 0);
 
-  const [themeId, setThemeId] = useState<number | "">(
-    initialValues?.theme?.id ?? ""
-  );
-
-  const [catalogId, setCatalogId] = useState<number | "">(
-    initialValues?.catalog_item?.id ?? ""
-  );
+  const [themeId, setThemeId] = useState<number | "">(initialValues?.theme?.id ?? "");
+  const [catalogId, setCatalogId] = useState<number | "">(initialValues?.catalog_item?.id ?? "");
 
   const [parts, setParts] = useState<PartRow[]>(
     (initialValues?.parts ?? []).map((row, i) => ({
       _rowId: makeRowId(`part-${i}`),
-      part_color_id: row.part_color.id,
+      part_color_id: row.part_color,
       quantity: row.quantity,
       instruction_page: row.instruction_page,
       sort_order: row.sort_order ?? i,
       bag_number: row.bag_number ?? "",
       is_visible: row.is_visible,
       is_structural: row.is_structural,
+      color_match_mode: row.color_match_mode ?? "exact",
       notes: row.notes ?? "",
     }))
   );
@@ -69,10 +64,11 @@ export function SetForm({
   const [minifigsState, setMinifigs] = useState<MinifigRow[]>(
     (initialValues?.minifigs ?? []).map((row, i) => ({
       _rowId: makeRowId(`minifig-${i}`),
-      minifig_id: row.minifig.id,
+      minifig_id: row.minifig,
       quantity: row.quantity,
       sort_order: row.sort_order ?? i,
       bag_number: row.bag_number ?? "",
+      is_required: row.is_required ?? true,
       notes: row.notes ?? "",
     }))
   );
@@ -86,10 +82,7 @@ export function SetForm({
   }, [parts]);
 
   const totalMinifigQty = useMemo(() => {
-    return minifigsState.reduce(
-      (sum, row) => sum + (Number(row.quantity) || 0),
-      0
-    );
+    return minifigsState.reduce((sum, row) => sum + (Number(row.quantity) || 0), 0);
   }, [minifigsState]);
 
   function addPart() {
@@ -104,15 +97,14 @@ export function SetForm({
         bag_number: "",
         is_visible: true,
         is_structural: false,
+        color_match_mode: "exact",
         notes: "",
       },
     ]);
   }
 
   function updatePart(rowId: string, patch: Partial<PartRow>) {
-    setParts((prev) =>
-      prev.map((row) => (row._rowId === rowId ? { ...row, ...patch } : row))
-    );
+    setParts((prev) => prev.map((row) => (row._rowId === rowId ? { ...row, ...patch } : row)));
   }
 
   function removePart(rowId: string) {
@@ -128,15 +120,14 @@ export function SetForm({
         quantity: 1,
         sort_order: prev.length,
         bag_number: "",
+        is_required: true,
         notes: "",
       },
     ]);
   }
 
   function updateMinifig(rowId: string, patch: Partial<MinifigRow>) {
-    setMinifigs((prev) =>
-      prev.map((row) => (row._rowId === rowId ? { ...row, ...patch } : row))
-    );
+    setMinifigs((prev) => prev.map((row) => (row._rowId === rowId ? { ...row, ...patch } : row)));
   }
 
   function removeMinifig(rowId: string) {
@@ -153,19 +144,22 @@ export function SetForm({
       official_piece_count: Number(pieceCount) || 0,
       theme_id: themeId || null,
       catalog_item_id: catalogId || null,
-
       parts: parts
         .filter((p) => p.part_color_id)
         .map(({ _rowId, ...p }, i) => ({
           ...p,
           sort_order: i,
+          instruction_page: p.instruction_page ?? null,
+          bag_number: p.bag_number ?? "",
+          notes: p.notes ?? "",
         })),
-
       minifigs: minifigsState
         .filter((m) => m.minifig_id)
         .map(({ _rowId, ...m }, i) => ({
           ...m,
           sort_order: i,
+          bag_number: m.bag_number ?? "",
+          notes: m.notes ?? "",
         })),
     };
 
@@ -174,14 +168,11 @@ export function SetForm({
 
   return (
     <form onSubmit={submit} className="space-y-6">
-      {/* Header Summary */}
       <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white px-6 py-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <h2 className="text-xl font-bold tracking-tight text-slate-900">
-                Set Details
-              </h2>
+              <h2 className="text-xl font-bold tracking-tight text-slate-900">Set Details</h2>
               <p className="mt-1 text-sm text-slate-500">
                 Manage set info, included parts, and minifigs.
               </p>
@@ -199,26 +190,18 @@ export function SetForm({
         <div className="p-6">
           <div className="grid gap-5 lg:grid-cols-12">
             <Field label="Set Number" className="lg:col-span-3">
-              <TextInput
-                value={setNum}
-                onChange={(e) => setSetNum(e.target.value)}
-                placeholder="75313"
-              />
+              <TextInput value={setNum} onChange={(e) => setSetNum(e.target.value)} placeholder="75313" />
             </Field>
 
             <Field label="Set Name" className="lg:col-span-5">
-              <TextInput
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="AT-AT"
-              />
+              <TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder="AT-AT" />
             </Field>
 
             <Field label="Official Piece Count" className="lg:col-span-2">
               <TextInput
                 type="number"
                 value={pieceCount}
-                onChange={(e) => setPieceCount(Number(e.target.value))}
+                onChange={(e) => setPieceCount(Number(e.target.value) || 0)}
                 placeholder="6785"
               />
             </Field>
@@ -226,9 +209,7 @@ export function SetForm({
             <Field label="Theme" className="lg:col-span-2">
               <SelectInput
                 value={themeId}
-                onChange={(e) =>
-                  setThemeId(e.target.value ? Number(e.target.value) : "")
-                }
+                onChange={(e) => setThemeId(e.target.value ? Number(e.target.value) : "")}
               >
                 <option value="">No theme</option>
                 {themes.map((theme) => (
@@ -242,9 +223,7 @@ export function SetForm({
             <Field label="Catalog Item" className="lg:col-span-4">
               <SelectInput
                 value={catalogId}
-                onChange={(e) =>
-                  setCatalogId(e.target.value ? Number(e.target.value) : "")
-                }
+                onChange={(e) => setCatalogId(e.target.value ? Number(e.target.value) : "")}
               >
                 <option value="">No catalog item</option>
                 {catalogItems.map((item) => (
@@ -275,8 +254,7 @@ export function SetForm({
                       alt={name || "Set preview"}
                       className="max-h-64 rounded-xl object-contain"
                       onError={(e) => {
-                        (e.currentTarget as HTMLImageElement).style.display =
-                          "none";
+                        (e.currentTarget as HTMLImageElement).style.display = "none";
                       }}
                     />
                   </div>
@@ -287,7 +265,6 @@ export function SetForm({
         </div>
       </section>
 
-      {/* Parts */}
       <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-col gap-4 border-b border-slate-200 bg-slate-50/70 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -317,9 +294,7 @@ export function SetForm({
                   className="rounded-3xl border border-slate-200 bg-slate-50 p-4 shadow-sm"
                 >
                   <div className="mb-4 flex items-center justify-between">
-                    <div className="text-sm font-bold text-slate-800">
-                      Part Row {index + 1}
-                    </div>
+                    <div className="text-sm font-bold text-slate-800">Part Row {index + 1}</div>
                     <button
                       type="button"
                       onClick={() => removePart(row._rowId)}
@@ -333,9 +308,7 @@ export function SetForm({
                     <Field label="Piece" className="xl:col-span-5">
                       <PartColorSearchPicker
                         value={row.part_color_id || 0}
-                        onChange={(id) =>
-                          updatePart(row._rowId, { part_color_id: id })
-                        }
+                        onChange={(id) => updatePart(row._rowId, { part_color_id: id })}
                       />
                     </Field>
 
@@ -346,7 +319,7 @@ export function SetForm({
                         value={row.quantity}
                         onChange={(e) =>
                           updatePart(row._rowId, {
-                            quantity: Number(e.target.value),
+                            quantity: Math.max(1, Number(e.target.value) || 1),
                           })
                         }
                       />
@@ -355,11 +328,7 @@ export function SetForm({
                     <Field label="Bag Number" className="xl:col-span-2">
                       <TextInput
                         value={row.bag_number}
-                        onChange={(e) =>
-                          updatePart(row._rowId, {
-                            bag_number: e.target.value,
-                          })
-                        }
+                        onChange={(e) => updatePart(row._rowId, { bag_number: e.target.value })}
                         placeholder="1"
                       />
                     </Field>
@@ -370,26 +339,36 @@ export function SetForm({
                         value={row.instruction_page ?? ""}
                         onChange={(e) =>
                           updatePart(row._rowId, {
-                            instruction_page: e.target.value
-                              ? Number(e.target.value)
-                              : null,
+                            instruction_page: e.target.value ? Number(e.target.value) : null,
                           })
                         }
                         placeholder="Optional"
                       />
                     </Field>
 
+                    <Field label="Color Match" className="xl:col-span-4">
+                      <SelectInput
+                        value={row.color_match_mode}
+                        onChange={(e) =>
+                          updatePart(row._rowId, {
+                            color_match_mode: e.target.value as ColorMatchMode,
+                          })
+                        }
+                      >
+                        <option value="exact">Exact Color</option>
+                        <option value="any_color">Any Color</option>
+                      </SelectInput>
+                    </Field>
+
                     <Field label="Notes" className="xl:col-span-8">
                       <TextInput
                         value={row.notes}
-                        onChange={(e) =>
-                          updatePart(row._rowId, { notes: e.target.value })
-                        }
+                        onChange={(e) => updatePart(row._rowId, { notes: e.target.value })}
                         placeholder="Optional notes about this piece"
                       />
                     </Field>
 
-                    <div className="xl:col-span-4">
+                    <div className="xl:col-span-12">
                       <label className="mb-2 block text-sm font-semibold text-slate-700">
                         Options
                       </label>
@@ -397,16 +376,12 @@ export function SetForm({
                         <ToggleBox
                           label="Visible"
                           checked={row.is_visible}
-                          onChange={(checked) =>
-                            updatePart(row._rowId, { is_visible: checked })
-                          }
+                          onChange={(checked) => updatePart(row._rowId, { is_visible: checked })}
                         />
                         <ToggleBox
                           label="Structural"
                           checked={row.is_structural}
-                          onChange={(checked) =>
-                            updatePart(row._rowId, { is_structural: checked })
-                          }
+                          onChange={(checked) => updatePart(row._rowId, { is_structural: checked })}
                         />
                       </div>
                     </div>
@@ -418,7 +393,6 @@ export function SetForm({
         </div>
       </section>
 
-      {/* Minifigs */}
       <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-col gap-4 border-b border-slate-200 bg-slate-50/70 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -448,9 +422,7 @@ export function SetForm({
                   className="rounded-3xl border border-slate-200 bg-slate-50 p-4 shadow-sm"
                 >
                   <div className="mb-4 flex items-center justify-between">
-                    <div className="text-sm font-bold text-slate-800">
-                      Minifig Row {index + 1}
-                    </div>
+                    <div className="text-sm font-bold text-slate-800">Minifig Row {index + 1}</div>
                     <button
                       type="button"
                       onClick={() => removeMinifig(row._rowId)}
@@ -466,9 +438,7 @@ export function SetForm({
                         value={row.minifig_id || ""}
                         onChange={(e) =>
                           updateMinifig(row._rowId, {
-                            minifig_id: e.target.value
-                              ? Number(e.target.value)
-                              : 0,
+                            minifig_id: e.target.value ? Number(e.target.value) : 0,
                           })
                         }
                       >
@@ -488,7 +458,7 @@ export function SetForm({
                         value={row.quantity}
                         onChange={(e) =>
                           updateMinifig(row._rowId, {
-                            quantity: Number(e.target.value),
+                            quantity: Math.max(1, Number(e.target.value) || 1),
                           })
                         }
                       />
@@ -497,21 +467,28 @@ export function SetForm({
                     <Field label="Bag Number" className="xl:col-span-2">
                       <TextInput
                         value={row.bag_number}
-                        onChange={(e) =>
-                          updateMinifig(row._rowId, {
-                            bag_number: e.target.value,
-                          })
-                        }
+                        onChange={(e) => updateMinifig(row._rowId, { bag_number: e.target.value })}
                         placeholder="1"
                       />
                     </Field>
 
+                    <div className="xl:col-span-2">
+                      <label className="mb-2 block text-sm font-semibold text-slate-700">
+                        Required
+                      </label>
+                      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                        <ToggleBox
+                          label="Required"
+                          checked={row.is_required}
+                          onChange={(checked) => updateMinifig(row._rowId, { is_required: checked })}
+                        />
+                      </div>
+                    </div>
+
                     <Field label="Notes" className="xl:col-span-12">
                       <TextInput
                         value={row.notes}
-                        onChange={(e) =>
-                          updateMinifig(row._rowId, { notes: e.target.value })
-                        }
+                        onChange={(e) => updateMinifig(row._rowId, { notes: e.target.value })}
                         placeholder="Optional notes about this minifig"
                       />
                     </Field>
@@ -523,16 +500,11 @@ export function SetForm({
         </div>
       </section>
 
-      {/* Save Bar */}
       <div className="sticky bottom-0 z-20 rounded-3xl border border-slate-200 bg-white/95 p-4 shadow-lg backdrop-blur">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-sm text-slate-500">
-            <span className="font-semibold text-slate-800">{parts.length}</span>{" "}
-            part rows •{" "}
-            <span className="font-semibold text-slate-800">
-              {minifigsState.length}
-            </span>{" "}
-            minifig rows
+            <span className="font-semibold text-slate-800">{parts.length}</span> part rows •{" "}
+            <span className="font-semibold text-slate-800">{minifigsState.length}</span> minifig rows
           </div>
 
           <button
@@ -559,9 +531,7 @@ function Field({
 }) {
   return (
     <div className={className}>
-      <label className="mb-2 block text-sm font-semibold text-slate-700">
-        {label}
-      </label>
+      <label className="mb-2 block text-sm font-semibold text-slate-700">{label}</label>
       {children}
     </div>
   );
@@ -602,9 +572,7 @@ function SummaryPill({
 }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-      <div className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
-        {label}
-      </div>
+      <div className="text-[11px] font-bold uppercase tracking-wide text-slate-500">{label}</div>
       <div className="mt-1 text-base font-bold text-slate-900">{value}</div>
     </div>
   );
