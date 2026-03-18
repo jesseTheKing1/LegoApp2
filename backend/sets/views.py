@@ -1,3 +1,4 @@
+import traceback
 from rest_framework import viewsets
 from rest_framework.response import Response
 
@@ -37,6 +38,7 @@ class SetViewSet(viewsets.ModelViewSet):
             return Response(serializer.data)
         except Exception as e:
             print("SETS LIST ERROR:", repr(e))
+            traceback.print_exc()
             raise
 
     def create(self, request, *args, **kwargs):
@@ -45,17 +47,23 @@ class SetViewSet(viewsets.ModelViewSet):
         except Exception as e:
             print("SETS CREATE ERROR:", repr(e))
             print("SETS CREATE PAYLOAD:", request.data)
+            traceback.print_exc()
             raise
 
+    def update(self, request, *args, **kwargs):
+        try:
+            return super().update(request, *args, **kwargs)
+        except Exception as e:
+            print("SETS UPDATE ERROR:", repr(e))
+            print("SETS UPDATE PAYLOAD:", request.data)
+            traceback.print_exc()
+            raise
 
-class SetPartViewSet(viewsets.ModelViewSet):
-    queryset = (
-        SetPart.objects
-        .select_related("set", "part_color", "part_color__part", "part_color__color")
-    )
-    serializer_class = SetPartReadSerializer
-
-
-class SetMinifigViewSet(viewsets.ModelViewSet):
-    queryset = SetMinifig.objects.select_related("set", "minifig")
-    serializer_class = SetMinifigReadSerializer
+    def partial_update(self, request, *args, **kwargs):
+        try:
+            return super().partial_update(request, *args, **kwargs)
+        except Exception as e:
+            print("SETS PATCH ERROR:", repr(e))
+            print("SETS PATCH PAYLOAD:", request.data)
+            traceback.print_exc()
+            raise
