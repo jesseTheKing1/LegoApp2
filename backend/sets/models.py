@@ -59,6 +59,14 @@ class SetPart(models.Model):
 
     notes = models.CharField(max_length=200, blank=True)
 
+    color_match_mode = models.CharField(
+    max_length=20,
+    choices=[
+        ("exact", "Exact Color"),
+        ("any_color", "Any Color"),
+    ],
+    default="exact",
+)
     class Meta:
         ordering = ["instruction_page", "sort_order", "id"]
         constraints = [
@@ -91,7 +99,8 @@ class SetMinifig(models.Model):
     bag_number = models.CharField(max_length=20, blank=True)
 
     notes = models.CharField(max_length=200, blank=True)
-
+    is_required = models.BooleanField(default=True)
+    
     class Meta:
         ordering = ["sort_order", "id"]
         constraints = [
