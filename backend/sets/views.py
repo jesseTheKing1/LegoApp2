@@ -1,4 +1,5 @@
 from rest_framework import viewsets
+from rest_framework.response import Response
 
 from .models import Set, SetPart, SetMinifig
 from .serializers import (
@@ -29,14 +30,22 @@ class SetViewSet(viewsets.ModelViewSet):
             return SetReadSerializer
         return SetWriteSerializer
 
+    def list(self, request, *args, **kwargs):
+        try:
+            queryset = self.filter_queryset(self.get_queryset())
+            serializer = self.get_serializer(queryset, many=True)
+            return Response(serializer.data)
+        except Exception as e:
+            print("SETS LIST ERROR:", repr(e))
+            raise
 
-class SetPartViewSet(viewsets.ModelViewSet):
-    queryset = (
-        SetPart.objects
-        .select_related("set", "part_color", "part_color__part", "part_color__color")
-    )
-    serializer_class = SetPartReadSerializer
-
+    def create(self, request, *args, **kwargs):
+        try:
+            return super().create(request, *args, **kwargs)
+        except Exception as e:
+            print("SETS CREATE ERROR:", repr(e))
+            print("SETS CREATE PAYLOAD:", request.data)
+            raise
 
 class SetMinifigViewSet(viewsets.ModelViewSet):
     queryset = SetMinifig.objects.select_related("set", "minifig")
