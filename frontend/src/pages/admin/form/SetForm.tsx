@@ -135,36 +135,37 @@ export function SetForm({
   }
 
   async function submit(e: React.FormEvent) {
-    e.preventDefault();
+  e.preventDefault();
 
-    const payload: SetPayload = {
-      set_num: setNum.trim(),
-      name: name.trim(),
-      image_url: imageUrl.trim() || undefined,
-      official_piece_count: Number(pieceCount) || 0,
-      theme_id: themeId || null,
-      catalog_item_id: catalogId || null,
-      parts: parts
-        .filter((p) => p.part_color_id)
-        .map(({ _rowId, ...p }, i) => ({
-          ...p,
-          sort_order: i,
-          instruction_page: p.instruction_page ?? null,
-          bag_number: p.bag_number ?? "",
-          notes: p.notes ?? "",
-        })),
-      minifigs: minifigsState
-        .filter((m) => m.minifig_id)
-        .map(({ _rowId, ...m }, i) => ({
-          ...m,
-          sort_order: i,
-          bag_number: m.bag_number ?? "",
-          notes: m.notes ?? "",
-        })),
-    };
+  const payload: SetPayload = {
+    set_num: setNum.trim(),
+    name: name.trim(),
+    image_url: imageUrl.trim() || undefined,
+    official_piece_count: Number(pieceCount) || 0,
+    theme_id: themeId || null,
+    catalog_item_id: catalogId || null,
+    parts: parts
+      .filter((p) => p.part_color_id)
+      .map(({ _rowId, ...p }, i) => ({
+        ...p,
+        sort_order: i,
+        instruction_page: p.instruction_page ?? null,
+        bag_number: p.bag_number ?? "",
+        notes: p.notes ?? "",
+      })),
+    minifigs: minifigsState
+      .filter((m) => m.minifig_id)
+      .map(({ _rowId, ...m }, i) => ({
+        ...m,
+        sort_order: i,
+        bag_number: m.bag_number ?? "",
+        notes: m.notes ?? "",
+      })),
+  };
 
-    await onSubmit(payload);
-  }
+  console.log("SET PAYLOAD", payload);
+  await onSubmit(payload);
+}
 
   return (
     <form onSubmit={submit} className="space-y-6">
