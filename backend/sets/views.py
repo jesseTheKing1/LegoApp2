@@ -67,3 +67,15 @@ class SetViewSet(viewsets.ModelViewSet):
             print("SETS PATCH PAYLOAD:", request.data)
             traceback.print_exc()
             raise
+
+class SetPartViewSet(viewsets.ModelViewSet):
+    queryset = (
+        SetPart.objects
+        .select_related("set", "part_color", "part_color__part", "part_color__color")
+    )
+    serializer_class = SetPartReadSerializer
+
+
+class SetMinifigViewSet(viewsets.ModelViewSet):
+    queryset = SetMinifig.objects.select_related("set", "minifig")
+    serializer_class = SetMinifigReadSerializer
