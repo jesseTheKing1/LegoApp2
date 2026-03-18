@@ -1,4 +1,7 @@
-import React, { useMemo, useState } from "react";
+// src/pages/admin/form/SetForm.tsx
+import React, { useMemo, useRef, useState } from "react";
+import { uploadImageToR2 } from "../../../lib/r2Uploads";
+
 import type { CatalogItemMini } from "../../../types/catalog";
 import type { Theme, Minifig } from "../../../types/minifig";
 import type {
@@ -21,6 +24,22 @@ type MinifigRow = SetMinifigPayload & {
 
 function makeRowId(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function formatErr(e: any) {
+  return (
+    e?.message ||
+    e?.response?.data?.detail ||
+    (typeof e?.response?.data === "string" ? e.response.data : null) ||
+    "Upload failed"
+  );
+}
+
+function validateFile(file: File) {
+  if (!file.type?.startsWith("image/")) return "Please choose an image file.";
+  const maxBytes = 10 * 1024 * 1024;
+  if (file.size > maxBytes) return "Image is too large (max 10 MB).";
+  return null;
 }
 
 export function SetForm({
@@ -73,9 +92,14 @@ export function SetForm({
     }))
   );
 
+  // image upload state
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadImageErr, setUploadImageErr] = useState<string | null>(null);
+  const imageFileRef = useRef<HTMLInputElement | null>(null);
+
   const canSave = useMemo(() => {
-    return !!setNum.trim() && !!name.trim() && !submitting;
-  }, [setNum, name, submitting]);
+    return !!setNum.trim() && !!name.trim() && !submitting && !uploadingImage;
+  }, [setNum, name, submitting, uploadingImage]);
 
   const totalPartQty = useMemo(() => {
     return parts.reduce((sum, row) => sum + (Number(row.quantity) || 0), 0);
@@ -84,6 +108,34 @@ export function SetForm({
   const totalMinifigQty = useMemo(() => {
     return minifigsState.reduce((sum, row) => sum + (Number(row.quantity) || 0), 0);
   }, [minifigsState]);
+
+  function resetImageFileInput() {
+    if (imageFileRef.current) imageFileRef.current.value = "";
+  }
+
+  async function uploadSetImage(file: File) {
+    const err = validateFile(file);
+    if (err) {
+      setUploadImageErr(err);
+      resetImageFileInput();
+      return;
+    }
+
+    setUploadImageErr(null);
+    setUploadingImage(true);
+
+    try {
+      const res = await uploadImageToR2(file);
+      setImageUrl(res.public_url);
+    } catch (e) {
+      const msg = formatErr(e);
+      console.error("Set image upload error:", e);
+      setUploadImageErr(msg);
+    } finally {
+      setUploadingImage(false);
+      resetImageFileInput();
+    }
+  }
 
   function addPart() {
     setParts((prev) => [
@@ -135,37 +187,37 @@ export function SetForm({
   }
 
   async function submit(e: React.FormEvent) {
-  e.preventDefault();
+    e.preventDefault();
 
-  const payload: SetPayload = {
-    set_num: setNum.trim(),
-    name: name.trim(),
-    image_url: imageUrl.trim() || undefined,
-    official_piece_count: Number(pieceCount) || 0,
-    theme_id: themeId || null,
-    catalog_item_id: catalogId || null,
-    parts: parts
-      .filter((p) => p.part_color_id)
-      .map(({ _rowId, ...p }, i) => ({
-        ...p,
-        sort_order: i,
-        instruction_page: p.instruction_page ?? null,
-        bag_number: p.bag_number ?? "",
-        notes: p.notes ?? "",
-      })),
-    minifigs: minifigsState
-      .filter((m) => m.minifig_id)
-      .map(({ _rowId, ...m }, i) => ({
-        ...m,
-        sort_order: i,
-        bag_number: m.bag_number ?? "",
-        notes: m.notes ?? "",
-      })),
-  };
+    const payload: SetPayload = {
+      set_num: setNum.trim(),
+      name: name.trim(),
+      image_url: imageUrl.trim() || undefined,
+      official_piece_count: Number(pieceCount) || 0,
+      theme_id: themeId || null,
+      catalog_item_id: catalogId || null,
+      parts: parts
+        .filter((p) => p.part_color_id)
+        .map(({ _rowId, ...p }, i) => ({
+          ...p,
+          sort_order: i,
+          instruction_page: p.instruction_page ?? null,
+          bag_number: p.bag_number ?? "",
+          notes: p.notes ?? "",
+        })),
+      minifigs: minifigsState
+        .filter((m) => m.minifig_id)
+        .map(({ _rowId, ...m }, i) => ({
+          ...m,
+          sort_order: i,
+          bag_number: m.bag_number ?? "",
+          notes: m.notes ?? "",
+        })),
+    };
 
-  console.log("SET PAYLOAD", payload);
-  await onSubmit(payload);
-}
+    console.log("SET PAYLOAD", payload);
+    await onSubmit(payload);
+  }
 
   return (
     <form onSubmit={submit} className="space-y-6">
@@ -235,13 +287,69 @@ export function SetForm({
               </SelectInput>
             </Field>
 
-            <Field label="Image URL" className="lg:col-span-8">
-              <TextInput
-                value={imageUrl}
-                onChange={(e) => setImageUrl(e.target.value)}
-                placeholder="https://..."
-              />
-            </Field>
+            <div className="lg:col-span-8">
+              <label className="mb-2 block text-sm font-semibold text-slate-700">Image</label>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <TextInput
+                    value={imageUrl}
+                    onChange={(e) => setImageUrl(e.target.value)}
+                    placeholder="https://..."
+                    disabled={!!submitting || uploadingImage}
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => imageFileRef.current?.click()}
+                    disabled={!!submitting || uploadingImage}
+                    className={[
+                      "rounded-xl px-3 py-2 text-sm font-semibold shadow-sm",
+                      "border border-slate-200 bg-white text-slate-900 hover:bg-slate-50",
+                      "disabled:opacity-60 disabled:cursor-not-allowed",
+                    ].join(" ")}
+                  >
+                    {uploadingImage ? "Uploading…" : "Upload"}
+                  </button>
+
+                  {imageUrl ? (
+                    <button
+                      type="button"
+                      onClick={() => setImageUrl("")}
+                      disabled={!!submitting || uploadingImage}
+                      className={[
+                        "rounded-xl px-3 py-2 text-sm font-semibold shadow-sm",
+                        "border border-slate-200 bg-white text-slate-900 hover:bg-slate-50",
+                        "disabled:opacity-60 disabled:cursor-not-allowed",
+                      ].join(" ")}
+                    >
+                      Clear
+                    </button>
+                  ) : null}
+                </div>
+
+                <input
+                  ref={imageFileRef}
+                  type="file"
+                  accept="image/*"
+                  hidden
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) uploadSetImage(f);
+                  }}
+                />
+
+                {uploadImageErr ? (
+                  <div className="mt-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                    {uploadImageErr}
+                  </div>
+                ) : null}
+
+                <div className="mt-3 text-[11px] font-semibold text-slate-500">
+                  Upload an image to R2 or paste an image URL manually.
+                </div>
+              </div>
+            </div>
 
             {imageUrl ? (
               <div className="lg:col-span-12">
@@ -254,9 +362,7 @@ export function SetForm({
                       src={imageUrl}
                       alt={name || "Set preview"}
                       className="max-h-64 rounded-xl object-contain"
-                      onError={(e) => {
-                        (e.currentTarget as HTMLImageElement).style.display = "none";
-                      }}
+                      onError={() => console.warn("Image preview failed to load:", imageUrl)}
                     />
                   </div>
                 </div>
@@ -513,7 +619,7 @@ export function SetForm({
             disabled={!canSave}
             className="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-6 py-3 text-sm font-bold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {submitting ? "Saving..." : "Save Set"}
+            {submitting || uploadingImage ? "Saving..." : "Save Set"}
           </button>
         </div>
       </div>
