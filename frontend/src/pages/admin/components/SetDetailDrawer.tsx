@@ -47,7 +47,7 @@ export function SetDetailDrawer({
     setSaving(true);
     setErr(null);
     try {
-      const res = await api.patch(`${ENDPOINTS.sets}${setItem.id}/`, payload);
+      const res = await api.patch(`${ENDPOINTS.sets}${setItem.set_num}/`, payload);
       onPatched(res.data as LegoSet);
     } catch (e) {
       setErr(formatApiError(e));
@@ -63,7 +63,7 @@ export function SetDetailDrawer({
     setSaving(true);
     setErr(null);
     try {
-      await api.delete(`${ENDPOINTS.sets}${setItem.id}/`);
+      await api.delete(`${ENDPOINTS.sets}${setItem.set_num}/`);
       onDeleted();
     } catch (e) {
       setErr(formatApiError(e));
