@@ -17,7 +17,8 @@ import { cx, card, btnPrimary, btnBase, inputBase } from "../utils/ui";
 import { PartColorDetailDrawer } from "../components/PartColorDetailDrawer";
 
 type ShapeGroup = { part: Part; rows: PartColorRow[] };
-type CategoryGroup = { category: string; shapes: ShapeGroup[] };
+type SpecificCategoryGroup = { specificCategory: string; shapes: ShapeGroup[] };
+type CategoryGroup = { category: string; specifics: SpecificCategoryGroup[] };
 
 type VariantGroup = { variantLabel: string; rows: PartColorRow[] };
 type ColorGroup = { colorId: number; colorName: string; groups: VariantGroup[] };
@@ -26,19 +27,30 @@ function readStr(v: unknown) {
   return String(v ?? "").trim();
 }
 
-// Safe reads for category fields (won't break if types drift)
 function getGeneralCategory(p: Part): string {
   return readStr((p as any)?.general_category);
 }
+
 function getSpecificCategory(p: Part): string {
   return readStr((p as any)?.specific_category);
 }
+
 function getActualCategory(p: Part): string {
   return readStr((p as any)?.actual_category);
 }
+
 function getCategoryLabel(p: Part): string {
   const g = getGeneralCategory(p);
   return g || "Uncategorized";
+}
+
+function getSpecificCategoryLabel(p: Part): string {
+  const s = getSpecificCategory(p);
+  return s || "Unspecified";
+}
+
+function makeSpecificKey(general: string, specific: string) {
+  return `${general}__${specific}`;
 }
 
 function sortRows(rows: PartColorRow[]) {
@@ -55,7 +67,6 @@ function sortRows(rows: PartColorRow[]) {
   });
 }
 
-// ✅ NEW: group rows within a shape by Color -> Variant
 function groupRowsByColorThenVariant(rows: PartColorRow[]): ColorGroup[] {
   const colorMap = new Map<number, { colorName: string; variantMap: Map<string, PartColorRow[]> }>();
 
@@ -67,7 +78,9 @@ function groupRowsByColorThenVariant(rows: PartColorRow[]): ColorGroup[] {
     const v = (r.variant ?? "").trim();
     const vKey = v ? v.toLowerCase() : "__none__";
 
-    if (!colorMap.has(cid)) colorMap.set(cid, { colorName: cname, variantMap: new Map() });
+    if (!colorMap.has(cid)) {
+      colorMap.set(cid, { colorName: cname, variantMap: new Map() });
+    }
 
     const entry = colorMap.get(cid)!;
     if (!entry.variantMap.has(vKey)) entry.variantMap.set(vKey, []);
@@ -81,20 +94,25 @@ function groupRowsByColorThenVariant(rows: PartColorRow[]): ColorGroup[] {
 
     for (const [vKey, vRows] of entry.variantMap.entries()) {
       sortRows(vRows);
+
       const first = vRows[0];
       const variantLabel =
         vKey === "__none__" ? "(no variant)" : (first?.variant ?? "").trim() || "(no variant)";
+
       groups.push({ variantLabel, rows: vRows });
     }
 
-    // (no variant) first, then alpha
     groups.sort((a, b) => {
       if (a.variantLabel === "(no variant)" && b.variantLabel !== "(no variant)") return -1;
       if (b.variantLabel === "(no variant)" && a.variantLabel !== "(no variant)") return 1;
       return a.variantLabel.localeCompare(b.variantLabel);
     });
 
-    colorGroups.push({ colorId, colorName: entry.colorName, groups });
+    colorGroups.push({
+      colorId,
+      colorName: entry.colorName,
+      groups,
+    });
   }
 
   colorGroups.sort((a, b) => a.colorName.localeCompare(b.colorName));
@@ -111,8 +129,11 @@ export default function PartColorsPage() {
   // Shape expand/collapse (part.id -> bool)
   const [expanded, setExpanded] = useState<Record<number, boolean>>({});
 
-  // Category expand/collapse (category string -> bool)
+  // General category expand/collapse
   const [catExpanded, setCatExpanded] = useState<Record<string, boolean>>({});
+
+  // Specific category expand/collapse
+  const [specificExpanded, setSpecificExpanded] = useState<Record<string, boolean>>({});
 
   const [createOpen, setCreateOpen] = useState(false);
 
@@ -125,6 +146,7 @@ export default function PartColorsPage() {
 
   async function loadAll() {
     setErr(null);
+
     const [pcRes, pRes, cRes, catRes] = await Promise.all([
       api.get(ENDPOINTS.partColors),
       api.get(ENDPOINTS.parts),
@@ -143,45 +165,39 @@ export default function PartColorsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Use /parts as the source of truth (category fields always present here)
   const partsById = useMemo(() => {
     const m = new Map<number, Part>();
     for (const p of parts) m.set(p.id, p);
     return m;
   }, [parts]);
 
-  /**
-   * ✅ Grouping:
-   * Category (general_category)
-   *   -> Shape (part.id)
-   *      -> Rows
-   */
   const groupedByCategory: CategoryGroup[] = useMemo(() => {
-    // A) group by shape (part.id)
     const shapeMap = new Map<number, ShapeGroup>();
 
     for (const pc of items) {
       const pid = pc.part?.id;
       if (!pid) continue;
 
-      // ✅ always prefer the full part from /parts
       const fullPart = partsById.get(pid) ?? pc.part;
       if (!fullPart) continue;
 
-      if (!shapeMap.has(pid)) shapeMap.set(pid, { part: fullPart, rows: [] });
+      if (!shapeMap.has(pid)) {
+        shapeMap.set(pid, { part: fullPart, rows: [] });
+      }
+
       shapeMap.get(pid)!.rows.push(pc);
     }
 
-    // B) sort rows inside each shape (stable sorting for grouping)
-    for (const sg of shapeMap.values()) sortRows(sg.rows);
+    for (const sg of shapeMap.values()) {
+      sortRows(sg.rows);
+    }
 
-    // C) shapes array sorted by part_id
     let shapes = Array.from(shapeMap.values()).sort((a, b) =>
       (a.part.part_id ?? "").localeCompare(b.part.part_id ?? "")
     );
 
-    // D) search filter
     const qq = q.trim().toLowerCase();
+
     if (qq) {
       shapes = shapes
         .map((sg) => {
@@ -205,39 +221,49 @@ export default function PartColorsPage() {
         .filter((sg) => sg.rows.length > 0);
     }
 
-    // E) group shapes by category
-    const catMap = new Map<string, ShapeGroup[]>();
+    const generalMap = new Map<string, Map<string, ShapeGroup[]>>();
+
     for (const sg of shapes) {
-      const cat = getCategoryLabel(sg.part);
-      if (!catMap.has(cat)) catMap.set(cat, []);
-      catMap.get(cat)!.push(sg);
+      const general = getCategoryLabel(sg.part);
+      const specific = getSpecificCategoryLabel(sg.part);
+
+      if (!generalMap.has(general)) generalMap.set(general, new Map());
+      const specificMap = generalMap.get(general)!;
+
+      if (!specificMap.has(specific)) specificMap.set(specific, []);
+      specificMap.get(specific)!.push(sg);
     }
 
-    // F) sort categories (Uncategorized last)
-    const cats = Array.from(catMap.entries()).sort(([a], [b]) => {
+    const generalEntries = Array.from(generalMap.entries()).sort(([a], [b]) => {
       if (a === "Uncategorized" && b !== "Uncategorized") return 1;
       if (b === "Uncategorized" && a !== "Uncategorized") return -1;
       return a.localeCompare(b);
     });
 
-    return cats.map(([category, shapes]) => ({ category, shapes }));
+    return generalEntries.map(([category, specificMap]) => {
+      const specifics = Array.from(specificMap.entries())
+        .sort(([a], [b]) => {
+          if (a === "Unspecified" && b !== "Unspecified") return 1;
+          if (b === "Unspecified" && a !== "Unspecified") return -1;
+          return a.localeCompare(b);
+        })
+        .map(([specificCategory, shapes]) => ({
+          specificCategory,
+          shapes: shapes.sort((a, b) => (a.part.part_id ?? "").localeCompare(b.part.part_id ?? "")),
+        }));
+
+      return { category, specifics };
+    });
   }, [items, q, partsById]);
 
   const totalShapeGroups = useMemo(
-    () => groupedByCategory.reduce((sum, cg) => sum + cg.shapes.length, 0),
+    () =>
+      groupedByCategory.reduce(
+        (sum, cg) => sum + cg.specifics.reduce((inner, sg) => inner + sg.shapes.length, 0),
+        0
+      ),
     [groupedByCategory]
   );
-
-  // Open all categories by default once we have data (only if user hasn't interacted)
-  useEffect(() => {
-    if (groupedByCategory.length === 0) return;
-    if (Object.keys(catExpanded).length > 0) return;
-
-    const all: Record<string, boolean> = {};
-    groupedByCategory.forEach((cg) => (all[cg.category] = true));
-    setCatExpanded(all);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groupedByCategory]);
 
   function toggleShape(partPk: number) {
     setExpanded((prev) => ({ ...prev, [partPk]: !prev[partPk] }));
@@ -247,24 +273,36 @@ export default function PartColorsPage() {
     setCatExpanded((prev) => ({ ...prev, [cat]: !prev[cat] }));
   }
 
-  function expandAll() {
-    // categories
-    const allCats: Record<string, boolean> = {};
-    groupedByCategory.forEach((cg) => (allCats[cg.category] = true));
-    setCatExpanded(allCats);
+  function toggleSpecific(general: string, specific: string) {
+    const key = makeSpecificKey(general, specific);
+    setSpecificExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
 
-    // shapes
+  function expandAll() {
+    const allCats: Record<string, boolean> = {};
+    const allSpecifics: Record<string, boolean> = {};
     const allShapes: Record<number, boolean> = {};
+
     groupedByCategory.forEach((cg) => {
-      cg.shapes.forEach((sg) => {
-        if (sg.part?.id != null) allShapes[sg.part.id] = true;
+      allCats[cg.category] = true;
+
+      cg.specifics.forEach((scg) => {
+        allSpecifics[makeSpecificKey(cg.category, scg.specificCategory)] = true;
+
+        scg.shapes.forEach((sg) => {
+          if (sg.part?.id != null) allShapes[sg.part.id] = true;
+        });
       });
     });
+
+    setCatExpanded(allCats);
+    setSpecificExpanded(allSpecifics);
     setExpanded(allShapes);
   }
 
   function collapseAll() {
     setCatExpanded({});
+    setSpecificExpanded({});
     setExpanded({});
   }
 
@@ -283,6 +321,7 @@ export default function PartColorsPage() {
   async function create(payload: any) {
     setSaving(true);
     setErr(null);
+
     try {
       await api.post(ENDPOINTS.partColors, payload);
       setCreateOpen(false);
@@ -296,8 +335,10 @@ export default function PartColorsPage() {
 
   async function saveEdit(payload: any) {
     if (!selected?.id) return;
+
     setSaving(true);
     setErr(null);
+
     try {
       const res = await api.patch(`${ENDPOINTS.partColors}${selected.id}/`, payload);
       applyPatched(res.data);
@@ -318,6 +359,7 @@ export default function PartColorsPage() {
 
     setSaving(true);
     setErr(null);
+
     try {
       await api.delete(`${ENDPOINTS.partColors}${selected.id}/`);
       setDetailOpen(false);
@@ -338,7 +380,7 @@ export default function PartColorsPage() {
           className={cx(inputBase, "sm:max-w-md")}
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Search category, shape, color, variant, or your ID..."
+          placeholder="Search category, specific category, shape, color, variant, or your ID..."
           autoComplete="off"
         />
 
@@ -346,21 +388,25 @@ export default function PartColorsPage() {
           <button type="button" className={btnPrimary} onClick={() => setCreateOpen(true)}>
             + New PartColor
           </button>
+
           <button type="button" className={btnBase} onClick={expandAll}>
             Expand all
           </button>
+
           <button type="button" className={btnBase} onClick={collapseAll}>
             Collapse all
           </button>
         </div>
 
-        <div className="text-xs text-slate-500 font-semibold sm:ml-auto">
+        <div className="text-xs font-semibold text-slate-500 sm:ml-auto">
           {totalShapeGroups} shapes • {items.length} rows
         </div>
       </div>
 
       {err ? (
-        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{err}</div>
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {err}
+        </div>
       ) : null}
 
       <div className={card}>
@@ -370,151 +416,203 @@ export default function PartColorsPage() {
           groupedByCategory.map((cg, catIdx) => {
             const catOpen = !!catExpanded[cg.category];
 
+            const specificCount = cg.specifics.length;
+            const shapeCount = cg.specifics.reduce((sum, scg) => sum + scg.shapes.length, 0);
+
             return (
               <div key={cg.category} className={catIdx === 0 ? "" : "border-t border-slate-200"}>
-                {/* ✅ Category accordion header */}
+                {/* General Category */}
                 <button
                   type="button"
                   onClick={() => toggleCategory(cg.category)}
-                  className="w-full px-4 py-3 bg-slate-50 border-b border-slate-200 hover:bg-slate-100 flex items-center gap-3 text-left"
+                  className="flex w-full items-center gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 text-left hover:bg-slate-100"
                 >
-                  <div className="w-6 text-slate-600 font-black">{catOpen ? "▾" : "▸"}</div>
+                  <div className="w-6 font-black text-slate-600">{catOpen ? "▾" : "▸"}</div>
+
                   <div className="min-w-0 flex-1">
-                    <div className="text-xs font-black tracking-wide text-slate-700 uppercase">
+                    <div className="text-xs font-black uppercase tracking-wide text-slate-700">
                       {cg.category}{" "}
-                      <span className="text-slate-500 font-semibold">({cg.shapes.length})</span>
+                      <span className="font-semibold text-slate-500">
+                        ({specificCount} specific • {shapeCount} shapes)
+                      </span>
                     </div>
                   </div>
-                  <div className="text-xs text-slate-500 font-semibold">{catOpen ? "hide" : "show"}</div>
+
+                  <div className="text-xs font-semibold text-slate-500">{catOpen ? "hide" : "show"}</div>
                 </button>
 
-                {/* ✅ Shapes list only renders when category is open */}
-                {catOpen ? (
-                  cg.shapes.map((sg, idx) => {
-                    const isOpen = !!expanded[sg.part.id];
+                {catOpen
+                  ? cg.specifics.map((scg, scgIdx) => {
+                      const specificKey = makeSpecificKey(cg.category, scg.specificCategory);
+                      const specificOpen = !!specificExpanded[specificKey];
 
-                    const thumbs = sg.rows
-                      .map((r) => r.thumb_url || r.image_url_1 || r.image_url_2 || null)
-                      .filter(Boolean)
-                      .slice(0, 4) as string[];
+                      return (
+                        <div key={specificKey} className={scgIdx === 0 ? "" : "border-t border-slate-200"}>
+                          {/* Specific Category */}
+                          <button
+                            type="button"
+                            onClick={() => toggleSpecific(cg.category, scg.specificCategory)}
+                            className="flex w-full items-center gap-3 bg-white px-6 py-3 text-left hover:bg-slate-50"
+                          >
+                            <div className="w-6 font-black text-slate-500">{specificOpen ? "▾" : "▸"}</div>
 
-                    const showPlaceholders = Math.max(0, 4 - thumbs.length);
-
-                    return (
-                      <div key={sg.part.id} className={idx === 0 ? "" : "border-t border-slate-200"}>
-                        {/* ✅ Shape accordion header */}
-                        <button
-                          type="button"
-                          className="w-full px-4 py-3 flex items-center gap-3 hover:bg-slate-50 text-left"
-                          onClick={() => toggleShape(sg.part.id)}
-                        >
-                          <div className="w-6 text-slate-500 font-black">{isOpen ? "▾" : "▸"}</div>
-
-                          <div className="min-w-0 flex-1">
-                            <div className="text-sm font-extrabold text-slate-900 break-words">
-                              {sg.part.part_id} — {sg.part.name}{" "}
-                              <span className="text-slate-500 font-bold">({sg.rows.length})</span>
-                            </div>
-
-                            <div className="mt-2 flex items-center gap-2 flex-wrap">
-                              {thumbs.map((t, i) => (
-                                <MiniThumb key={`${sg.part.id}-t-${i}`} src={t} />
-                              ))}
-                              {Array.from({ length: showPlaceholders }).map((_, i) => (
-                                <MiniThumb key={`${sg.part.id}-p-${i}`} src={null} />
-                              ))}
-                              <div className="text-xs text-slate-500 font-semibold">
-                                {thumbs.length > 0 ? "preview" : "no images yet"}
+                            <div className="min-w-0 flex-1">
+                              <div className="text-xs font-black uppercase tracking-wide text-slate-600">
+                                {scg.specificCategory}{" "}
+                                <span className="font-semibold text-slate-400">({scg.shapes.length})</span>
                               </div>
                             </div>
-                          </div>
 
-                          <div className="text-xs text-slate-500 font-semibold">{isOpen ? "hide" : "show"}</div>
-                        </button>
+                            <div className="text-xs font-semibold text-slate-500">
+                              {specificOpen ? "hide" : "show"}
+                            </div>
+                          </button>
 
-                        {/* ✅ Rows render grouped by Color -> Variant */}
-                        {isOpen ? (
-                          <div className="border-t border-slate-200">
-                            {groupRowsByColorThenVariant(sg.rows).map((cg2, cgIdx) => (
-                              <div key={cg2.colorId} className={cgIdx === 0 ? "" : "border-t border-slate-200"}>
-                                {/* Color header */}
-                                <div className="px-4 py-2 bg-slate-50 text-xs font-black text-slate-700 flex items-center justify-between">
-                                  <div className="truncate">{cg2.colorName}</div>
-                                  <div className="text-slate-500 font-semibold">
-                                    {cg2.groups.reduce((sum, g) => sum + g.rows.length, 0)} rows
-                                  </div>
-                                </div>
+                          {specificOpen
+                            ? scg.shapes.map((sg, idx) => {
+                                const isOpen = !!expanded[sg.part.id];
 
-                                {/* Variant groups */}
-                                {cg2.groups.map((vg, vgIdx) => (
-                                  <div
-                                    key={`${cg2.colorId}-${vg.variantLabel}`}
-                                    className={vgIdx === 0 ? "" : "border-t border-slate-100"}
-                                  >
-                                    {cg2.groups.length > 1 ? (
-                                      <div className="px-4 py-2 text-xs font-bold text-slate-600">
-                                        {vg.variantLabel}{" "}
-                                        <span className="text-slate-400 font-semibold">({vg.rows.length})</span>
+                                const thumbs = sg.rows
+                                  .map((r) => r.thumb_url || r.image_url_1 || r.image_url_2 || null)
+                                  .filter(Boolean)
+                                  .slice(0, 4) as string[];
+
+                                const showPlaceholders = Math.max(0, 4 - thumbs.length);
+
+                                return (
+                                  <div key={sg.part.id} className={idx === 0 ? "" : "border-t border-slate-200"}>
+                                    {/* Shape */}
+                                    <button
+                                      type="button"
+                                      className="flex w-full items-center gap-3 px-8 py-3 text-left hover:bg-slate-50"
+                                      onClick={() => toggleShape(sg.part.id)}
+                                    >
+                                      <div className="w-6 font-black text-slate-500">{isOpen ? "▾" : "▸"}</div>
+
+                                      <div className="min-w-0 flex-1">
+                                        <div className="break-words text-sm font-extrabold text-slate-900">
+                                          {sg.part.part_id} — {sg.part.name}{" "}
+                                          <span className="font-bold text-slate-500">({sg.rows.length})</span>
+                                        </div>
+
+                                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                                          {thumbs.map((t, i) => (
+                                            <MiniThumb key={`${sg.part.id}-t-${i}`} src={t} />
+                                          ))}
+
+                                          {Array.from({ length: showPlaceholders }).map((_, i) => (
+                                            <MiniThumb key={`${sg.part.id}-p-${i}`} src={null} />
+                                          ))}
+
+                                          <div className="text-xs font-semibold text-slate-500">
+                                            {thumbs.length > 0 ? "preview" : "no images yet"}
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      <div className="text-xs font-semibold text-slate-500">
+                                        {isOpen ? "hide" : "show"}
+                                      </div>
+                                    </button>
+
+                                    {isOpen ? (
+                                      <div className="border-t border-slate-200">
+                                        {groupRowsByColorThenVariant(sg.rows).map((cg2, cgIdx) => (
+                                          <div
+                                            key={cg2.colorId}
+                                            className={cgIdx === 0 ? "" : "border-t border-slate-200"}
+                                          >
+                                            {/* Color Header */}
+                                            <div className="flex items-center justify-between bg-slate-50 px-4 py-2 text-xs font-black text-slate-700">
+                                              <div className="truncate">{cg2.colorName}</div>
+                                              <div className="font-semibold text-slate-500">
+                                                {cg2.groups.reduce((sum, g) => sum + g.rows.length, 0)} rows
+                                              </div>
+                                            </div>
+
+                                            {/* Variant Groups */}
+                                            {cg2.groups.map((vg, vgIdx) => (
+                                              <div
+                                                key={`${cg2.colorId}-${vg.variantLabel}`}
+                                                className={vgIdx === 0 ? "" : "border-t border-slate-100"}
+                                              >
+                                                {cg2.groups.length > 1 ? (
+                                                  <div className="px-4 py-2 text-xs font-bold text-slate-600">
+                                                    {vg.variantLabel}{" "}
+                                                    <span className="font-semibold text-slate-400">
+                                                      ({vg.rows.length})
+                                                    </span>
+                                                  </div>
+                                                ) : null}
+
+                                                {vg.rows.map((pc, pcIdx) => {
+                                                  const img =
+                                                    pc.thumb_url || pc.image_url_1 || pc.image_url_2 || null;
+
+                                                  const idText = pc.part_color_code
+                                                    ? `ID: ${pc.part_color_code}`
+                                                    : "ID: —";
+
+                                                  const nameText = pc.color?.name ?? "—";
+
+                                                  const priceBadge =
+                                                    pc.catalog_item && pc.catalog_item.base_price_override != null
+                                                      ? `$${pc.catalog_item.base_price_override}`
+                                                      : null;
+
+                                                  return (
+                                                    <button
+                                                      key={pc.id}
+                                                      type="button"
+                                                      className={cx(
+                                                        "flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-slate-50",
+                                                        pcIdx === 0 ? "" : "border-t border-slate-100"
+                                                      )}
+                                                      onClick={() => openDetail(pc)}
+                                                    >
+                                                      <RowThumb src={img} />
+
+                                                      <div className="hidden w-[240px] truncate text-xs font-semibold text-slate-600 sm:block">
+                                                        {idText}
+                                                      </div>
+
+                                                      <div className="min-w-0 flex-1">
+                                                        <div className="truncate text-sm font-extrabold text-slate-900">
+                                                          {nameText}
+                                                          {pc.variant ? (
+                                                            <span className="font-bold text-slate-500">
+                                                              {" "}• {pc.variant}
+                                                            </span>
+                                                          ) : null}
+
+                                                          {priceBadge ? (
+                                                            <span className="ml-2 inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-extrabold text-slate-700">
+                                                              {priceBadge}
+                                                            </span>
+                                                          ) : null}
+                                                        </div>
+
+                                                        <div className="truncate text-xs font-semibold text-slate-500 sm:hidden">
+                                                          {idText}
+                                                        </div>
+                                                      </div>
+                                                    </button>
+                                                  );
+                                                })}
+                                              </div>
+                                            ))}
+                                          </div>
+                                        ))}
                                       </div>
                                     ) : null}
-
-                                    {vg.rows.map((pc, pcIdx) => {
-                                      const img = pc.thumb_url || pc.image_url_1 || pc.image_url_2 || null;
-                                      const idText = pc.part_color_code ? `ID: ${pc.part_color_code}` : "ID: —";
-                                      const nameText = pc.color?.name ?? "—";
-
-                                      const priceBadge =
-                                        pc.catalog_item && pc.catalog_item.base_price_override != null
-                                          ? `$${pc.catalog_item.base_price_override}`
-                                          : null;
-
-                                      return (
-                                        <button
-                                          key={pc.id}
-                                          type="button"
-                                          className={cx(
-                                            "w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-slate-50",
-                                            pcIdx === 0 ? "" : "border-t border-slate-100"
-                                          )}
-                                          onClick={() => openDetail(pc)}
-                                        >
-                                          <RowThumb src={img} />
-
-                                          <div className="hidden sm:block w-[240px] text-xs font-semibold text-slate-600 truncate">
-                                            {idText}
-                                          </div>
-
-                                          <div className="min-w-0 flex-1">
-                                            <div className="text-sm font-extrabold text-slate-900 truncate">
-                                              {nameText}{" "}
-                                              {pc.variant ? (
-                                                <span className="text-slate-500 font-bold">• {pc.variant}</span>
-                                              ) : null}
-
-                                              {priceBadge ? (
-                                                <span className="ml-2 inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-extrabold text-slate-700">
-                                                  {priceBadge}
-                                                </span>
-                                              ) : null}
-                                            </div>
-
-                                            <div className="sm:hidden text-xs text-slate-500 font-semibold truncate">
-                                              {idText}
-                                            </div>
-                                          </div>
-                                        </button>
-                                      );
-                                    })}
                                   </div>
-                                ))}
-                              </div>
-                            ))}
-                          </div>
-                        ) : null}
-                      </div>
-                    );
-                  })
-                ) : null}
+                                );
+                              })
+                            : null}
+                        </div>
+                      );
+                    })
+                  : null}
               </div>
             );
           })
@@ -522,7 +620,13 @@ export default function PartColorsPage() {
       </div>
 
       <DrawerShell open={createOpen} title="New PartColor" onClose={() => setCreateOpen(false)} width={980}>
-        <PartColorForm parts={parts} colors={colors} catalogItems={catalogItems} submitting={saving} onSubmit={create} />
+        <PartColorForm
+          parts={parts}
+          colors={colors}
+          catalogItems={catalogItems}
+          submitting={saving}
+          onSubmit={create}
+        />
       </DrawerShell>
 
       <PartColorDetailDrawer
