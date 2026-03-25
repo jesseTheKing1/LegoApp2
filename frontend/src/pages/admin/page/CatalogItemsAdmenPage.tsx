@@ -304,7 +304,7 @@ export default function CatalogItemsAdminPage() {
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         title={selected ? selected.sku : "New Catalog Item"}
-        size="xl"
+        width={1100}
       >
         <div className="space-y-6">
           {selected ? (
