@@ -22,4 +22,5 @@ export const ENDPOINTS = {
   inventoryRecords: "/api/inventory/records/",
 
   presignUpload: "/api/upload/presign/",
+ libraryPickerLookup: "/api/search/library-picker/lookup/",
 };

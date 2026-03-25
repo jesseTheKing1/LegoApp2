@@ -11,5 +11,6 @@ urlpatterns = [
     path("api/", include("minifigs.urls")),
     path("api/inventory/", include("inventory.urls")),
     path("api/", include("sets.urls")),
+    path("api/search/", include("search.urls")),
 
 ]

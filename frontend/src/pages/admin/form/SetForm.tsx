@@ -1,4 +1,3 @@
-// src/pages/admin/form/SetForm.tsx
 import React, { useMemo, useRef, useState } from "react";
 import { uploadImageToR2 } from "../../../lib/r2Uploads";
 
@@ -11,15 +10,21 @@ import type {
   SetMinifigPayload,
   ColorMatchMode,
 } from "../../../types/set";
+import type { LibraryPickerResult } from "../../../types/libraryPicker";
 
-import { PartColorSearchPicker } from "../components/PartColorSearchPicker";
+import { GlobalLibraryPicker } from "../components/GlobalLibraryPicker";
+import { cx } from "../utils/ui";
 
 type PartRow = SetPartPayload & {
   _rowId: string;
+  _label?: string;
+  _subtitle?: string;
 };
 
 type MinifigRow = SetMinifigPayload & {
   _rowId: string;
+  _label?: string;
+  _subtitle?: string;
 };
 
 function makeRowId(prefix: string) {
@@ -64,6 +69,19 @@ export function SetForm({
 
   const [themeId, setThemeId] = useState<number | "">(initialValues?.theme?.id ?? "");
   const [catalogId, setCatalogId] = useState<number | "">(initialValues?.catalog_item?.id ?? "");
+  const [catalogPreview, setCatalogPreview] = useState<LibraryPickerResult | null>(
+    initialValues?.catalog_item
+      ? {
+          id: initialValues.catalog_item.id,
+          type: "catalog",
+          title: initialValues.catalog_item.sku,
+          subtitle: initialValues.catalog_item.sku,
+          image_url: null,
+          search_text: initialValues.catalog_item.sku,
+          meta: { sku: initialValues.catalog_item.sku },
+        }
+      : null
+  );
 
   const [parts, setParts] = useState<PartRow[]>(
     (initialValues?.parts ?? []).map((row, i) => ({
@@ -77,6 +95,17 @@ export function SetForm({
       is_structural: row.is_structural,
       color_match_mode: row.color_match_mode ?? "exact",
       notes: row.notes ?? "",
+      _label:
+        row.part_color_detail?.part?.name ||
+        row.part_color_detail?.part_color_code ||
+        `Part ${row.part_color}`,
+      _subtitle: [
+        row.part_color_detail?.part?.part_id,
+        row.part_color_detail?.color?.name,
+        row.part_color_detail?.variant,
+      ]
+        .filter(Boolean)
+        .join(" • "),
     }))
   );
 
@@ -89,10 +118,15 @@ export function SetForm({
       bag_number: row.bag_number ?? "",
       is_required: row.is_required ?? true,
       notes: row.notes ?? "",
+      _label: row.minifig_detail?.name || `Minifig ${row.minifig}`,
+      _subtitle: row.minifig_detail?.bricklink_id || "",
     }))
   );
 
-  // image upload state
+  const [catalogPickerOpen, setCatalogPickerOpen] = useState(false);
+  const [partPickerOpen, setPartPickerOpen] = useState(false);
+  const [minifigPickerOpen, setMinifigPickerOpen] = useState(false);
+
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadImageErr, setUploadImageErr] = useState<string | null>(null);
   const imageFileRef = useRef<HTMLInputElement | null>(null);
@@ -128,31 +162,11 @@ export function SetForm({
       const res = await uploadImageToR2(file);
       setImageUrl(res.public_url);
     } catch (e) {
-      const msg = formatErr(e);
-      console.error("Set image upload error:", e);
-      setUploadImageErr(msg);
+      setUploadImageErr(formatErr(e));
     } finally {
       setUploadingImage(false);
       resetImageFileInput();
     }
-  }
-
-  function addPart() {
-    setParts((prev) => [
-      ...prev,
-      {
-        _rowId: makeRowId("part"),
-        part_color_id: 0,
-        quantity: 1,
-        instruction_page: null,
-        sort_order: prev.length,
-        bag_number: "",
-        is_visible: true,
-        is_structural: false,
-        color_match_mode: "exact",
-        notes: "",
-      },
-    ]);
   }
 
   function updatePart(rowId: string, patch: Partial<PartRow>) {
@@ -163,27 +177,64 @@ export function SetForm({
     setParts((prev) => prev.filter((row) => row._rowId !== rowId));
   }
 
-  function addMinifig() {
-    setMinifigs((prev) => [
-      ...prev,
-      {
-        _rowId: makeRowId("minifig"),
-        minifig_id: 0,
-        quantity: 1,
-        sort_order: prev.length,
-        bag_number: "",
-        is_required: true,
-        notes: "",
-      },
-    ]);
-  }
-
   function updateMinifig(rowId: string, patch: Partial<MinifigRow>) {
     setMinifigs((prev) => prev.map((row) => (row._rowId === rowId ? { ...row, ...patch } : row)));
   }
 
   function removeMinifig(rowId: string) {
     setMinifigs((prev) => prev.filter((row) => row._rowId !== rowId));
+  }
+
+  function handleCatalogPick(item: LibraryPickerResult) {
+    if (item.type !== "catalog") return;
+    setCatalogId(item.id);
+    setCatalogPreview(item);
+    setCatalogPickerOpen(false);
+  }
+
+  function handlePartPick(item: LibraryPickerResult) {
+    if (item.type !== "part_color") return;
+
+    setParts((prev) => [
+      ...prev,
+      {
+        _rowId: makeRowId("part"),
+        part_color_id: item.id,
+        quantity: 1,
+        instruction_page: null,
+        sort_order: prev.length,
+        bag_number: "",
+        is_visible: true,
+        is_structural: false,
+        color_match_mode: "exact",
+        notes: "",
+        _label: item.title,
+        _subtitle: item.subtitle,
+      },
+    ]);
+
+    setPartPickerOpen(false);
+  }
+
+  function handleMinifigPick(item: LibraryPickerResult) {
+    if (item.type !== "minifig") return;
+
+    setMinifigs((prev) => [
+      ...prev,
+      {
+        _rowId: makeRowId("minifig"),
+        minifig_id: item.id,
+        quantity: 1,
+        sort_order: prev.length,
+        bag_number: "",
+        is_required: true,
+        notes: "",
+        _label: item.title,
+        _subtitle: item.subtitle,
+      },
+    ]);
+
+    setMinifigPickerOpen(false);
   }
 
   async function submit(e: React.FormEvent) {
@@ -198,7 +249,7 @@ export function SetForm({
       catalog_item_id: catalogId || null,
       parts: parts
         .filter((p) => p.part_color_id)
-        .map(({ _rowId, ...p }, i) => ({
+        .map(({ _rowId, _label, _subtitle, ...p }, i) => ({
           ...p,
           sort_order: i,
           instruction_page: p.instruction_page ?? null,
@@ -207,7 +258,7 @@ export function SetForm({
         })),
       minifigs: minifigsState
         .filter((m) => m.minifig_id)
-        .map(({ _rowId, ...m }, i) => ({
+        .map(({ _rowId, _label, _subtitle, ...m }, i) => ({
           ...m,
           sort_order: i,
           bag_number: m.bag_number ?? "",
@@ -215,7 +266,6 @@ export function SetForm({
         })),
     };
 
-    console.log("SET PAYLOAD", payload);
     await onSubmit(payload);
   }
 
@@ -225,9 +275,9 @@ export function SetForm({
         <div className="border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white px-6 py-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <h2 className="text-xl font-bold tracking-tight text-slate-900">Set Details</h2>
+              <h2 className="text-xl font-black tracking-tight text-slate-900">Set Details</h2>
               <p className="mt-1 text-sm text-slate-500">
-                Manage set info, included parts, and minifigs.
+                Manage set info, linked catalog pricing, included parts, and minifigs.
               </p>
             </div>
 
@@ -273,19 +323,48 @@ export function SetForm({
               </SelectInput>
             </Field>
 
-            <Field label="Catalog Item" className="lg:col-span-4">
-              <SelectInput
-                value={catalogId}
-                onChange={(e) => setCatalogId(e.target.value ? Number(e.target.value) : "")}
-              >
-                <option value="">No catalog item</option>
-                {catalogItems.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.sku}
-                  </option>
-                ))}
-              </SelectInput>
-            </Field>
+            <div className="lg:col-span-4">
+              <label className="mb-2 block text-sm font-semibold text-slate-700">Catalog Item</label>
+              <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+                {catalogPreview ? (
+                  <SelectedCard
+                    title={catalogPreview.title}
+                    subtitle={catalogPreview.subtitle}
+                    onClear={() => {
+                      setCatalogId("");
+                      setCatalogPreview(null);
+                    }}
+                  />
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">
+                    No catalog item linked.
+                  </div>
+                )}
+
+                <div className="mt-3 flex gap-2">
+                  <button
+                    type="button"
+                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                    onClick={() => setCatalogPickerOpen((v) => !v)}
+                  >
+                    {catalogPickerOpen ? "Close Search" : catalogPreview ? "Change Catalog Item" : "Search Catalog"}
+                  </button>
+                </div>
+
+                {catalogPickerOpen ? (
+                  <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <GlobalLibraryPicker
+                      mode="catalog"
+                      allowedModes={["catalog"]}
+                      title="Select Catalog Item"
+                      placeholder="Search SKU, part, minifig, or pricing..."
+                      onPick={handleCatalogPick}
+                      autoFocus
+                    />
+                  </div>
+                ) : null}
+              </div>
+            </div>
 
             <div className="lg:col-span-8">
               <label className="mb-2 block text-sm font-semibold text-slate-700">Image</label>
@@ -303,11 +382,7 @@ export function SetForm({
                     type="button"
                     onClick={() => imageFileRef.current?.click()}
                     disabled={!!submitting || uploadingImage}
-                    className={[
-                      "rounded-xl px-3 py-2 text-sm font-semibold shadow-sm",
-                      "border border-slate-200 bg-white text-slate-900 hover:bg-slate-50",
-                      "disabled:opacity-60 disabled:cursor-not-allowed",
-                    ].join(" ")}
+                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {uploadingImage ? "Uploading…" : "Upload"}
                   </button>
@@ -317,11 +392,7 @@ export function SetForm({
                       type="button"
                       onClick={() => setImageUrl("")}
                       disabled={!!submitting || uploadingImage}
-                      className={[
-                        "rounded-xl px-3 py-2 text-sm font-semibold shadow-sm",
-                        "border border-slate-200 bg-white text-slate-900 hover:bg-slate-50",
-                        "disabled:opacity-60 disabled:cursor-not-allowed",
-                      ].join(" ")}
+                      className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       Clear
                     </button>
@@ -362,7 +433,6 @@ export function SetForm({
                       src={imageUrl}
                       alt={name || "Set preview"}
                       className="max-h-64 rounded-xl object-contain"
-                      onError={() => console.warn("Image preview failed to load:", imageUrl)}
                     />
                   </div>
                 </div>
@@ -375,22 +445,35 @@ export function SetForm({
       <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-col gap-4 border-b border-slate-200 bg-slate-50/70 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h3 className="text-lg font-bold text-slate-900">Parts</h3>
+            <h3 className="text-lg font-black text-slate-900">Parts</h3>
             <p className="mt-1 text-sm text-slate-500">
-              Add exact part and color combinations used in this set.
+              Search exact part-color combinations, then fill in bag, page, and visibility details.
             </p>
           </div>
 
           <button
             type="button"
-            onClick={addPart}
+            onClick={() => setPartPickerOpen((v) => !v)}
             className="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700"
           >
-            + Add Part
+            {partPickerOpen ? "Close Part Search" : "+ Add Part"}
           </button>
         </div>
 
-        <div className="p-6">
+        <div className="p-6 space-y-5">
+          {partPickerOpen ? (
+            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+              <GlobalLibraryPicker
+                mode="part_color"
+                allowedModes={["part_color"]}
+                title="Add Part Color"
+                placeholder="Search part id, name, color, category, or variant..."
+                onPick={handlePartPick}
+                autoFocus
+              />
+            </div>
+          ) : null}
+
           {parts.length === 0 ? (
             <EmptyState text="No parts added yet." />
           ) : (
@@ -400,8 +483,15 @@ export function SetForm({
                   key={row._rowId}
                   className="rounded-3xl border border-slate-200 bg-slate-50 p-4 shadow-sm"
                 >
-                  <div className="mb-4 flex items-center justify-between">
-                    <div className="text-sm font-bold text-slate-800">Part Row {index + 1}</div>
+                  <div className="mb-4 flex items-start justify-between gap-4">
+                    <div>
+                      <div className="text-sm font-black text-slate-800">Part Row {index + 1}</div>
+                      <div className="mt-1 text-sm font-semibold text-slate-900">
+                        {row._label || "Unselected part"}
+                      </div>
+                      <div className="text-sm text-slate-500">{row._subtitle || "Choose a part color"}</div>
+                    </div>
+
                     <button
                       type="button"
                       onClick={() => removePart(row._rowId)}
@@ -412,13 +502,6 @@ export function SetForm({
                   </div>
 
                   <div className="grid gap-4 xl:grid-cols-12">
-                    <Field label="Piece" className="xl:col-span-5">
-                      <PartColorSearchPicker
-                        value={row.part_color_id || 0}
-                        onChange={(id) => updatePart(row._rowId, { part_color_id: id })}
-                      />
-                    </Field>
-
                     <Field label="Quantity" className="xl:col-span-2">
                       <TextInput
                         type="number"
@@ -440,7 +523,7 @@ export function SetForm({
                       />
                     </Field>
 
-                    <Field label="Instruction Page" className="xl:col-span-3">
+                    <Field label="Instruction Page" className="xl:col-span-2">
                       <TextInput
                         type="number"
                         value={row.instruction_page ?? ""}
@@ -453,7 +536,7 @@ export function SetForm({
                       />
                     </Field>
 
-                    <Field label="Color Match" className="xl:col-span-4">
+                    <Field label="Color Match" className="xl:col-span-3">
                       <SelectInput
                         value={row.color_match_mode}
                         onChange={(e) =>
@@ -467,6 +550,19 @@ export function SetForm({
                       </SelectInput>
                     </Field>
 
+                    <Field label="Replace Part Selection" className="xl:col-span-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPartPickerOpen(true);
+                          removePart(row._rowId);
+                        }}
+                        className="w-full rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-900 transition hover:bg-slate-50"
+                      >
+                        Search Another Part
+                      </button>
+                    </Field>
+
                     <Field label="Notes" className="xl:col-span-8">
                       <TextInput
                         value={row.notes}
@@ -475,7 +571,7 @@ export function SetForm({
                       />
                     </Field>
 
-                    <div className="xl:col-span-12">
+                    <div className="xl:col-span-4">
                       <label className="mb-2 block text-sm font-semibold text-slate-700">
                         Options
                       </label>
@@ -503,22 +599,35 @@ export function SetForm({
       <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-col gap-4 border-b border-slate-200 bg-slate-50/70 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h3 className="text-lg font-bold text-slate-900">Minifigs</h3>
+            <h3 className="text-lg font-black text-slate-900">Minifigs</h3>
             <p className="mt-1 text-sm text-slate-500">
-              Add the minifigs included in this set.
+              Search and add minifigs cleanly instead of digging through a huge dropdown.
             </p>
           </div>
 
           <button
             type="button"
-            onClick={addMinifig}
+            onClick={() => setMinifigPickerOpen((v) => !v)}
             className="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700"
           >
-            + Add Minifig
+            {minifigPickerOpen ? "Close Minifig Search" : "+ Add Minifig"}
           </button>
         </div>
 
-        <div className="p-6">
+        <div className="p-6 space-y-5">
+          {minifigPickerOpen ? (
+            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+              <GlobalLibraryPicker
+                mode="minifig"
+                allowedModes={["minifig"]}
+                title="Add Minifig"
+                placeholder="Search minifig name, BrickLink ID, or theme..."
+                onPick={handleMinifigPick}
+                autoFocus
+              />
+            </div>
+          ) : null}
+
           {minifigsState.length === 0 ? (
             <EmptyState text="No minifigs added yet." />
           ) : (
@@ -528,8 +637,15 @@ export function SetForm({
                   key={row._rowId}
                   className="rounded-3xl border border-slate-200 bg-slate-50 p-4 shadow-sm"
                 >
-                  <div className="mb-4 flex items-center justify-between">
-                    <div className="text-sm font-bold text-slate-800">Minifig Row {index + 1}</div>
+                  <div className="mb-4 flex items-start justify-between gap-4">
+                    <div>
+                      <div className="text-sm font-black text-slate-800">Minifig Row {index + 1}</div>
+                      <div className="mt-1 text-sm font-semibold text-slate-900">
+                        {row._label || "Unselected minifig"}
+                      </div>
+                      <div className="text-sm text-slate-500">{row._subtitle || "Choose a minifig"}</div>
+                    </div>
+
                     <button
                       type="button"
                       onClick={() => removeMinifig(row._rowId)}
@@ -540,24 +656,6 @@ export function SetForm({
                   </div>
 
                   <div className="grid gap-4 xl:grid-cols-12">
-                    <Field label="Minifig" className="xl:col-span-6">
-                      <SelectInput
-                        value={row.minifig_id || ""}
-                        onChange={(e) =>
-                          updateMinifig(row._rowId, {
-                            minifig_id: e.target.value ? Number(e.target.value) : 0,
-                          })
-                        }
-                      >
-                        <option value="">Select a minifig</option>
-                        {minifigs.map((mf) => (
-                          <option key={mf.id} value={mf.id}>
-                            {mf.name}
-                          </option>
-                        ))}
-                      </SelectInput>
-                    </Field>
-
                     <Field label="Quantity" className="xl:col-span-2">
                       <TextInput
                         type="number"
@@ -571,7 +669,7 @@ export function SetForm({
                       />
                     </Field>
 
-                    <Field label="Bag Number" className="xl:col-span-2">
+                    <Field label="Bag Number" className="xl:col-span-3">
                       <TextInput
                         value={row.bag_number}
                         onChange={(e) => updateMinifig(row._rowId, { bag_number: e.target.value })}
@@ -579,7 +677,7 @@ export function SetForm({
                       />
                     </Field>
 
-                    <div className="xl:col-span-2">
+                    <div className="xl:col-span-3">
                       <label className="mb-2 block text-sm font-semibold text-slate-700">
                         Required
                       </label>
@@ -591,6 +689,19 @@ export function SetForm({
                         />
                       </div>
                     </div>
+
+                    <Field label="Replace Minifig" className="xl:col-span-4">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMinifigPickerOpen(true);
+                          removeMinifig(row._rowId);
+                        }}
+                        className="w-full rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-900 transition hover:bg-slate-50"
+                      >
+                        Search Another Minifig
+                      </button>
+                    </Field>
 
                     <Field label="Notes" className="xl:col-span-12">
                       <TextInput
@@ -712,5 +823,34 @@ function ToggleBox({
       />
       {label}
     </label>
+  );
+}
+
+function SelectedCard({
+  title,
+  subtitle,
+  onClear,
+}: {
+  title: string;
+  subtitle?: string;
+  onClear: () => void;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="truncate text-sm font-black text-slate-900">{title}</div>
+          <div className="mt-1 text-sm text-slate-500">{subtitle || "—"}</div>
+        </div>
+
+        <button
+          type="button"
+          onClick={onClear}
+          className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50"
+        >
+          Clear
+        </button>
+      </div>
+    </div>
   );
 }

@@ -5,7 +5,10 @@ import type {
   CatalogCostSource,
 } from "../../../types/catalogCostEntry";
 import type { CatalogItemMini } from "../../../types/catalog";
+import type { LibraryPickerResult } from "../../../types/libraryPicker";
+
 import { btnBase, btnPrimary, cx, inputBase } from "../utils/ui";
+import { GlobalLibraryPicker } from "../components/GlobalLibraryPicker";
 
 const SOURCE_OPTIONS: CatalogCostSource[] = [
   "lego",
@@ -36,6 +39,9 @@ export function CatalogCostEntryForm({
   const [catalogItem, setCatalogItem] = useState<number>(
     initialValues?.catalog_item ?? defaultCatalogItemId ?? 0
   );
+  const [catalogPreview, setCatalogPreview] = useState<LibraryPickerResult | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+
   const [source, setSource] = useState<CatalogCostSource>(
     (initialValues?.source as CatalogCostSource) || "bricklink"
   );
@@ -63,7 +69,29 @@ export function CatalogCostEntryForm({
     setPurchasedAt(initialValues?.purchased_at ?? "");
     setReference(initialValues?.reference ?? "");
     setNotes(initialValues?.notes ?? "");
-  }, [initialValues, defaultCatalogItemId]);
+
+    if (defaultCatalogItemId && !initialValues?.catalog_item) {
+      const found = catalogItems.find((x) => x.id === defaultCatalogItemId);
+      if (found) {
+        setCatalogPreview({
+          id: found.id,
+          type: "catalog",
+          title: found.sku,
+          subtitle: found.sku,
+          image_url: null,
+          search_text: found.sku,
+          meta: { sku: found.sku },
+        });
+      }
+    }
+  }, [initialValues, defaultCatalogItemId, catalogItems]);
+
+  function handleCatalogPick(item: LibraryPickerResult) {
+    if (item.type !== "catalog") return;
+    setCatalogItem(item.id);
+    setCatalogPreview(item);
+    setPickerOpen(false);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -85,24 +113,62 @@ export function CatalogCostEntryForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
-      <div className="grid gap-4 md:grid-cols-2">
-        <label className="grid gap-2 md:col-span-2">
-          <span className="text-sm font-semibold text-slate-700">Catalog Item</span>
-          <select
-            className={inputBase}
-            value={catalogItem}
-            onChange={(e) => setCatalogItem(Number(e.target.value))}
-            required
-          >
-            <option value={0}>Select catalog item...</option>
-            {catalogItems.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.sku}
-              </option>
-            ))}
-          </select>
-        </label>
+      <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-slate-500">
+          Catalog Item
+        </div>
 
+        {catalogPreview ? (
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-sm font-black text-slate-900">{catalogPreview.title}</div>
+                <div className="mt-1 text-sm text-slate-500">{catalogPreview.subtitle || "—"}</div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setCatalogItem(0);
+                  setCatalogPreview(null);
+                }}
+                className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
+            No catalog item selected.
+          </div>
+        )}
+
+        <div className="mt-3 flex gap-2">
+          <button
+            type="button"
+            className={btnBase}
+            onClick={() => setPickerOpen((v) => !v)}
+          >
+            {pickerOpen ? "Close Search" : catalogPreview ? "Change Catalog Item" : "Search Catalog"}
+          </button>
+        </div>
+
+        {pickerOpen ? (
+          <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <GlobalLibraryPicker
+              mode="catalog"
+              allowedModes={["catalog"]}
+              title="Find Catalog Item"
+              placeholder="Search SKU, linked part, minifig, or price..."
+              onPick={handleCatalogPick}
+              autoFocus
+            />
+          </div>
+        ) : null}
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
         <label className="grid gap-2">
           <span className="text-sm font-semibold text-slate-700">Source</span>
           <select
@@ -211,7 +277,7 @@ export function CatalogCostEntryForm({
       </label>
 
       <div className="flex items-center gap-3">
-        <button type="submit" className={btnPrimary} disabled={submitting}>
+        <button type="submit" className={btnPrimary} disabled={submitting || !catalogItem}>
           {submitting ? "Saving..." : "Save Cost Entry"}
         </button>
         <button type="reset" className={btnBase}>
