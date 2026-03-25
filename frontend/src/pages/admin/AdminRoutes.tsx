@@ -1,7 +1,5 @@
-// src/pages/admin/catalog/CatalogAdminRoutes.tsx
 import React from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
-
 
 import ColorsAdminPage from "./page/ColorsAdminPage";
 import PartColorsPage from "./page/PartColorsAdminPage";
@@ -12,6 +10,9 @@ import InventoryDashboardPage from "./page/InventoryDashboardPage";
 import InventoryLocationsPage from "./page/InventoryLocationsPage";
 import InventoryRecordsPage from "./page/InventoryRecordsPage";
 import SetsAdminPage from "./page/SetsAdminPage";
+import CatalogItemsAdminPage from "./page/CatalogItemsAdmenPage";
+import CatalogCostEntriesAdminPage from "./page/CatalogCostEntriesAdminPage";
+
 
 export default function CatalogAdminRoutes() {
   return (
@@ -25,6 +26,10 @@ export default function CatalogAdminRoutes() {
         <Route path="themes" element={<ThemesAdminPage />} />
         <Route path="sets" element={<SetsAdminPage />} />
         <Route path="minifigs" element={<MinifigsAdminPage />} />
+
+        <Route path="catalog" element={<CatalogItemsAdminPage />} />
+        <Route path="catalog/costs" element={<CatalogCostEntriesAdminPage />} />
+
         <Route path="inventory" element={<InventoryDashboardPage />} />
         <Route path="inventory/records" element={<InventoryRecordsPage />} />
         <Route path="inventory/locations" element={<InventoryLocationsPage />} />

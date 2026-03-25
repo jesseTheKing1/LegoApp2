@@ -45,6 +45,14 @@ export function AdminMenu({ compact = false }: { compact?: boolean }) {
           <div className="max-h-[80vh] overflow-y-auto p-2">
             <div className={sectionLabelClass}>Catalog</div>
 
+            <Link to="/admin/catalog" className={linkClass} onClick={close}>
+              Catalog Items <span className="text-slate-400">↗</span>
+            </Link>
+
+            <Link to="/admin/catalog/costs" className={linkClass} onClick={close}>
+              Cost Entries <span className="text-slate-400">↗</span>
+            </Link>
+            
             <div className="grid gap-1">
               <Link to="/admin/parts" className={linkClass} onClick={close}>
                 Parts <span className="text-slate-400">↗</span>
