@@ -1,21 +1,19 @@
+import type { CatalogCostEntry } from "./catalogCostEntry";
+
 export interface CatalogItem {
   id: number;
   sku: string;
   is_active: boolean;
 
-  // sell pricing
   base_price_override: string | null;
   force_override: boolean;
 
-  // market reference pricing
   lego_reference_price: string | null;
   bricklink_reference_price: string | null;
 
-  // computed sell pricing
   current_price: string | null;
   pricing_source: string;
 
-  // computed cost analytics
   latest_landed_unit_cost: string | null;
   weighted_average_unit_cost: string | null;
   current_cost: string | null;
@@ -26,6 +24,8 @@ export interface CatalogItem {
   total_spent: string | null;
 
   notes: string;
+  cost_entries?: CatalogCostEntry[];
+
   created_at: string;
   updated_at: string;
 }
