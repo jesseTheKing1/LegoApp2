@@ -180,9 +180,9 @@ export default function CatalogCostEntriesAdminPage() {
       <DrawerShell
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        title="New Cost Entry"
-        size="lg"
-      >
+        title={selected ? selected.sku : "New Catalog Item"}
+        width={1100}
+        >
         <div className={cx(card, "p-5")}>
           <CatalogCostEntryForm
             catalogItems={catalogItems.map((item) => ({
