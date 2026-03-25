@@ -1,12 +1,11 @@
-# catalog/views.py
-from django.db.models import Q
+from django.db.models import Q, Prefetch
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
 
-from .models import CatalogItem
-from .serializers import CatalogItemSerializer
+from .models import CatalogItem, CatalogCostEntry
+from .serializers import CatalogItemSerializer, CatalogCostEntrySerializer
 
 
 class CatalogItemViewSet(viewsets.ModelViewSet):
@@ -14,6 +13,7 @@ class CatalogItemViewSet(viewsets.ModelViewSet):
         CatalogItem.objects
         .select_related("minifig", "part_color")
         .select_related("part_color__part", "part_color__color")
+        .prefetch_related("cost_entries")
         .all()
         .order_by("sku")
     )
@@ -29,6 +29,7 @@ class CatalogItemViewSet(viewsets.ModelViewSet):
             CatalogItem.objects
             .select_related("minifig", "part_color")
             .select_related("part_color__part", "part_color__color")
+            .prefetch_related("cost_entries")
             .all()
             .order_by("sku")
         )
@@ -36,20 +37,13 @@ class CatalogItemViewSet(viewsets.ModelViewSet):
         if q:
             qs = qs.filter(
                 Q(sku__icontains=q)
-                |
-                Q(minifig__name__icontains=q)
-                |
-                Q(minifig__bricklink_id__icontains=q)
-                |
-                Q(part_color__part_color_code__icontains=q)
-                |
-                Q(part_color__description__icontains=q)
-                |
-                Q(part_color__part__part_id__icontains=q)
-                |
-                Q(part_color__part__name__icontains=q)
-                |
-                Q(part_color__color__name__icontains=q)
+                | Q(minifig__name__icontains=q)
+                | Q(minifig__bricklink_id__icontains=q)
+                | Q(part_color__part_color_code__icontains=q)
+                | Q(part_color__description__icontains=q)
+                | Q(part_color__part__part_id__icontains=q)
+                | Q(part_color__part__name__icontains=q)
+                | Q(part_color__color__name__icontains=q)
             )
 
         results = []
@@ -92,9 +86,43 @@ class CatalogItemViewSet(viewsets.ModelViewSet):
                 "display_name": display_name,
                 "subtitle": subtitle,
                 "display_image_url": display_image_url,
+
+                # sell pricing
                 "current_price": item.current_price,
                 "pricing_source": item.pricing_source,
+
+                # cost pricing
+                "current_cost": item.current_cost,
+                "latest_landed_unit_cost": item.latest_landed_unit_cost,
+                "margin_amount": item.margin_amount,
+                "margin_percent": item.margin_percent,
+
+                # reference pricing
+                "lego_reference_price": item.lego_reference_price,
+                "bricklink_reference_price": item.bricklink_reference_price,
+                "lego_vs_bricklink_diff_percent": item.lego_vs_bricklink_diff_percent,
+
                 "is_active": item.is_active,
             })
 
         return Response(results)
+
+
+class CatalogCostEntryViewSet(viewsets.ModelViewSet):
+    queryset = (
+        CatalogCostEntry.objects
+        .select_related("catalog_item")
+        .all()
+        .order_by("-purchased_at", "-id")
+    )
+    serializer_class = CatalogCostEntrySerializer
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        catalog_item_id = self.request.query_params.get("catalog_item")
+
+        if catalog_item_id:
+            qs = qs.filter(catalog_item_id=catalog_item_id)
+
+        return qs
