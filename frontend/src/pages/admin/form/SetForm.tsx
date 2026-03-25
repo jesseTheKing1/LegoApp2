@@ -186,56 +186,72 @@ export function SetForm({
   }
 
   function handleCatalogPick(item: LibraryPickerResult) {
-    if (item.type !== "catalog") return;
-    setCatalogId(item.id);
-    setCatalogPreview(item);
-    setCatalogPickerOpen(false);
+  console.log("catalog pick", item);
+
+  if (item.type !== "catalog") {
+    console.warn("Expected catalog result but got:", item.type);
+    return;
   }
 
-  function handlePartPick(item: LibraryPickerResult) {
-    if (item.type !== "part_color") return;
+  setCatalogId(item.id);
+  setCatalogPreview(item);
+  setCatalogPickerOpen(false);
+}
 
-    setParts((prev) => [
-      ...prev,
-      {
-        _rowId: makeRowId("part"),
-        part_color_id: item.id,
-        quantity: 1,
-        instruction_page: null,
-        sort_order: prev.length,
-        bag_number: "",
-        is_visible: true,
-        is_structural: false,
-        color_match_mode: "exact",
-        notes: "",
-        _label: item.title,
-        _subtitle: item.subtitle,
-      },
-    ]);
+function handlePartPick(item: LibraryPickerResult) {
+  console.log("part pick", item);
 
-    setPartPickerOpen(false);
+  if (item.type !== "part_color") {
+    console.warn("Expected part_color result but got:", item.type);
+    return;
   }
 
-  function handleMinifigPick(item: LibraryPickerResult) {
-    if (item.type !== "minifig") return;
+  setParts((prev) => [
+    ...prev,
+    {
+      _rowId: makeRowId("part"),
+      part_color_id: item.id,
+      quantity: 1,
+      instruction_page: null,
+      sort_order: prev.length,
+      bag_number: "",
+      is_visible: true,
+      is_structural: false,
+      color_match_mode: "exact",
+      notes: "",
+      _label: item.title,
+      _subtitle: item.subtitle,
+    },
+  ]);
 
-    setMinifigs((prev) => [
-      ...prev,
-      {
-        _rowId: makeRowId("minifig"),
-        minifig_id: item.id,
-        quantity: 1,
-        sort_order: prev.length,
-        bag_number: "",
-        is_required: true,
-        notes: "",
-        _label: item.title,
-        _subtitle: item.subtitle,
-      },
-    ]);
+  setPartPickerOpen(false);
+}
 
-    setMinifigPickerOpen(false);
+function handleMinifigPick(item: LibraryPickerResult) {
+  console.log("minifig pick", item);
+
+  if (item.type !== "minifig") {
+    console.warn("Expected minifig result but got:", item.type);
+    return;
   }
+
+  setMinifigs((prev) => [
+    ...prev,
+    {
+      _rowId: makeRowId("minifig"),
+      minifig_id: item.id,
+      quantity: 1,
+      sort_order: prev.length,
+      bag_number: "",
+      is_required: true,
+      notes: "",
+      _label: item.title,
+      _subtitle: item.subtitle,
+    },
+  ]);
+
+  setMinifigPickerOpen(false);
+}
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();

@@ -87,12 +87,17 @@ export function CatalogCostEntryForm({
   }, [initialValues, defaultCatalogItemId, catalogItems]);
 
   function handleCatalogPick(item: LibraryPickerResult) {
-    if (item.type !== "catalog") return;
-    setCatalogItem(item.id);
-    setCatalogPreview(item);
-    setPickerOpen(false);
+  console.log("cost-entry catalog pick", item);
+
+  if (item.type !== "catalog") {
+    console.warn("Expected catalog result but got:", item.type);
+    return;
   }
 
+  setCatalogItem(item.id);
+  setCatalogPreview(item);
+  setPickerOpen(false);
+}
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 

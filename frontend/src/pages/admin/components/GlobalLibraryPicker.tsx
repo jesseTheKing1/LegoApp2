@@ -16,13 +16,6 @@ const MODE_LABELS: Record<LibraryPickerMode, string> = {
   catalog: "Catalog",
 };
 
-function money(v?: string | null) {
-  if (v == null || v === "") return null;
-  const n = Number(v);
-  if (Number.isNaN(n)) return null;
-  return `$${n.toFixed(4)}`;
-}
-
 function useDebouncedValue<T>(value: T, delay = 250) {
   const [debounced, setDebounced] = useState(value);
 
@@ -34,14 +27,228 @@ function useDebouncedValue<T>(value: T, delay = 250) {
   return debounced;
 }
 
+type GroupedRows = {
+  label: string;
+  key: string;
+  rows?: LibraryPickerResult[];
+  children?: GroupedRows[];
+};
+
+function groupResults(rows: LibraryPickerResult[], activeMode: LibraryPickerMode): GroupedRows[] {
+  const typeOrder: LibraryPickerType[] = ["part_color", "minifig", "set", "catalog"];
+
+  const typeFiltered =
+    activeMode === "all" ? rows : rows.filter((r) => r.type === activeMode);
+
+  const byType = new Map<string, LibraryPickerResult[]>();
+  for (const row of typeFiltered) {
+    if (!byType.has(row.type)) byType.set(row.type, []);
+    byType.get(row.type)!.push(row);
+  }
+
+  const groups: GroupedRows[] = [];
+
+  for (const type of typeOrder) {
+    const typeRows = byType.get(type);
+    if (!typeRows?.length) continue;
+
+    if (type === "part_color") {
+      const generalMap = new Map<string, Map<string, LibraryPickerResult[]>>();
+
+      for (const row of typeRows) {
+        const primary = row.meta?.general_category || "Other";
+        const secondary = row.meta?.specific_category || "Other";
+
+        if (!generalMap.has(primary)) generalMap.set(primary, new Map());
+        const specMap = generalMap.get(primary)!;
+
+        if (!specMap.has(secondary)) specMap.set(secondary, []);
+        specMap.get(secondary)!.push(row);
+      }
+
+      groups.push({
+        key: `type:${type}`,
+        label: MODE_LABELS[type],
+        children: Array.from(generalMap.entries())
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([general, specMap]) => ({
+            key: `type:${type}:general:${general}`,
+            label: general,
+            children: Array.from(specMap.entries())
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([specific, specRows]) => ({
+                key: `type:${type}:general:${general}:specific:${specific}`,
+                label: specific,
+                rows: [...specRows].sort((a, b) => {
+                  const a1 = a.meta?.part_id || "";
+                  const b1 = b.meta?.part_id || "";
+                  if (a1 !== b1) return a1.localeCompare(b1);
+                  return a.title.localeCompare(b.title);
+                }),
+              })),
+          })),
+      });
+    } else if (type === "minifig" || type === "set") {
+      const themeMap = new Map<string, LibraryPickerResult[]>();
+
+      for (const row of typeRows) {
+        const theme = row.meta?.theme_name || "No Theme";
+        if (!themeMap.has(theme)) themeMap.set(theme, []);
+        themeMap.get(theme)!.push(row);
+      }
+
+      groups.push({
+        key: `type:${type}`,
+        label: MODE_LABELS[type],
+        children: Array.from(themeMap.entries())
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([theme, themeRows]) => ({
+            key: `type:${type}:theme:${theme}`,
+            label: theme,
+            rows: [...themeRows].sort((a, b) => a.title.localeCompare(b.title)),
+          })),
+      });
+    } else {
+      groups.push({
+        key: `type:${type}`,
+        label: MODE_LABELS[type],
+        rows: [...typeRows].sort((a, b) => a.title.localeCompare(b.title)),
+      });
+    }
+  }
+
+  return groups;
+}
+
+function ResultRow({
+  row,
+  onPick,
+}: {
+  row: LibraryPickerResult;
+  onPick: (item: LibraryPickerResult) => void;
+}) {
+  const colorHex = row.meta?.color_hex;
+  const isPart = row.type === "part_color";
+
+  return (
+    <button
+      type="button"
+      onClick={() => onPick(row)}
+      className="group flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition hover:bg-slate-100"
+    >
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+        {row.image_url ? (
+          <img src={row.image_url} alt={row.title} className="h-full w-full object-cover" />
+        ) : isPart && colorHex ? (
+          <span
+            className="h-5 w-5 rounded-full border border-slate-300"
+            style={{ backgroundColor: colorHex }}
+          />
+        ) : (
+          <span className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+            {row.type}
+          </span>
+        )}
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm font-semibold text-slate-900">{row.title}</div>
+        <div className="truncate text-xs text-slate-500">{row.subtitle || "—"}</div>
+      </div>
+
+      <div className="shrink-0 text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
+        select
+      </div>
+    </button>
+  );
+}
+
+function ExpandableGroup({
+  group,
+  openMap,
+  setOpenMap,
+  onPick,
+  defaultOpen = false,
+}: {
+  group: GroupedRows;
+  openMap: Record<string, boolean>;
+  setOpenMap: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
+  onPick: (item: LibraryPickerResult) => void;
+  defaultOpen?: boolean;
+}) {
+  const isOpen = openMap[group.key] ?? defaultOpen;
+
+  const toggle = () => {
+    setOpenMap((prev) => ({
+      ...prev,
+      [group.key]: !isOpen,
+    }));
+  };
+
+  const rowCount =
+    group.rows?.length ||
+    group.children?.reduce((sum, child) => {
+      if (child.rows) return sum + child.rows.length;
+      if (child.children) {
+        return (
+          sum +
+          child.children.reduce((inner, c) => inner + (c.rows?.length || 0), 0)
+        );
+      }
+      return sum;
+    }, 0) ||
+    0;
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white">
+      <button
+        type="button"
+        onClick={toggle}
+        className="flex w-full items-center justify-between gap-3 rounded-2xl px-4 py-3 text-left hover:bg-slate-50"
+      >
+        <div>
+          <div className="text-sm font-black text-slate-900">{group.label}</div>
+          <div className="text-[11px] font-medium text-slate-500">{rowCount} items</div>
+        </div>
+        <div className={cx("text-slate-400 transition", isOpen && "rotate-90")}>›</div>
+      </button>
+
+      {isOpen ? (
+        <div className="border-t border-slate-100 p-2">
+          {group.children?.length ? (
+            <div className="space-y-2">
+              {group.children.map((child) => (
+                <ExpandableGroup
+                  key={child.key}
+                  group={child}
+                  openMap={openMap}
+                  setOpenMap={setOpenMap}
+                  onPick={onPick}
+                  defaultOpen={false}
+                />
+              ))}
+            </div>
+          ) : group.rows?.length ? (
+            <div className="space-y-1">
+              {group.rows.map((row) => (
+                <ResultRow key={`${row.type}-${row.id}`} row={row} onPick={onPick} />
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function GlobalLibraryPicker({
   mode = "all",
   allowedModes,
   title = "Search library",
   placeholder = "Search...",
   emptyText = "No results found.",
-  onPick,
   autoFocus = false,
+  onPick,
 }: {
   mode?: LibraryPickerMode;
   allowedModes?: LibraryPickerMode[];
@@ -66,7 +273,9 @@ export function GlobalLibraryPicker({
   const [rows, setRows] = useState<LibraryPickerResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [openMap, setOpenMap] = useState<Record<string, boolean>>({});
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const cacheRef = useRef<Record<string, LibraryPickerResult[]>>({});
 
   const debouncedQuery = useDebouncedValue(query, 250);
 
@@ -75,23 +284,43 @@ export function GlobalLibraryPicker({
   }, [autoFocus]);
 
   useEffect(() => {
+    const q = debouncedQuery.trim();
+    const cacheKey = `${activeMode}::${q}`;
+
     let cancelled = false;
 
     async function run() {
+      if (!q) {
+        setRows([]);
+        setLoading(false);
+        setError("");
+        return;
+      }
+
+      if (cacheRef.current[cacheKey]) {
+        setRows(cacheRef.current[cacheKey]);
+        setLoading(false);
+        setError("");
+        return;
+      }
+
       setLoading(true);
       setError("");
 
       try {
         const res = await api.get(ENDPOINTS.libraryPickerLookup, {
           params: {
-            q: debouncedQuery,
+            q,
             type: activeMode,
-            limit: 40,
+            limit: 60,
           },
         });
 
+        const nextRows = Array.isArray(res.data) ? res.data : [];
+        cacheRef.current[cacheKey] = nextRows;
+
         if (!cancelled) {
-          setRows(Array.isArray(res.data) ? res.data : []);
+          setRows(nextRows);
         }
       } catch (e: any) {
         if (!cancelled) {
@@ -114,168 +343,88 @@ export function GlobalLibraryPicker({
     };
   }, [debouncedQuery, activeMode]);
 
-  const grouped = useMemo(() => {
-    const map: Record<LibraryPickerType, LibraryPickerResult[]> = {
-      part_color: [],
-      minifig: [],
-      set: [],
-      catalog: [],
-    };
+  useEffect(() => {
+    if (!debouncedQuery.trim()) return;
 
-    for (const row of rows) {
-      map[row.type]?.push(row);
+    const groups = groupResults(rows, activeMode);
+    const nextOpen: Record<string, boolean> = {};
+
+    function markOpen(items: GroupedRows[]) {
+      for (const item of items) {
+        nextOpen[item.key] = true;
+        if (item.children?.length) markOpen(item.children);
+      }
     }
 
-    return map;
-  }, [rows]);
+    markOpen(groups);
+    setOpenMap(nextOpen);
+  }, [rows, activeMode, debouncedQuery]);
 
-  function ResultCard({ row }: { row: LibraryPickerResult }) {
-    const colorHex = row.meta?.color_hex;
-    const showSwatch = row.type === "part_color" && !!colorHex;
-    const currentPrice = money(row.meta?.current_price);
-    const currentCost = money(row.meta?.current_cost);
-
-    return (
-      <button
-        type="button"
-        onClick={() => onPick(row)}
-        className="group flex w-full items-start gap-3 rounded-2xl border border-slate-200 bg-white p-3 text-left shadow-sm transition hover:-translate-y-[1px] hover:border-slate-300 hover:bg-slate-50"
-      >
-        <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
-          {row.image_url ? (
-            <img
-              src={row.image_url}
-              alt={row.title}
-              className="h-full w-full object-cover"
-            />
-          ) : (
-            <div className="text-[10px] font-black uppercase tracking-wide text-slate-400">
-              {row.type.replace("_", " ")}
-            </div>
-          )}
-        </div>
-
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="truncate text-sm font-black text-slate-900">
-              {row.title}
-            </div>
-
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">
-              {MODE_LABELS[row.type]}
-            </span>
-
-            {showSwatch ? (
-              <span
-                className="inline-block h-4 w-4 rounded-full border border-slate-300 shadow-sm"
-                style={{ backgroundColor: colorHex }}
-              />
-            ) : null}
-          </div>
-
-          <div className="mt-1 text-sm text-slate-600">{row.subtitle || "—"}</div>
-
-          {(currentPrice || currentCost) && (
-            <div className="mt-2 flex flex-wrap gap-2">
-              {currentPrice ? (
-                <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700">
-                  Price {currentPrice}
-                </span>
-              ) : null}
-              {currentCost ? (
-                <span className="rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-700">
-                  Cost {currentCost}
-                </span>
-              ) : null}
-            </div>
-          )}
-        </div>
-
-        <div className="pt-1 text-slate-300 transition group-hover:text-slate-500">↗</div>
-      </button>
-    );
-  }
-
-  function renderSection(type: LibraryPickerType) {
-    if (!grouped[type]?.length) return null;
-
-    return (
-      <div className="space-y-2">
-        <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">
-          {MODE_LABELS[type]}
-        </div>
-        <div className="grid gap-2">
-          {grouped[type].map((row) => (
-            <ResultCard key={`${row.type}-${row.id}`} row={row} />
-          ))}
-        </div>
-      </div>
-    );
-  }
+  const grouped = useMemo(() => groupResults(rows, activeMode), [rows, activeMode]);
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3">
-        <div>
-          <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">
-            Search
-          </div>
-          <div className="mt-1 text-lg font-black text-slate-900">{title}</div>
+      <div>
+        <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">
+          Search
         </div>
-
-        <div className="flex flex-wrap gap-2">
-          {modes.map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => setActiveMode(m)}
-              className={cx(
-                btnBase,
-                "rounded-full px-4",
-                activeMode === m
-                  ? "border-slate-900 bg-slate-900 text-white hover:bg-slate-800"
-                  : ""
-              )}
-            >
-              {MODE_LABELS[m]}
-            </button>
-          ))}
-        </div>
-
-        <input
-          ref={inputRef}
-          className={inputBase}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder={placeholder}
-        />
+        <div className="mt-1 text-base font-black text-slate-900">{title}</div>
       </div>
 
-      {error ? (
-        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </div>
-      ) : null}
+      <div className="flex flex-wrap gap-2">
+        {modes.map((m) => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => setActiveMode(m)}
+            className={cx(
+              btnBase,
+              "rounded-full px-4 py-2 text-xs font-black uppercase tracking-[0.14em]",
+              activeMode === m
+                ? "border-slate-900 bg-slate-900 text-white hover:bg-slate-800"
+                : ""
+            )}
+          >
+            {MODE_LABELS[m]}
+          </button>
+        ))}
+      </div>
 
-      {loading ? (
+      <input
+        ref={inputRef}
+        className={inputBase}
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder={placeholder}
+      />
+
+      {!debouncedQuery.trim() ? (
+        <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+          Start typing to search.
+        </div>
+      ) : loading ? (
         <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">
           Searching…
         </div>
-      ) : rows.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm font-medium text-slate-500">
+      ) : error ? (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      ) : grouped.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
           {emptyText}
         </div>
-      ) : activeMode === "all" ? (
-        <div className="space-y-5">
-          {renderSection("part_color")}
-          {renderSection("minifig")}
-          {renderSection("set")}
-          {renderSection("catalog")}
-        </div>
       ) : (
-        <div className="grid gap-2">
-          {rows.map((row) => (
-            <ResultCard key={`${row.type}-${row.id}`} row={row} />
+        <div className="space-y-3">
+          {grouped.map((group, idx) => (
+            <ExpandableGroup
+              key={group.key}
+              group={group}
+              openMap={openMap}
+              setOpenMap={setOpenMap}
+              onPick={onPick}
+              defaultOpen={idx === 0}
+            />
           ))}
         </div>
       )}
