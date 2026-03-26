@@ -126,19 +126,12 @@ export default function PartColorsPage() {
   const [catalogItems, setCatalogItems] = useState<CatalogItemMini[]>([]);
   const [q, setQ] = useState("");
 
-  // Shape expand/collapse (part.id -> bool)
   const [expanded, setExpanded] = useState<Record<number, boolean>>({});
-
-  // General category expand/collapse
   const [catExpanded, setCatExpanded] = useState<Record<string, boolean>>({});
-
-  // Specific category expand/collapse
   const [specificExpanded, setSpecificExpanded] = useState<Record<string, boolean>>({});
 
   const [createOpen, setCreateOpen] = useState(false);
-
   const [detailOpen, setDetailOpen] = useState(false);
-  const [editing, setEditing] = useState(false);
   const [selected, setSelected] = useState<PartColorRow | null>(null);
 
   const [saving, setSaving] = useState(false);
@@ -151,7 +144,7 @@ export default function PartColorsPage() {
       api.get(ENDPOINTS.partColors),
       api.get(ENDPOINTS.parts),
       api.get(ENDPOINTS.colors),
-      api.get(ENDPOINTS.catalog),
+      api.get(ENDPOINTS.catalogItems),
     ]);
 
     setItems(getListData<PartColorRow>(pcRes.data));
@@ -162,7 +155,6 @@ export default function PartColorsPage() {
 
   useEffect(() => {
     loadAll().catch((e) => setErr(formatApiError(e)));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const partsById = useMemo(() => {
@@ -309,7 +301,12 @@ export default function PartColorsPage() {
   function openDetail(pc: PartColorRow) {
     setSelected(pc);
     setDetailOpen(true);
-    setEditing(false);
+    setErr(null);
+  }
+
+  function closeDetail() {
+    setDetailOpen(false);
+    setSelected(null);
     setErr(null);
   }
 
@@ -333,6 +330,11 @@ export default function PartColorsPage() {
     }
   }
 
+  async function refreshCatalogItems() {
+    const catRes = await api.get(ENDPOINTS.catalogItems);
+    setCatalogItems(getListData<CatalogItemMini>(catRes.data));
+  }
+
   async function saveEdit(payload: any) {
     if (!selected?.id) return;
 
@@ -342,10 +344,7 @@ export default function PartColorsPage() {
     try {
       const res = await api.patch(`${ENDPOINTS.partColors}${selected.id}/`, payload);
       applyPatched(res.data);
-      setEditing(false);
-
-      const catRes = await api.get(ENDPOINTS.catalog);
-      setCatalogItems(getListData<CatalogItemMini>(catRes.data));
+      await refreshCatalogItems();
     } catch (e: any) {
       setErr(formatApiError(e));
     } finally {
@@ -362,9 +361,7 @@ export default function PartColorsPage() {
 
     try {
       await api.delete(`${ENDPOINTS.partColors}${selected.id}/`);
-      setDetailOpen(false);
-      setSelected(null);
-      setEditing(false);
+      closeDetail();
       await loadAll();
     } catch (e: any) {
       setErr(formatApiError(e));
@@ -415,13 +412,11 @@ export default function PartColorsPage() {
         ) : (
           groupedByCategory.map((cg, catIdx) => {
             const catOpen = !!catExpanded[cg.category];
-
             const specificCount = cg.specifics.length;
             const shapeCount = cg.specifics.reduce((sum, scg) => sum + scg.shapes.length, 0);
 
             return (
               <div key={cg.category} className={catIdx === 0 ? "" : "border-t border-slate-200"}>
-                {/* General Category */}
                 <button
                   type="button"
                   onClick={() => toggleCategory(cg.category)}
@@ -448,7 +443,6 @@ export default function PartColorsPage() {
 
                       return (
                         <div key={specificKey} className={scgIdx === 0 ? "" : "border-t border-slate-200"}>
-                          {/* Specific Category */}
                           <button
                             type="button"
                             onClick={() => toggleSpecific(cg.category, scg.specificCategory)}
@@ -481,7 +475,6 @@ export default function PartColorsPage() {
 
                                 return (
                                   <div key={sg.part.id} className={idx === 0 ? "" : "border-t border-slate-200"}>
-                                    {/* Shape */}
                                     <button
                                       type="button"
                                       className="flex w-full items-center gap-3 px-8 py-3 text-left hover:bg-slate-50"
@@ -522,7 +515,6 @@ export default function PartColorsPage() {
                                             key={cg2.colorId}
                                             className={cgIdx === 0 ? "" : "border-t border-slate-200"}
                                           >
-                                            {/* Color Header */}
                                             <div className="flex items-center justify-between bg-slate-50 px-4 py-2 text-xs font-black text-slate-700">
                                               <div className="truncate">{cg2.colorName}</div>
                                               <div className="font-semibold text-slate-500">
@@ -530,7 +522,6 @@ export default function PartColorsPage() {
                                               </div>
                                             </div>
 
-                                            {/* Variant Groups */}
                                             {cg2.groups.map((vg, vgIdx) => (
                                               <div
                                                 key={`${cg2.colorId}-${vg.variantLabel}`}
@@ -545,7 +536,7 @@ export default function PartColorsPage() {
                                                   </div>
                                                 ) : null}
 
-                                                {vg.rows.map((pc, pcIdx) => {
+                                                {vg.rows.map((pc: PartColorRow, pcIdx: number) => {
                                                   const img =
                                                     pc.thumb_url || pc.image_url_1 || pc.image_url_2 || null;
 
@@ -629,40 +620,20 @@ export default function PartColorsPage() {
         />
       </DrawerShell>
 
-      <PartColorDetailDrawer
+      <DrawerShell
         open={detailOpen}
-        selected={selected}
-        allItems={items}
-        parts={parts}
-        colors={colors}
-        catalogItems={catalogItems}
-        saving={saving}
-        setSaving={setSaving}
-        err={err}
-        setErr={setErr}
-        editing={editing}
-        onClose={() => {
-          setDetailOpen(false);
-          setSelected(null);
-          setEditing(false);
-          setErr(null);
-        }}
-        onToggleEdit={() => setEditing((v) => !v)}
-        onDelete={removeSelected}
-        onSubmitEdit={saveEdit}
-        onPatched={(pc) => {
-          applyPatched(pc);
-          api
-            .get(ENDPOINTS.catalog)
-            .then((res) => setCatalogItems(getListData<CatalogItemMini>(res.data)))
-            .catch(() => {});
-        }}
-        onSelect={(pc) => {
-          setSelected(pc);
-          setEditing(false);
-          setErr(null);
-        }}
-      />
+        title={selected?.part?.name ? `${selected.part.part_id} — ${selected.part.name}` : "Part Color Details"}
+        onClose={closeDetail}
+        width={1180}
+      >
+        <PartColorDetailDrawer
+          row={selected}
+          onUpdated={async () => {
+            await loadAll();
+            await refreshCatalogItems();
+          }}
+        />
+      </DrawerShell>
     </div>
   );
 }
