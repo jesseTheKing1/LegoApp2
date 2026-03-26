@@ -1,539 +1,554 @@
-// src/pages/admin/components/PartColorDetailDrawer.tsx
 import React, { useEffect, useMemo, useState } from "react";
-
-import { DrawerShell } from "./DrawerShell";
-import { RowThumb } from "./Thumbs";
-
-import { PartColorForm } from "../form/PartColorForm";
-import { CatalogMiniEditor } from "./CatalogMiniEditor";
-
-import { cx, card, btnPrimary, btnDanger, btnBase, inputBase } from "../utils/ui";
-
+import api from "../../../api/client";
+import { ENDPOINTS } from "../../../api/endpoints";
 import type { PartColorRow } from "../../../types/partColor";
-import type { CatalogItemMini } from "../../../types/catalog";
-import type { Color } from "../../../types/color";
-import type { Part } from "../../../types/part";
+import type { CatalogCostEntry, CatalogCostEntryPayload } from "../../../types/catalogCostEntry";
+import type { InventoryRecordPayload, InventoryRecordRow, LocationRow } from "../../../types/inventory";
+import { getListData } from "../utils/list";
+import { formatApiError } from "../utils/errors";
+import { btnBase, btnPrimary, card, cx } from "../utils/ui";
+import { RowThumb } from "./Thumbs";
+import { CatalogCostEntryForm } from "../form/CatalogCostEntryForm";
+import { InventoryRecordForm } from "../form/InventoryRecordForm";
+import { integer, money } from "../utils/number";
 
-function safeHex(hex?: string | null) {
-  if (!hex) return null;
-  const h = String(hex).trim();
-  if (!h) return null;
-  return h.startsWith("#") ? h : `#${h}`;
+type TabKey = "overview" | "inventory" | "costs";
+
+function StatCard({
+  label,
+  value,
+  subvalue,
+}: {
+  label: string;
+  value: string;
+  subvalue?: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+        {label}
+      </div>
+      <div className="mt-2 text-xl font-semibold text-slate-900">{value}</div>
+      {subvalue ? <div className="mt-1 text-xs text-slate-500">{subvalue}</div> : null}
+    </div>
+  );
 }
 
-function fmtMoney(v: unknown) {
-  const n = typeof v === "number" ? v : v == null ? null : Number(v);
-  if (n == null || Number.isNaN(n)) return null;
-  return `$${n.toFixed(2)}`;
-}
-
-async function copyToClipboard(text: string) {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    // fallback
-    try {
-      const ta = document.createElement("textarea");
-      ta.value = text;
-      ta.style.position = "fixed";
-      ta.style.opacity = "0";
-      document.body.appendChild(ta);
-      ta.focus();
-      ta.select();
-      const ok = document.execCommand("copy");
-      document.body.removeChild(ta);
-      return ok;
-    } catch {
-      return false;
-    }
-  }
-}
-
-function pillClass(active: boolean) {
-  return cx(
-    "rounded-full border px-3 py-1.5 text-xs font-extrabold",
-    active
-      ? "border-slate-900 bg-slate-900 text-white"
-      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+function TabButton({
+  active,
+  children,
+  onClick,
+}: {
+  active: boolean;
+  children: React.ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cx(
+        "rounded-xl px-3 py-2 text-sm font-medium transition",
+        active
+          ? "bg-slate-900 text-white"
+          : "border border-slate-300 bg-white text-slate-700 hover:border-slate-400"
+      )}
+    >
+      {children}
+    </button>
   );
 }
 
 export function PartColorDetailDrawer({
-  open,
-  selected,
-  allItems,
-  colors,
-  parts,
-  catalogItems,
-  saving,
-  err,
-  editing,
-  onClose,
-  onToggleEdit,
-  onDelete,
-  onSubmitEdit,
-  onSelect,
-  setSaving,
-  setErr,
-  onPatched,
+  row,
+  onUpdated,
 }: {
-  open: boolean;
-  selected: PartColorRow | null;
-  allItems: PartColorRow[];
-  parts: Part[];
-  colors: Color[];
-  catalogItems: CatalogItemMini[];
-  saving: boolean;
-  err: string | null;
-  editing: boolean;
-  onClose: () => void;
-  onToggleEdit: () => void;
-  onDelete: () => void;
-  onSubmitEdit: (payload: any) => void;
-  onSelect: (pc: PartColorRow) => void;
-
-  setSaving: (v: boolean) => void;
-  setErr: (v: string | null) => void;
-  onPatched: (pc: PartColorRow) => void;
+  row: PartColorRow | null;
+  onUpdated?: () => void;
 }) {
-  const [colorQ, setColorQ] = useState("");
-  const [copied, setCopied] = useState<string | null>(null);
+  const [tab, setTab] = useState<TabKey>("overview");
+
+  const [inventoryRows, setInventoryRows] = useState<InventoryRecordRow[]>([]);
+  const [costRows, setCostRows] = useState<CatalogCostEntry[]>([]);
+  const [locations, setLocations] = useState<LocationRow[]>([]);
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const [showInventoryForm, setShowInventoryForm] = useState(false);
+  const [showCostForm, setShowCostForm] = useState(false);
+
+  const [editingInventory, setEditingInventory] = useState<InventoryRecordRow | null>(null);
+  const [editingCost, setEditingCost] = useState<CatalogCostEntry | null>(null);
+
+  const [savingInventory, setSavingInventory] = useState(false);
+  const [savingCost, setSavingCost] = useState(false);
+
+  const catalogItemId = row?.catalog_item?.id ?? null;
 
   useEffect(() => {
-    if (!open) {
-      setColorQ("");
-      setCopied(null);
-    }
-  }, [open]);
+    setTab("overview");
+    setShowInventoryForm(false);
+    setShowCostForm(false);
+    setEditingInventory(null);
+    setEditingCost(null);
+  }, [row?.id]);
 
   useEffect(() => {
-    if (!copied) return;
-    const t = setTimeout(() => setCopied(null), 1200);
-    return () => clearTimeout(t);
-  }, [copied]);
-
-  const partPk = selected?.part?.id;
-
-  const siblings = useMemo(() => {
-    if (!partPk) return [];
-    return allItems.filter((x) => x.part?.id === partPk);
-  }, [allItems, partPk]);
-
-  const colorHexById = useMemo(() => {
-    const m = new Map<number, string | null>();
-    for (const c of colors) {
-      if (c?.id == null) continue;
-      m.set(c.id, safeHex((c as any).hex ?? null));
+    if (!catalogItemId) {
+      setInventoryRows([]);
+      setCostRows([]);
+      return;
     }
-    return m;
-  }, [colors]);
 
-  // One "best" row per color for swatches (still fine)
-  const swatches = useMemo(() => {
-    const map = new Map<
-      number,
-      { colorId: number; name: string; hex: string | null; row: PartColorRow; count: number }
-    >();
+    let cancelled = false;
 
-    const score = (r: PartColorRow) => {
-      let s = 0;
-      if (r.thumb_url || r.image_url_1 || r.image_url_2) s += 10;
-      if (!(r.variant ?? "").trim()) s += 2;
-      if ((r.part_color_code ?? "").trim()) s += 1;
-      return s;
+    async function load() {
+      setLoading(true);
+      setError("");
+      try {
+        const [inventoryRes, costRes, locationsRes] = await Promise.all([
+          api.get(`${ENDPOINTS.inventoryRecords}?catalog_item=${catalogItemId}`),
+          api.get(`${ENDPOINTS.catalogCostEntries}?catalog_item=${catalogItemId}`),
+          api.get(`${ENDPOINTS.inventoryLocations}?is_active=true`),
+        ]);
+
+        if (cancelled) return;
+
+        setInventoryRows(getListData<InventoryRecordRow>(inventoryRes.data));
+        setCostRows(getListData<CatalogCostEntry>(costRes.data));
+        setLocations(getListData<LocationRow>(locationsRes.data));
+      } catch (e: any) {
+        if (!cancelled) setError(formatApiError(e));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    load();
+
+    return () => {
+      cancelled = true;
     };
+  }, [catalogItemId]);
 
-    for (const row of siblings) {
-      const c = row.color;
-      if (!c?.id) continue;
+  const inventorySummary = useMemo(() => {
+    let onHand = 0;
+    let reserved = 0;
+    let available = 0;
+    let totalCost = 0;
 
-      const fromRow = safeHex((c as any).hex ?? null);
-      const fromLookup = colorHexById.get(c.id) ?? null;
-      const cHex = fromRow ?? fromLookup ?? null;
-
-      const existing = map.get(c.id);
-      if (!existing) {
-        map.set(c.id, { colorId: c.id, name: c.name ?? "—", hex: cHex, row, count: 1 });
-        continue;
-      }
-
-      existing.count += 1;
-      if (score(row) > score(existing.row)) {
-        map.set(c.id, { ...existing, row, hex: existing.hex ?? cHex });
-      }
+    for (const rec of inventoryRows) {
+      onHand += Number(rec.quantity_on_hand || 0);
+      reserved += Number(rec.quantity_reserved || 0);
+      available += Number(rec.quantity_available || 0);
+      totalCost += Number(rec.total_cost || 0);
     }
 
-    return Array.from(map.values()).sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
-  }, [siblings, colorHexById]);
+    return {
+      onHand,
+      reserved,
+      available,
+      totalCost,
+      locations: new Set(inventoryRows.map((x) => x.location?.id)).size,
+    };
+  }, [inventoryRows]);
 
-  const swatchesFiltered = useMemo(() => {
-    const qq = colorQ.trim().toLowerCase();
-    if (!qq) return swatches;
-    return swatches.filter((s) => (s.name ?? "").toLowerCase().includes(qq));
-  }, [swatches, colorQ]);
+  async function reloadData() {
+    if (!catalogItemId) return;
 
-  const drawerTitle = useMemo(() => {
-    if (!selected?.part) return "PartColor";
-    const pid = selected.part.part_id ?? "Part";
-    return `${pid} • PartColor`;
-  }, [selected]);
+    const [inventoryRes, costRes] = await Promise.all([
+      api.get(`${ENDPOINTS.inventoryRecords}?catalog_item=${catalogItemId}`),
+      api.get(`${ENDPOINTS.catalogCostEntries}?catalog_item=${catalogItemId}`),
+    ]);
 
-  const heroSrc = selected?.image_url_1 || selected?.thumb_url || selected?.image_url_2 || null;
+    setInventoryRows(getListData<InventoryRecordRow>(inventoryRes.data));
+    setCostRows(getListData<CatalogCostEntry>(costRes.data));
+    onUpdated?.();
+  }
 
-  // ✅ Pricing display (read-only) + "needs pricing" flag
-  const price = fmtMoney((selected as any)?.catalog_item?.base_price_override);
-  const hasPricing = (selected as any)?.catalog_item?.base_price_override != null;
-  const sku = (selected as any)?.catalog_item?.sku ?? null;
+  async function handleSaveInventory(payload: InventoryRecordPayload) {
+    if (!catalogItemId) return;
 
-  // ✅ Variant picker for currently selected color
-  const selectedColorId = selected?.color?.id ?? null;
+    setSavingInventory(true);
+    setError("");
+    try {
+      if (editingInventory) {
+        await api.patch(`${ENDPOINTS.inventoryRecords}${editingInventory.id}/`, payload);
+      } else {
+        await api.post(ENDPOINTS.inventoryRecords, payload);
+      }
 
-  const variantsForSelectedColor = useMemo(() => {
-    if (!selectedColorId) return [];
-    return siblings.filter((x) => x.color?.id === selectedColorId);
-  }, [siblings, selectedColorId]);
-
-  const variantOptions = useMemo(() => {
-    const seen = new Set<string>();
-    const out: Array<{ label: string; key: string }> = [];
-
-    for (const row of variantsForSelectedColor) {
-      const v = (row.variant ?? "").trim();
-      const key = v ? v.toLowerCase() : "__none__";
-      if (seen.has(key)) continue;
-      seen.add(key);
-      out.push({ label: v || "(no variant)", key });
+      setShowInventoryForm(false);
+      setEditingInventory(null);
+      await reloadData();
+      setTab("inventory");
+    } catch (e: any) {
+      setError(formatApiError(e));
+    } finally {
+      setSavingInventory(false);
     }
-
-    out.sort((a, b) => {
-      if (a.key === "__none__" && b.key !== "__none__") return -1;
-      if (b.key === "__none__" && a.key !== "__none__") return 1;
-      return a.label.localeCompare(b.label);
-    });
-
-    return out;
-  }, [variantsForSelectedColor]);
-
-  const selectedVariantKey = useMemo(() => {
-    const v = (selected?.variant ?? "").trim();
-    return v ? v.toLowerCase() : "__none__";
-  }, [selected]);
-
-  function pickVariant(key: string) {
-    if (!selectedColorId) return;
-
-    const match = variantsForSelectedColor.find((r) => {
-      const v = (r.variant ?? "").trim();
-      const k = v ? v.toLowerCase() : "__none__";
-      return k === key;
-    });
-
-    if (match) onSelect(match);
   }
 
-  async function copyPartId() {
-    const txt = selected?.part?.part_id ?? "";
-    if (!txt) return;
-    const ok = await copyToClipboard(txt);
-    setCopied(ok ? "part_id" : "copy-failed");
+  async function handleSaveCost(payload: CatalogCostEntryPayload) {
+    if (!catalogItemId) return;
+
+    setSavingCost(true);
+    setError("");
+    try {
+      if (editingCost) {
+        await api.patch(`${ENDPOINTS.catalogCostEntries}${editingCost.id}/`, payload);
+      } else {
+        await api.post(ENDPOINTS.catalogCostEntries, payload);
+      }
+
+      setShowCostForm(false);
+      setEditingCost(null);
+      await reloadData();
+      setTab("costs");
+    } catch (e: any) {
+      setError(formatApiError(e));
+    } finally {
+      setSavingCost(false);
+    }
   }
 
-  async function copyYourId() {
-    const txt = selected?.part_color_code ?? "";
-    if (!txt) return;
-    const ok = await copyToClipboard(txt);
-    setCopied(ok ? "pc_id" : "copy-failed");
+  if (!row) {
+    return (
+      <div className="flex h-full items-center justify-center text-sm text-slate-500">
+        Select a part color to view details.
+      </div>
+    );
   }
 
-  async function copySku() {
-    const txt = sku ?? "";
-    if (!txt) return;
-    const ok = await copyToClipboard(txt);
-    setCopied(ok ? "sku" : "copy-failed");
-  }
+  const imageUrl =
+    row.image_url_1 ||
+    row.image_url_2 ||
+    row.part?.image_url ||
+    "";
 
   return (
-    <DrawerShell open={open} title={drawerTitle} onClose={onClose} width={980}>
-      {!selected ? (
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
-          No selection.
+    <div className="space-y-5">
+      <div className={card}>
+        <div className="flex items-start gap-4">
+          <RowThumb
+            src={imageUrl}
+            alt={row.part_color_code || row.part?.name || "Part color"}
+            className="h-24 w-24 rounded-2xl"
+          />
+
+          <div className="min-w-0 flex-1">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+              Part Color
+            </div>
+            <div className="mt-1 text-xl font-semibold text-slate-900">
+              {row.part?.name || "Unnamed Part"}
+            </div>
+            <div className="mt-1 text-sm text-slate-600">
+              {[row.part?.part_id, row.color?.name, row.variant].filter(Boolean).join(" • ")}
+            </div>
+            <div className="mt-2 text-xs text-slate-500">
+              Code: {row.part_color_code || "—"}
+            </div>
+
+            {row.catalog_item ? (
+              <div className="mt-3 inline-flex items-center rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-700">
+                SKU: {row.catalog_item.sku}
+              </div>
+            ) : (
+              <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                No catalog item linked yet. Link or create one before using inventory and cost history.
+              </div>
+            )}
+          </div>
         </div>
-      ) : (
-        <div className="space-y-4">
-          {err ? (
-            <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {err}
-            </div>
-          ) : null}
+      </div>
 
-          {/* ✅ TOP: clean "summary" block */}
-          <div className={cx(card, "p-4")}>
-            <div className="grid gap-4 lg:grid-cols-[260px_1fr]">
-              {/* left: hero */}
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 overflow-hidden aspect-square flex items-center justify-center">
-                {heroSrc ? (
-                  <img
-                    src={heroSrc}
-                    alt=""
-                    className="h-full w-full object-contain"
-                    onError={(e) => ((e.currentTarget as HTMLImageElement).style.display = "none")}
-                  />
-                ) : (
-                  <div className="text-xs text-slate-500 font-black">No image</div>
-                )}
-              </div>
-
-              {/* right: info */}
-              <div className="min-w-0">
-                <div className="flex items-start gap-3">
-                  <RowThumb src={selected.thumb_url || selected.image_url_1 || selected.image_url_2 || null} />
-
-                  <div className="min-w-0 flex-1">
-                    <div className="text-base font-extrabold text-slate-900 truncate">
-                      {selected.part?.part_id ?? "—"} — {selected.part?.name ?? "—"}
-                    </div>
-
-                    <div className="mt-1 flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-bold text-slate-700">
-                        {selected.color?.name ?? "—"}
-                      </span>
-
-                      {(selected.variant ?? "").trim() ? (
-                        <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-xs font-extrabold text-slate-700">
-                          {selected.variant}
-                        </span>
-                      ) : (
-                        <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-xs font-bold text-slate-500">
-                          no variant
-                        </span>
-                      )}
-
-                      {/* ✅ pricing badge */}
-                      {hasPricing ? (
-                        <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-extrabold text-emerald-800">
-                          Price: {price}
-                        </span>
-                      ) : (
-                        <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-extrabold text-amber-800">
-                          Needs pricing
-                        </span>
-                      )}
-                    </div>
-
-                    {/* ✅ IDs row (copyable) */}
-                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                      <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2">
-                        <div className="text-[11px] font-black text-slate-500">Part ID</div>
-                        <div className="mt-0.5 flex items-center justify-between gap-2">
-                          <div className="text-sm font-extrabold text-slate-900 truncate">
-                            {selected.part?.part_id ?? "—"}
-                          </div>
-                          <button
-                            type="button"
-                            className={cx(btnBase, "h-9 px-3")}
-                            onClick={copyPartId}
-                            disabled={!selected.part?.part_id}
-                          >
-                            {copied === "part_id" ? "Copied" : "Copy"}
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2">
-                        <div className="text-[11px] font-black text-slate-500">Your PartColor ID</div>
-                        <div className="mt-0.5 flex items-center justify-between gap-2">
-                          <div className="text-sm font-extrabold text-slate-900 truncate">
-                            {selected.part_color_code ?? "—"}
-                          </div>
-                          <button
-                            type="button"
-                            className={cx(btnBase, "h-9 px-3")}
-                            onClick={copyYourId}
-                            disabled={!selected.part_color_code}
-                          >
-                            {copied === "pc_id" ? "Copied" : "Copy"}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* ✅ catalog quick view */}
-                    <div className="mt-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="text-[11px] font-black text-slate-500">Catalog</div>
-                        {sku ? (
-                          <button type="button" className={cx(btnBase, "h-8 px-3")} onClick={copySku}>
-                            {copied === "sku" ? "Copied" : "Copy SKU"}
-                          </button>
-                        ) : null}
-                      </div>
-                      <div className="mt-1 text-sm font-semibold text-slate-800">
-                        {sku ? (
-                          <>
-                            SKU: <span className="font-extrabold">{sku}</span>{" "}
-                            <span className="text-slate-500">
-                              {price ? `• ${price}` : "• no price set"}
-                            </span>
-                          </>
-                        ) : (
-                          <span className="text-slate-600">No catalog item attached</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* actions */}
-                  <div className="shrink-0 flex items-center gap-2">
-                    <button type="button" className={btnPrimary} onClick={onToggleEdit} disabled={saving}>
-                      {editing ? "Stop editing" : "Edit"}
-                    </button>
-                    <button type="button" className={btnDanger} onClick={onDelete} disabled={saving}>
-                      Delete
-                    </button>
-                  </div>
-                </div>
-
-                {(selected.image_url_1 || selected.image_url_2) ? (
-                  <div className="mt-3 flex flex-wrap items-center gap-3">
-                    {selected.image_url_1 ? (
-                      <a
-                        href={selected.image_url_1}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-sm font-bold text-blue-600 hover:underline"
-                      >
-                        Open image 1
-                      </a>
-                    ) : null}
-                    {selected.image_url_2 ? (
-                      <a
-                        href={selected.image_url_2}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-sm font-bold text-blue-600 hover:underline"
-                      >
-                        Open image 2
-                      </a>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-            </div>
+      {row.catalog_item ? (
+        <>
+          <div className="grid gap-3 md:grid-cols-4">
+            <StatCard label="On Hand" value={integer(inventorySummary.onHand)} />
+            <StatCard label="Reserved" value={integer(inventorySummary.reserved)} />
+            <StatCard label="Available" value={integer(inventorySummary.available)} />
+            <StatCard
+              label="Stock Cost"
+              value={money(inventorySummary.totalCost)}
+              subvalue={`${inventorySummary.locations} locations`}
+            />
           </div>
 
-          {/* ✅ Mid: choose color + variants as compact chips */}
-          {swatches.length > 0 ? (
-            <div className={cx(card, "p-3 sm:p-4")}>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div className="text-xs font-black text-slate-600">Switch color / variant</div>
+          <div className="flex flex-wrap gap-2">
+            <TabButton active={tab === "overview"} onClick={() => setTab("overview")}>
+              Overview
+            </TabButton>
+            <TabButton active={tab === "inventory"} onClick={() => setTab("inventory")}>
+              Inventory
+            </TabButton>
+            <TabButton active={tab === "costs"} onClick={() => setTab("costs")}>
+              Cost History
+            </TabButton>
+          </div>
 
-                {swatches.length >= 16 ? (
-                  <input
-                    className={cx(inputBase, "sm:w-[280px]")}
-                    value={colorQ}
-                    onChange={(e) => setColorQ(e.target.value)}
-                    placeholder="Search colors..."
-                    autoComplete="off"
-                  />
+          {error ? (
+            <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+              {error}
+            </div>
+          ) : null}
+
+          {loading ? (
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500">
+              Loading inventory and cost history...
+            </div>
+          ) : null}
+
+          {!loading && tab === "overview" ? (
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className={card}>
+                <div className="text-sm font-semibold text-slate-900">Pricing Snapshot</div>
+                <div className="mt-4 space-y-2 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500">Current price</span>
+                    <span className="font-medium text-slate-900">
+                      {money(row.catalog_item.current_price)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500">Current cost</span>
+                    <span className="font-medium text-slate-900">
+                      {money(row.catalog_item.current_cost)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500">Margin</span>
+                    <span className="font-medium text-slate-900">
+                      {money(row.catalog_item.margin_amount)}{" "}
+                      {row.catalog_item.margin_percent
+                        ? `(${Number(row.catalog_item.margin_percent).toFixed(2)}%)`
+                        : ""}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className={card}>
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-semibold text-slate-900">Quick Actions</div>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className={btnPrimary}
+                    onClick={() => {
+                      setEditingInventory(null);
+                      setShowInventoryForm(true);
+                      setTab("inventory");
+                    }}
+                  >
+                    Add inventory
+                  </button>
+
+                  <button
+                    type="button"
+                    className={btnBase}
+                    onClick={() => {
+                      setEditingCost(null);
+                      setShowCostForm(true);
+                      setTab("costs");
+                    }}
+                  >
+                    Add cost entry
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {!loading && tab === "inventory" ? (
+            <div className="space-y-4">
+              <div className={card}>
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold text-slate-900">Inventory by Location</div>
+                    <div className="mt-1 text-xs text-slate-500">
+                      Track stock rows for this part color's catalog item.
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    className={btnPrimary}
+                    onClick={() => {
+                      setEditingInventory(null);
+                      setShowInventoryForm((v) => !v);
+                    }}
+                  >
+                    {showInventoryForm ? "Close form" : "Add inventory"}
+                  </button>
+                </div>
+
+                {showInventoryForm ? (
+                  <div className="mt-4">
+                    <InventoryRecordForm
+                      catalogItemId={row.catalog_item.id}
+                      locations={locations}
+                      initialValues={editingInventory}
+                      submitting={savingInventory}
+                      onSubmit={handleSaveInventory}
+                      onCancel={() => {
+                        setShowInventoryForm(false);
+                        setEditingInventory(null);
+                      }}
+                    />
+                  </div>
                 ) : null}
               </div>
 
-              <div className="mt-3 grid gap-1.5 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8">
-                {swatchesFiltered.map((s) => {
-                  const active = selected.color?.id === s.colorId;
-                  return (
-                    <button
-                      key={s.colorId}
-                      type="button"
-                      onClick={() => onSelect(s.row)}
-                      title={s.name}
-                      className={cx(
-                        "w-full rounded-xl border px-2 py-1.5 text-left transition",
-                        "min-h-[44px] flex items-center gap-2",
-                        active
-                          ? "border-slate-900 ring-2 ring-slate-900 ring-offset-1 ring-offset-white bg-slate-50"
-                          : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
-                      )}
-                    >
-                      <span
-                        className={cx(
-                          "h-5 w-5 rounded-md border border-black/10 shrink-0",
-                          active ? "outline outline-2 outline-slate-900 outline-offset-1" : ""
-                        )}
-                        style={{ background: s.hex ?? "#e5e7eb" }}
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span
-                          className={cx(
-                            "block text-xs font-extrabold truncate",
-                            active ? "text-slate-900" : "text-slate-800"
-                          )}
-                        >
-                          {s.name}
-                        </span>
-                      </span>
-                      {active ? (
-                        <span className="h-4 w-4 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-black shrink-0">
-                          ✓
-                        </span>
-                      ) : null}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* variants row */}
-              {variantOptions.length > 0 ? (
-                <div className="mt-3 border-t border-slate-200 pt-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-xs font-black text-slate-600">Variants</div>
-                    <div className="text-xs text-slate-500 font-semibold">{variantOptions.length}</div>
-                  </div>
-
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {variantOptions.map((v) => (
-                      <button
-                        key={v.key}
-                        type="button"
-                        onClick={() => pickVariant(v.key)}
-                        className={pillClass(v.key === selectedVariantKey)}
-                        title={`Switch to ${v.label}`}
+              <div className={card}>
+                {inventoryRows.length === 0 ? (
+                  <div className="text-sm text-slate-500">No inventory records yet.</div>
+                ) : (
+                  <div className="space-y-3">
+                    {inventoryRows.map((rec) => (
+                      <div
+                        key={rec.id}
+                        className="rounded-2xl border border-slate-200 bg-white p-4"
                       >
-                        {v.label}
-                      </button>
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <div className="text-sm font-semibold text-slate-900">
+                              {rec.location?.code} — {rec.location?.name}
+                            </div>
+                            <div className="mt-1 text-xs text-slate-500">
+                              {rec.condition} • {rec.source_type} • {rec.is_sellable ? "sellable" : "not sellable"}
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            className={btnBase}
+                            onClick={() => {
+                              setEditingInventory(rec);
+                              setShowInventoryForm(true);
+                            }}
+                          >
+                            Edit
+                          </button>
+                        </div>
+
+                        <div className="mt-4 grid gap-3 md:grid-cols-4">
+                          <StatCard label="On Hand" value={integer(rec.quantity_on_hand)} />
+                          <StatCard label="Reserved" value={integer(rec.quantity_reserved)} />
+                          <StatCard label="Available" value={integer(rec.quantity_available)} />
+                          <StatCard label="Unit Cost" value={money(rec.unit_cost)} />
+                        </div>
+
+                        {(rec.acquired_at || rec.notes) ? (
+                          <div className="mt-4 text-sm text-slate-600">
+                            {rec.acquired_at ? <div>Acquired: {rec.acquired_at}</div> : null}
+                            {rec.notes ? <div className="mt-1">{rec.notes}</div> : null}
+                          </div>
+                        ) : null}
+                      </div>
                     ))}
                   </div>
-                </div>
-              ) : null}
+                )}
+              </div>
             </div>
           ) : null}
 
-          {/* ✅ Pricing editor (keep as-is, but now price is visible above too) */}
-          <CatalogMiniEditor selected={selected} saving={saving} setSaving={setSaving} setErr={setErr} onPatched={onPatched} />
+          {!loading && tab === "costs" ? (
+            <div className="space-y-4">
+              <div className={card}>
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold text-slate-900">Cost History</div>
+                    <div className="mt-1 text-xs text-slate-500">
+                      Record new lot purchases and landed costs for this item.
+                    </div>
+                  </div>
 
-          {/* ✅ Edit form collapses neatly */}
-          {editing ? (
-            <div className={cx(card, "p-4")}>
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <div className="text-xs font-black text-slate-600">Edit this PartColor</div>
-                <div className="text-xs text-slate-500 font-semibold">
-                  {saving ? "Saving…" : "Ready"}
+                  <button
+                    type="button"
+                    className={btnPrimary}
+                    onClick={() => {
+                      setEditingCost(null);
+                      setShowCostForm((v) => !v);
+                    }}
+                  >
+                    {showCostForm ? "Close form" : "Add cost entry"}
+                  </button>
                 </div>
+
+                {showCostForm ? (
+                  <div className="mt-4">
+                    <CatalogCostEntryForm
+                      catalogItemId={row.catalog_item.id}
+                      initialValues={editingCost}
+                      submitting={savingCost}
+                      onSubmit={handleSaveCost}
+                      onCancel={() => {
+                        setShowCostForm(false);
+                        setEditingCost(null);
+                      }}
+                    />
+                  </div>
+                ) : null}
               </div>
 
-              <PartColorForm
-                parts={parts}
-                colors={colors}
-                catalogItems={catalogItems}
-                submitting={saving}
-                initialValues={selected}
-                onSubmit={onSubmitEdit}
-              />
+              <div className={card}>
+                {costRows.length === 0 ? (
+                  <div className="text-sm text-slate-500">No cost entries yet.</div>
+                ) : (
+                  <div className="space-y-3">
+                    {costRows.map((entry) => (
+                      <div
+                        key={entry.id}
+                        className="rounded-2xl border border-slate-200 bg-white p-4"
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <div className="text-sm font-semibold text-slate-900">
+                              {entry.source} {entry.supplier_name ? `— ${entry.supplier_name}` : ""}
+                            </div>
+                            <div className="mt-1 text-xs text-slate-500">
+                              Purchased {entry.purchased_at} • Qty {entry.quantity}
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            className={btnBase}
+                            onClick={() => {
+                              setEditingCost(entry);
+                              setShowCostForm(true);
+                            }}
+                          >
+                            Edit
+                          </button>
+                        </div>
+
+                        <div className="mt-4 grid gap-3 md:grid-cols-4">
+                          <StatCard label="Unit Cost" value={money(entry.unit_cost)} />
+                          <StatCard label="Shipping" value={money(entry.shipping_cost)} />
+                          <StatCard label="Tax" value={money(entry.tax_cost)} />
+                          <StatCard label="Landed Cost" value={money(entry.landed_unit_cost)} />
+                        </div>
+
+                        {(entry.reference || entry.notes) ? (
+                          <div className="mt-4 text-sm text-slate-600">
+                            {entry.reference ? <div>Reference: {entry.reference}</div> : null}
+                            {entry.notes ? <div className="mt-1">{entry.notes}</div> : null}
+                          </div>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           ) : null}
-        </div>
-      )}
-    </DrawerShell>
+        </>
+      ) : null}
+    </div>
   );
 }

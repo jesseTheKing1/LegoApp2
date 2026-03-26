@@ -1,7 +1,7 @@
-from django.db.models import Q, Prefetch
+from django.db.models import Q
 from rest_framework import viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticatedOrReadOnly
+from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
 
 from .models import CatalogItem, CatalogCostEntry
@@ -86,22 +86,15 @@ class CatalogItemViewSet(viewsets.ModelViewSet):
                 "display_name": display_name,
                 "subtitle": subtitle,
                 "display_image_url": display_image_url,
-
-                # sell pricing
                 "current_price": item.current_price,
                 "pricing_source": item.pricing_source,
-
-                # cost pricing
                 "current_cost": item.current_cost,
                 "latest_landed_unit_cost": item.latest_landed_unit_cost,
                 "margin_amount": item.margin_amount,
                 "margin_percent": item.margin_percent,
-
-                # reference pricing
                 "lego_reference_price": item.lego_reference_price,
                 "bricklink_reference_price": item.bricklink_reference_price,
                 "lego_vs_bricklink_diff_percent": item.lego_vs_bricklink_diff_percent,
-
                 "is_active": item.is_active,
             })
 
@@ -116,7 +109,7 @@ class CatalogCostEntryViewSet(viewsets.ModelViewSet):
         .order_by("-purchased_at", "-id")
     )
     serializer_class = CatalogCostEntrySerializer
-    permission_classes = [IsAuthenticatedOrReadOnly]
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         qs = super().get_queryset()

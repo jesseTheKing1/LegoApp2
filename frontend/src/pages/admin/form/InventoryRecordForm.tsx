@@ -1,17 +1,14 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import type {
-  InventoryLocation,
-  InventoryRecord,
+  InventoryCondition,
   InventoryRecordPayload,
+  InventoryRecordRow,
+  InventorySourceType,
+  LocationRow,
 } from "../../../types/inventory";
-import type { CatalogLookupItem } from "../../../types/catalogLookup";
-import { CatalogItemPicker } from "../components/CatalogItemPicker";
-const inputBase =
-  "w-full rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none focus:ring-4 focus:ring-slate-200/70";
-const selectBase = inputBase;
-const labelText = "text-[11px] font-black uppercase tracking-[0.14em] text-slate-500";
+import { btnBase, btnPrimary, inputBase, cx } from "../utils/ui";
 
-const CONDITIONS: InventoryRecordPayload["condition"][] = [
+const conditionOptions: InventoryCondition[] = [
   "sealed",
   "complete",
   "loose",
@@ -19,7 +16,7 @@ const CONDITIONS: InventoryRecordPayload["condition"][] = [
   "damaged",
 ];
 
-const SOURCES: InventoryRecordPayload["source_type"][] = [
+const sourceOptions: InventorySourceType[] = [
   "lego",
   "bricklink",
   "ebay",
@@ -29,223 +26,243 @@ const SOURCES: InventoryRecordPayload["source_type"][] = [
   "other",
 ];
 
+const selectBase =
+  "w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-900";
+
 export function InventoryRecordForm({
-  initialValues,
+  catalogItemId,
   locations,
+  initialValues,
   submitting,
   onSubmit,
+  onCancel,
 }: {
-  initialValues?: Partial<InventoryRecord>;
-  locations: InventoryLocation[];
+  catalogItemId: number;
+  locations: LocationRow[];
+  initialValues?: InventoryRecordRow | null;
   submitting?: boolean;
   onSubmit: (payload: InventoryRecordPayload) => Promise<void> | void;
+  onCancel?: () => void;
 }) {
-  const initialLookupValue: CatalogLookupItem | null = initialValues?.catalog_item
-  ? {
-      id: initialValues.catalog_item.id,
-      sku: initialValues.catalog_item.sku,
-      product_type: "catalog",
-      display_name: initialValues.catalog_item.sku,
-      subtitle: "",
-      display_image_url: "",
-      current_price: initialValues.catalog_item.base_price_override ?? null,
-      pricing_source: initialValues.catalog_item.force_override
-        ? "forced_override"
-        : initialValues.catalog_item.base_price_override != null
-        ? "manual_override"
-        : "",
-      is_active: initialValues.catalog_item.is_active,
+  const [locationId, setLocationId] = useState<number | "">("");
+  const [condition, setCondition] = useState<InventoryCondition>("loose");
+  const [sourceType, setSourceType] = useState<InventorySourceType>("other");
+  const [quantityOnHand, setQuantityOnHand] = useState("0");
+  const [quantityReserved, setQuantityReserved] = useState("0");
+  const [unitCost, setUnitCost] = useState("");
+  const [acquiredAt, setAcquiredAt] = useState("");
+  const [notes, setNotes] = useState("");
+  const [isSellable, setIsSellable] = useState(true);
+  const [isActive, setIsActive] = useState(true);
+  const [formError, setFormError] = useState<string>("");
+
+  useEffect(() => {
+    if (!initialValues) {
+      const firstActive = locations.find((x) => x.is_active);
+      setLocationId(firstActive?.id ?? "");
+      return;
     }
-  : null;
 
-  const [selectedCatalogItem, setSelectedCatalogItem] = useState<CatalogLookupItem | null>(
-    initialLookupValue
+    setLocationId(initialValues.location?.id ?? "");
+    setCondition(initialValues.condition ?? "loose");
+    setSourceType(initialValues.source_type ?? "other");
+    setQuantityOnHand(String(initialValues.quantity_on_hand ?? 0));
+    setQuantityReserved(String(initialValues.quantity_reserved ?? 0));
+    setUnitCost(initialValues.unit_cost ?? "");
+    setAcquiredAt(initialValues.acquired_at ?? "");
+    setNotes(initialValues.notes ?? "");
+    setIsSellable(Boolean(initialValues.is_sellable));
+    setIsActive(Boolean(initialValues.is_active));
+  }, [initialValues, locations]);
+
+  const activeLocations = useMemo(
+    () => locations.filter((x) => x.is_active),
+    [locations]
   );
 
-  const [locationId, setLocationId] = useState<number | "">(
-    initialValues?.location?.id ?? ""
-  );
-  const [condition, setCondition] = useState<InventoryRecordPayload["condition"]>(
-    initialValues?.condition ?? "loose"
-  );
-  const [sourceType, setSourceType] = useState<InventoryRecordPayload["source_type"]>(
-    initialValues?.source_type ?? "other"
-  );
-  const [quantityOnHand, setQuantityOnHand] = useState(initialValues?.quantity_on_hand ?? 0);
-  const [quantityReserved, setQuantityReserved] = useState(initialValues?.quantity_reserved ?? 0);
-  const [unitCost, setUnitCost] = useState(
-    initialValues?.unit_cost != null ? String(initialValues.unit_cost) : ""
-  );
-  const [acquiredAt, setAcquiredAt] = useState(initialValues?.acquired_at ?? "");
-  const [notes, setNotes] = useState(initialValues?.notes ?? "");
-  const [isSellable, setIsSellable] = useState(initialValues?.is_sellable ?? true);
-  const [isActive, setIsActive] = useState(initialValues?.is_active ?? true);
-
-  const canSave = useMemo(() => {
-    return (
-      !!selectedCatalogItem?.id &&
-      locationId !== "" &&
-      quantityReserved <= quantityOnHand &&
-      !submitting
-    );
-  }, [selectedCatalogItem, locationId, quantityReserved, quantityOnHand, submitting]);
-
-  async function submit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!selectedCatalogItem?.id || locationId === "") return;
+    setFormError("");
+
+    const qoh = Number(quantityOnHand);
+    const qr = Number(quantityReserved);
+
+    if (!locationId) {
+      setFormError("Please choose a location.");
+      return;
+    }
+
+    if (!Number.isFinite(qoh) || qoh < 0) {
+      setFormError("Quantity on hand must be 0 or greater.");
+      return;
+    }
+
+    if (!Number.isFinite(qr) || qr < 0) {
+      setFormError("Reserved quantity must be 0 or greater.");
+      return;
+    }
+
+    if (qr > qoh) {
+      setFormError("Reserved quantity cannot be greater than quantity on hand.");
+      return;
+    }
 
     await onSubmit({
-      catalog_item_id: selectedCatalogItem.id,
+      catalog_item_id: catalogItemId,
       location_id: Number(locationId),
       condition,
       source_type: sourceType,
-      quantity_on_hand: Number(quantityOnHand) || 0,
-      quantity_reserved: Number(quantityReserved) || 0,
-      unit_cost: unitCost.trim() === "" ? null : unitCost.trim(),
+      quantity_on_hand: qoh,
+      quantity_reserved: qr,
+      unit_cost: unitCost.trim() ? unitCost.trim() : null,
       acquired_at: acquiredAt || null,
-      notes: notes.trim(),
+      notes,
       is_sellable: isSellable,
       is_active: isActive,
     });
   }
 
   return (
-    <form onSubmit={submit} className="space-y-4">
-      <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <div className="space-y-1.5 lg:col-span-2">
-            <div className={labelText}>Catalog Item</div>
-            <CatalogItemPicker
-              value={selectedCatalogItem}
-              onChange={setSelectedCatalogItem}
-            />
-          </div>
+    <form onSubmit={handleSubmit} className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+      <div className="grid gap-4 md:grid-cols-2">
+        <label className="space-y-1">
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Location</div>
+          <select
+            className={selectBase}
+            value={locationId}
+            onChange={(e) => setLocationId(e.target.value ? Number(e.target.value) : "")}
+          >
+            <option value="">Select location</option>
+            {activeLocations.map((loc) => (
+              <option key={loc.id} value={loc.id}>
+                {loc.code} — {loc.name}
+              </option>
+            ))}
+          </select>
+        </label>
 
-          <label className="space-y-1.5">
-            <div className={labelText}>Location</div>
-            <select
-              className={selectBase}
-              value={locationId}
-              onChange={(e) => setLocationId(e.target.value ? Number(e.target.value) : "")}
-            >
-              <option value="">Select location…</option>
-              {locations.map((loc) => (
-                <option key={loc.id} value={loc.id}>
-                  {loc.code} — {loc.name}
-                </option>
-              ))}
-            </select>
-          </label>
+        <label className="space-y-1">
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Condition</div>
+          <select
+            className={selectBase}
+            value={condition}
+            onChange={(e) => setCondition(e.target.value as InventoryCondition)}
+          >
+            {conditionOptions.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
+            ))}
+          </select>
+        </label>
 
-          <label className="space-y-1.5">
-            <div className={labelText}>Condition</div>
-            <select
-              className={selectBase}
-              value={condition}
-              onChange={(e) => setCondition(e.target.value as InventoryRecordPayload["condition"])}
-            >
-              {CONDITIONS.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          </label>
+        <label className="space-y-1">
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Source</div>
+          <select
+            className={selectBase}
+            value={sourceType}
+            onChange={(e) => setSourceType(e.target.value as InventorySourceType)}
+          >
+            {sourceOptions.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
+            ))}
+          </select>
+        </label>
 
-          <label className="space-y-1.5">
-            <div className={labelText}>Source</div>
-            <select
-              className={selectBase}
-              value={sourceType}
-              onChange={(e) => setSourceType(e.target.value as InventoryRecordPayload["source_type"])}
-            >
-              {SOURCES.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          </label>
+        <label className="space-y-1">
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Acquired date</div>
+          <input
+            type="date"
+            className={inputBase}
+            value={acquiredAt}
+            onChange={(e) => setAcquiredAt(e.target.value)}
+          />
+        </label>
 
-          <label className="space-y-1.5">
-            <div className={labelText}>Acquired At</div>
-            <input
-              className={inputBase}
-              type="date"
-              value={acquiredAt ?? ""}
-              onChange={(e) => setAcquiredAt(e.target.value)}
-            />
-          </label>
+        <label className="space-y-1">
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Quantity on hand</div>
+          <input
+            type="number"
+            min={0}
+            className={inputBase}
+            value={quantityOnHand}
+            onChange={(e) => setQuantityOnHand(e.target.value)}
+          />
+        </label>
 
-          <label className="space-y-1.5">
-            <div className={labelText}>Qty On Hand</div>
-            <input
-              className={inputBase}
-              type="number"
-              min={0}
-              value={quantityOnHand}
-              onChange={(e) => setQuantityOnHand(Number(e.target.value) || 0)}
-            />
-          </label>
+        <label className="space-y-1">
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Quantity reserved</div>
+          <input
+            type="number"
+            min={0}
+            className={inputBase}
+            value={quantityReserved}
+            onChange={(e) => setQuantityReserved(e.target.value)}
+          />
+        </label>
 
-          <label className="space-y-1.5">
-            <div className={labelText}>Qty Reserved</div>
-            <input
-              className={inputBase}
-              type="number"
-              min={0}
-              value={quantityReserved}
-              onChange={(e) => setQuantityReserved(Number(e.target.value) || 0)}
-            />
-          </label>
-
-          <label className="space-y-1.5 lg:col-span-2">
-            <div className={labelText}>Unit Cost</div>
-            <input
-              className={inputBase}
-              value={unitCost}
-              onChange={(e) => setUnitCost(e.target.value)}
-              placeholder="3.2500"
-              inputMode="decimal"
-            />
-          </label>
-
-          <label className="space-y-1.5 lg:col-span-2">
-            <div className={labelText}>Notes</div>
-            <textarea
-              className={`${inputBase} min-h-[96px]`}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-            />
-          </label>
-
-          <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-900">
-            <input
-              type="checkbox"
-              checked={isSellable}
-              onChange={(e) => setIsSellable(e.target.checked)}
-            />
-            Sellable
-          </label>
-
-          <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-900">
-            <input
-              type="checkbox"
-              checked={isActive}
-              onChange={(e) => setIsActive(e.target.checked)}
-            />
-            Active
-          </label>
-        </div>
+        <label className="space-y-1">
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Unit cost</div>
+          <input
+            type="number"
+            step="0.0001"
+            min={0}
+            className={inputBase}
+            value={unitCost}
+            onChange={(e) => setUnitCost(e.target.value)}
+            placeholder="0.0000"
+          />
+        </label>
       </div>
 
-      <button
-        type="submit"
-        disabled={!canSave}
-        className="w-full rounded-[24px] bg-slate-950 px-5 py-4 text-sm font-black text-white hover:bg-slate-800 disabled:opacity-50 md:w-auto"
-      >
-        {submitting ? "Saving…" : "Save record"}
-      </button>
+      <label className="space-y-1 block">
+        <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Notes</div>
+        <textarea
+          className={cx(inputBase, "min-h-[84px]")}
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="Optional notes about this stock row"
+        />
+      </label>
+
+      <div className="flex flex-wrap gap-4">
+        <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            checked={isSellable}
+            onChange={(e) => setIsSellable(e.target.checked)}
+          />
+          Sellable
+        </label>
+
+        <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            checked={isActive}
+            onChange={(e) => setIsActive(e.target.checked)}
+          />
+          Active
+        </label>
+      </div>
+
+      {formError ? (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+          {formError}
+        </div>
+      ) : null}
+
+      <div className="flex items-center gap-2">
+        <button type="submit" className={btnPrimary} disabled={submitting}>
+          {submitting ? "Saving..." : initialValues ? "Update inventory" : "Add inventory"}
+        </button>
+        {onCancel ? (
+          <button type="button" className={btnBase} onClick={onCancel}>
+            Cancel
+          </button>
+        ) : null}
+      </div>
     </form>
   );
 }

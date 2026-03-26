@@ -26,6 +26,14 @@ class InventoryRecordViewSet(viewsets.ModelViewSet):
     serializer_class = InventoryRecordSerializer
     permission_classes = [IsAuthenticated]
 
+    def get_queryset(self):
+        qs = super().get_queryset()
+        catalog_item_id = self.request.query_params.get("catalog_item")
+
+        if catalog_item_id:
+            qs = qs.filter(catalog_item_id=catalog_item_id)
+
+        return qs
 
 class InventoryDashboardView(APIView):
     permission_classes = [IsAuthenticated]
