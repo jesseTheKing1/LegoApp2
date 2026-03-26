@@ -9,6 +9,60 @@ from sets.models import Set
 from catalog.models import CatalogItem
 
 
+def rank_result(item, q_lower: str):
+    title = (item.get("title") or "").lower()
+    subtitle = (item.get("subtitle") or "").lower()
+    search_text = (item.get("search_text") or "").lower()
+    meta = item.get("meta") or {}
+
+    important_fields = [
+        str(meta.get("part_id", "")).lower(),
+        str(meta.get("part_color_code", "")).lower(),
+        str(meta.get("set_num", "")).lower(),
+        str(meta.get("bricklink_id", "")).lower(),
+        str(meta.get("sku", "")).lower(),
+        str(meta.get("color_name", "")).lower(),
+        str(meta.get("theme_name", "")).lower(),
+    ]
+
+    if any(field == q_lower for field in important_fields if field):
+        return (0, title)
+
+    if any(field.startswith(q_lower) for field in important_fields if field):
+        return (1, title)
+
+    if title == q_lower:
+        return (2, title)
+
+    if title.startswith(q_lower):
+        return (3, title)
+
+    if q_lower in title:
+        return (4, title)
+
+    if q_lower in subtitle:
+        return (5, title)
+
+    if q_lower in search_text:
+        return (6, title)
+
+    return (7, title)
+
+
+def tokens_match(item, tokens: list[str]) -> bool:
+    meta = item.get("meta") or {}
+
+    haystacks = [
+        (item.get("title") or "").lower(),
+        (item.get("subtitle") or "").lower(),
+        (item.get("search_text") or "").lower(),
+        " ".join(str(v).lower() for v in meta.values() if v is not None),
+    ]
+
+    joined = " ".join(haystacks)
+    return all(token in joined for token in tokens)
+
+
 class LibraryPickerLookupView(APIView):
     permission_classes = [IsAuthenticatedOrReadOnly]
 
@@ -116,6 +170,7 @@ class LibraryPickerLookupView(APIView):
 
             for row in mf_qs[:limit]:
                 theme = getattr(row, "theme", None)
+
                 results.append({
                     "id": row.id,
                     "type": "minifig",
@@ -198,8 +253,7 @@ class LibraryPickerLookupView(APIView):
                 if getattr(row, "base_price_override", None):
                     subtitle_bits.append(f"Base: {row.base_price_override}")
 
-                if row.is_active is not None:
-                    subtitle_bits.append("Active" if row.is_active else "Inactive")
+                subtitle_bits.append("Active" if row.is_active else "Inactive")
 
                 results.append({
                     "id": row.id,
@@ -221,15 +275,13 @@ class LibraryPickerLookupView(APIView):
                 })
 
         if q:
+            tokens = [t.strip().lower() for t in q.split() if t.strip()]
+            if tokens:
+                results = [item for item in results if tokens_match(item, tokens)]
+
             q_lower = q.lower()
-            results.sort(
-                key=lambda x: (
-                    0 if x["title"].lower().startswith(q_lower) else 1,
-                    0 if q_lower in x["search_text"].lower() else 1,
-                    x["title"].lower(),
-                )
-            )
+            results.sort(key=lambda item: rank_result(item, q_lower))
         else:
-            results.sort(key=lambda x: (x["type"], x["title"].lower()))
+            results.sort(key=lambda item: (item["type"], item["title"].lower()))
 
         return Response(results[:limit])

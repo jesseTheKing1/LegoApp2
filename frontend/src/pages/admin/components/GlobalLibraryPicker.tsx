@@ -16,6 +16,8 @@ const MODE_LABELS: Record<LibraryPickerMode, string> = {
   catalog: "Catalog",
 };
 
+const RECENT_KEY = "global-library-picker-recent-v1";
+
 function useDebouncedValue<T>(value: T, delay = 250) {
   const [debounced, setDebounced] = useState(value);
 
@@ -27,6 +29,30 @@ function useDebouncedValue<T>(value: T, delay = 250) {
   return debounced;
 }
 
+function loadRecent(): LibraryPickerResult[] {
+  try {
+    const raw = window.localStorage.getItem(RECENT_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveRecent(item: LibraryPickerResult) {
+  try {
+    const existing = loadRecent();
+    const next = [
+      item,
+      ...existing.filter((x) => !(x.id === item.id && x.type === item.type)),
+    ].slice(0, 12);
+    window.localStorage.setItem(RECENT_KEY, JSON.stringify(next));
+  } catch {
+    // ignore storage failures
+  }
+}
+
 type GroupedRows = {
   label: string;
   key: string;
@@ -34,7 +60,10 @@ type GroupedRows = {
   children?: GroupedRows[];
 };
 
-function groupResults(rows: LibraryPickerResult[], activeMode: LibraryPickerMode): GroupedRows[] {
+function groupResults(
+  rows: LibraryPickerResult[],
+  activeMode: LibraryPickerMode
+): GroupedRows[] {
   const typeOrder: LibraryPickerType[] = ["part_color", "minifig", "set", "catalog"];
 
   const typeFiltered =
@@ -136,7 +165,7 @@ function ResultRow({
       onClick={() => onPick(row)}
       className="group flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition hover:bg-slate-100"
     >
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
         {row.image_url ? (
           <img src={row.image_url} alt={row.title} className="h-full w-full object-cover" />
         ) : isPart && colorHex ? (
@@ -190,7 +219,10 @@ function ExpandableGroup({
     group.children?.reduce((sum, child) => {
       if (child.rows) return sum + child.rows.length;
       if (child.children) {
-        return sum + child.children.reduce((inner, c) => inner + (c.rows?.length || 0), 0);
+        return (
+          sum +
+          child.children.reduce((inner, c) => inner + (c.rows?.length || 0), 0)
+        );
       }
       return sum;
     }, 0) ||
@@ -267,13 +299,20 @@ export function GlobalLibraryPicker({
   const [activeMode, setActiveMode] = useState<LibraryPickerMode>(safeInitialMode);
   const [query, setQuery] = useState("");
   const [rows, setRows] = useState<LibraryPickerResult[]>([]);
+  const [recentRows, setRecentRows] = useState<LibraryPickerResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [openMap, setOpenMap] = useState<Record<string, boolean>>({});
+  const [activeIndex, setActiveIndex] = useState(0);
+
   const inputRef = useRef<HTMLInputElement | null>(null);
   const cacheRef = useRef<Record<string, LibraryPickerResult[]>>({});
 
   const debouncedQuery = useDebouncedValue(query, 250);
+
+  useEffect(() => {
+    setRecentRows(loadRecent());
+  }, []);
 
   useEffect(() => {
     if (autoFocus) inputRef.current?.focus();
@@ -347,7 +386,60 @@ export function GlobalLibraryPicker({
     setOpenMap(nextOpen);
   }, [rows, activeMode]);
 
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [debouncedQuery, activeMode]);
+
   const grouped = useMemo(() => groupResults(rows, activeMode), [rows, activeMode]);
+
+  const filteredRecent = useMemo(() => {
+    return recentRows.filter((row) =>
+      activeMode === "all" ? true : row.type === activeMode
+    );
+  }, [recentRows, activeMode]);
+
+  const flatSearchRows = useMemo(() => {
+    const source = activeMode === "all" ? rows : rows.filter((r) => r.type === activeMode);
+    return source.slice(0, 30);
+  }, [rows, activeMode]);
+
+  function handlePick(item: LibraryPickerResult) {
+    saveRecent(item);
+    setRecentRows(loadRecent());
+    onPick(item);
+  }
+
+  function moveActive(delta: number) {
+    if (!flatSearchRows.length) return;
+    setActiveIndex((prev) => {
+      const next = prev + delta;
+      if (next < 0) return flatSearchRows.length - 1;
+      if (next >= flatSearchRows.length) return 0;
+      return next;
+    });
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (!debouncedQuery.trim()) return;
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      moveActive(1);
+      return;
+    }
+
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      moveActive(-1);
+      return;
+    }
+
+    if (e.key === "Enter") {
+      if (!flatSearchRows.length) return;
+      e.preventDefault();
+      handlePick(flatSearchRows[activeIndex] || flatSearchRows[0]);
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -382,10 +474,57 @@ export function GlobalLibraryPicker({
         className={inputBase}
         value={query}
         onChange={(e) => setQuery(e.target.value)}
+        onKeyDown={handleKeyDown}
         placeholder={placeholder}
       />
 
-      {loading ? (
+      {!debouncedQuery.trim() ? (
+        <div className="space-y-3">
+          {filteredRecent.length ? (
+            <div className="rounded-2xl border border-slate-200 bg-white p-3">
+              <div className="mb-2 text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                Recent Picks
+              </div>
+              <div className="space-y-1">
+                {filteredRecent.map((row) => (
+                  <ResultRow
+                    key={`recent-${row.type}-${row.id}`}
+                    row={row}
+                    onPick={handlePick}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {loading ? (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">
+              Loading…
+            </div>
+          ) : error ? (
+            <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {error}
+            </div>
+          ) : grouped.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+              No items available.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {grouped.map((group, idx) => (
+                <ExpandableGroup
+                  key={group.key}
+                  group={group}
+                  openMap={openMap}
+                  setOpenMap={setOpenMap}
+                  onPick={handlePick}
+                  defaultOpen={idx === 0}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      ) : loading ? (
         <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">
           Searching…
         </div>
@@ -393,22 +532,52 @@ export function GlobalLibraryPicker({
         <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
         </div>
-      ) : grouped.length === 0 ? (
+      ) : flatSearchRows.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
           {emptyText}
         </div>
       ) : (
-        <div className="space-y-3">
-          {grouped.map((group, idx) => (
-            <ExpandableGroup
-              key={group.key}
-              group={group}
-              openMap={openMap}
-              setOpenMap={setOpenMap}
-              onPick={onPick}
-              defaultOpen={idx === 0}
-            />
-          ))}
+        <div className="rounded-2xl border border-slate-200 bg-white p-2">
+          <div className="mb-2 px-2 pt-1 text-[11px] font-black uppercase tracking-[0.14em] text-slate-500">
+            Best Matches
+          </div>
+          <div className="space-y-1">
+            {flatSearchRows.map((row, idx) => (
+              <button
+                key={`${row.type}-${row.id}`}
+                type="button"
+                onClick={() => handlePick(row)}
+                className={cx(
+                  "group flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition",
+                  idx === activeIndex ? "bg-slate-100" : "hover:bg-slate-100"
+                )}
+              >
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                  {row.image_url ? (
+                    <img src={row.image_url} alt={row.title} className="h-full w-full object-cover" />
+                  ) : row.type === "part_color" && row.meta?.color_hex ? (
+                    <span
+                      className="h-5 w-5 rounded-full border border-slate-300"
+                      style={{ backgroundColor: row.meta.color_hex }}
+                    />
+                  ) : (
+                    <span className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+                      {row.type}
+                    </span>
+                  )}
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-semibold text-slate-900">{row.title}</div>
+                  <div className="truncate text-xs text-slate-500">{row.subtitle || "—"}</div>
+                </div>
+
+                <div className="shrink-0 text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
+                  select
+                </div>
+              </button>
+            ))}
+          </div>
         </div>
       )}
     </div>
