@@ -1,203 +1,282 @@
 import React, { useEffect, useMemo, useState } from "react";
-import api from "../../../api/client";
-import { ENDPOINTS } from "../../../api/endpoints";
-
-import type { CatalogItem } from "../../../types/catalog";
 import type {
   CatalogCostEntry,
   CatalogCostEntryPayload,
+  CatalogCostSource,
 } from "../../../types/catalogCostEntry";
+import type { CatalogItemMini } from "../../../types/catalog";
+import { btnBase, btnPrimary, inputBase, cx } from "../utils/ui";
 
-import { getListData } from "../utils/list";
-import { formatApiError } from "../utils/errors";
-import { DrawerShell } from "../components/DrawerShell";
-import { card, btnBase, btnPrimary, inputBase, cx } from "../utils/ui";
-import { CatalogCostEntryForm } from "../form/CatalogCostEntryForm";
+const sourceOptions: CatalogCostSource[] = [
+  "lego",
+  "bricklink",
+  "brickowl",
+  "ebay",
+  "local",
+  "other",
+];
 
-function money(v?: string | null) {
-  if (v == null || v === "") return "—";
-  const n = Number(v);
-  if (Number.isNaN(n)) return "—";
-  return `$${n.toFixed(4)}`;
-}
+const selectBase =
+  "w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-900";
 
-export default function CatalogCostEntriesAdminPage() {
-  const [rows, setRows] = useState<CatalogCostEntry[]>([]);
-  const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+type Props = {
+  catalogItemId?: number;
+  catalogItems?: CatalogItemMini[];
+  defaultCatalogItemId?: number;
+  initialValues?: CatalogCostEntry | null;
+  submitting?: boolean;
+  onSubmit: (payload: CatalogCostEntryPayload) => Promise<void> | void;
+  onCancel?: () => void;
+};
 
-  const [search, setSearch] = useState("");
-  const [drawerOpen, setDrawerOpen] = useState(false);
+export function CatalogCostEntryForm({
+  catalogItemId,
+  catalogItems = [],
+  defaultCatalogItemId,
+  initialValues,
+  submitting,
+  onSubmit,
+  onCancel,
+}: Props) {
+  const resolvedCatalogItemId =
+    catalogItemId ??
+    defaultCatalogItemId ??
+    initialValues?.catalog_item ??
+    catalogItems[0]?.id;
 
-  async function load() {
-    setLoading(true);
-    setError("");
-    try {
-      const [costRes, itemRes] = await Promise.all([
-        api.get(ENDPOINTS.catalogCostEntries),
-        api.get(ENDPOINTS.catalog),
-      ]);
+  const [selectedCatalogItemId, setSelectedCatalogItemId] = useState<number | "">(
+    resolvedCatalogItemId ?? ""
+  );
 
-      setRows(getListData<CatalogCostEntry>(costRes.data));
-      setCatalogItems(getListData<CatalogItem>(itemRes.data));
-    } catch (e: any) {
-      setError(formatApiError(e));
-    } finally {
-      setLoading(false);
-    }
-  }
+  const [source, setSource] = useState<CatalogCostSource>("bricklink");
+  const [supplierName, setSupplierName] = useState("");
+  const [quantity, setQuantity] = useState("1");
+  const [unitCost, setUnitCost] = useState("");
+  const [shippingCost, setShippingCost] = useState("");
+  const [taxCost, setTaxCost] = useState("");
+  const [otherCost, setOtherCost] = useState("");
+  const [purchasedAt, setPurchasedAt] = useState("");
+  const [reference, setReference] = useState("");
+  const [notes, setNotes] = useState("");
+  const [formError, setFormError] = useState("");
 
   useEffect(() => {
-    load();
-  }, []);
+    if (!initialValues) return;
+    setSelectedCatalogItemId(initialValues.catalog_item ?? resolvedCatalogItemId ?? "");
+    setSource(initialValues.source);
+    setSupplierName(initialValues.supplier_name || "");
+    setQuantity(String(initialValues.quantity ?? 1));
+    setUnitCost(initialValues.unit_cost ?? "");
+    setShippingCost(initialValues.shipping_cost ?? "");
+    setTaxCost(initialValues.tax_cost ?? "");
+    setOtherCost(initialValues.other_cost ?? "");
+    setPurchasedAt(initialValues.purchased_at ?? "");
+    setReference(initialValues.reference ?? "");
+    setNotes(initialValues.notes ?? "");
+  }, [initialValues, resolvedCatalogItemId]);
 
-  async function handleCreate(payload: CatalogCostEntryPayload) {
-    setSaving(true);
-    setError("");
-    try {
-      await api.post(ENDPOINTS.catalogCostEntries, payload);
-      await load();
-      setDrawerOpen(false);
-    } catch (e: any) {
-      setError(formatApiError(e));
-    } finally {
-      setSaving(false);
+  const showCatalogSelector = useMemo(
+    () => !catalogItemId && catalogItems.length > 0,
+    [catalogItemId, catalogItems.length]
+  );
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setFormError("");
+
+    const qty = Number(quantity);
+
+    if (!selectedCatalogItemId) {
+      setFormError("Please choose a catalog item.");
+      return;
     }
+
+    if (!Number.isFinite(qty) || qty <= 0) {
+      setFormError("Quantity must be greater than 0.");
+      return;
+    }
+
+    if (!unitCost.trim()) {
+      setFormError("Unit cost is required.");
+      return;
+    }
+
+    if (!purchasedAt) {
+      setFormError("Purchased date is required.");
+      return;
+    }
+
+    await onSubmit({
+      catalog_item: Number(selectedCatalogItemId),
+      source,
+      supplier_name: supplierName.trim() || undefined,
+      quantity: qty,
+      unit_cost: unitCost.trim(),
+      shipping_cost: shippingCost.trim() || undefined,
+      tax_cost: taxCost.trim() || undefined,
+      other_cost: otherCost.trim() || undefined,
+      purchased_at: purchasedAt,
+      reference: reference.trim() || undefined,
+      notes: notes.trim() || undefined,
+    });
   }
 
-  const skuMap = useMemo(() => {
-    const m = new Map<number, string>();
-    for (const item of catalogItems) m.set(item.id, item.sku);
-    return m;
-  }, [catalogItems]);
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return rows;
-
-    return rows.filter((row) => {
-      const sku = skuMap.get(row.catalog_item) || "";
-      return (
-        sku.toLowerCase().includes(q) ||
-        row.source.toLowerCase().includes(q) ||
-        (row.reference || "").toLowerCase().includes(q) ||
-        (row.supplier_name || "").toLowerCase().includes(q)
-      );
-    });
-  }, [rows, search, skuMap]);
-
   return (
-    <div className="space-y-5">
-      <div className={cx(card, "p-5")}>
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <div className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">
-              Catalog
-            </div>
-            <h1 className="mt-1 text-2xl font-black tracking-tight text-slate-900">
-              Cost Entries
-            </h1>
-            <p className="mt-1 text-sm text-slate-600">
-              Log purchases and landed cost for catalog items.
-            </p>
-          </div>
+    <form onSubmit={handleSubmit} className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+      {showCatalogSelector ? (
+        <label className="space-y-1 block">
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Catalog item</div>
+          <select
+            className={selectBase}
+            value={selectedCatalogItemId}
+            onChange={(e) => setSelectedCatalogItemId(e.target.value ? Number(e.target.value) : "")}
+          >
+            <option value="">Select catalog item</option>
+            {catalogItems.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.sku}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
 
-          <div className="flex gap-3">
-            <button className={btnBase} onClick={load}>
-              Refresh
-            </button>
-            <button className={btnPrimary} onClick={() => setDrawerOpen(true)}>
-              New Cost Entry
-            </button>
-          </div>
-        </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <label className="space-y-1">
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Source</div>
+          <select
+            className={selectBase}
+            value={source}
+            onChange={(e) => setSource(e.target.value as CatalogCostSource)}
+          >
+            {sourceOptions.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
+            ))}
+          </select>
+        </label>
 
-        <div className="mt-4">
+        <label className="space-y-1">
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Supplier</div>
           <input
             className={inputBase}
-            placeholder="Search by SKU, source, supplier, or reference..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            value={supplierName}
+            onChange={(e) => setSupplierName(e.target.value)}
+            placeholder="Store / seller"
           />
-        </div>
+        </label>
 
-        {error ? (
-          <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {error}
-          </div>
+        <label className="space-y-1">
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Quantity</div>
+          <input
+            type="number"
+            min={1}
+            className={inputBase}
+            value={quantity}
+            onChange={(e) => setQuantity(e.target.value)}
+          />
+        </label>
+
+        <label className="space-y-1">
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Unit cost</div>
+          <input
+            type="number"
+            step="0.0001"
+            min={0}
+            className={inputBase}
+            value={unitCost}
+            onChange={(e) => setUnitCost(e.target.value)}
+            placeholder="0.0000"
+          />
+        </label>
+
+        <label className="space-y-1">
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Shipping</div>
+          <input
+            type="number"
+            step="0.0001"
+            min={0}
+            className={inputBase}
+            value={shippingCost}
+            onChange={(e) => setShippingCost(e.target.value)}
+            placeholder="0.0000"
+          />
+        </label>
+
+        <label className="space-y-1">
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Tax</div>
+          <input
+            type="number"
+            step="0.0001"
+            min={0}
+            className={inputBase}
+            value={taxCost}
+            onChange={(e) => setTaxCost(e.target.value)}
+            placeholder="0.0000"
+          />
+        </label>
+
+        <label className="space-y-1">
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Other cost</div>
+          <input
+            type="number"
+            step="0.0001"
+            min={0}
+            className={inputBase}
+            value={otherCost}
+            onChange={(e) => setOtherCost(e.target.value)}
+            placeholder="0.0000"
+          />
+        </label>
+
+        <label className="space-y-1">
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Purchased date</div>
+          <input
+            type="date"
+            className={inputBase}
+            value={purchasedAt}
+            onChange={(e) => setPurchasedAt(e.target.value)}
+          />
+        </label>
+      </div>
+
+      <label className="space-y-1 block">
+        <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Reference</div>
+        <input
+          className={inputBase}
+          value={reference}
+          onChange={(e) => setReference(e.target.value)}
+          placeholder="Order number / invoice"
+        />
+      </label>
+
+      <label className="space-y-1 block">
+        <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Notes</div>
+        <textarea
+          className={cx(inputBase, "min-h-[84px]")}
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="Optional notes"
+        />
+      </label>
+
+      {formError ? (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+          {formError}
+        </div>
+      ) : null}
+
+      <div className="flex items-center gap-2">
+        <button type="submit" className={btnPrimary} disabled={submitting}>
+          {submitting ? "Saving..." : initialValues ? "Update cost entry" : "Add cost entry"}
+        </button>
+        {onCancel ? (
+          <button type="button" className={btnBase} onClick={onCancel}>
+            Cancel
+          </button>
         ) : null}
       </div>
-
-      <div className={cx(card, "overflow-hidden p-0")}>
-        {loading ? (
-          <div className="p-6 text-sm text-slate-500">Loading cost entries...</div>
-        ) : filtered.length === 0 ? (
-          <div className="p-6 text-sm text-slate-500">No cost entries found.</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead className="bg-slate-50 text-left text-slate-500">
-                <tr>
-                  <th className="px-4 py-3 font-bold">Date</th>
-                  <th className="px-4 py-3 font-bold">SKU</th>
-                  <th className="px-4 py-3 font-bold">Source</th>
-                  <th className="px-4 py-3 font-bold">Supplier</th>
-                  <th className="px-4 py-3 font-bold">Qty</th>
-                  <th className="px-4 py-3 font-bold">Unit</th>
-                  <th className="px-4 py-3 font-bold">Shipping</th>
-                  <th className="px-4 py-3 font-bold">Tax</th>
-                  <th className="px-4 py-3 font-bold">Total</th>
-                  <th className="px-4 py-3 font-bold">Landed Unit</th>
-                  <th className="px-4 py-3 font-bold">Reference</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((row) => (
-                  <tr key={row.id} className="border-t border-slate-100">
-                    <td className="px-4 py-3">{row.purchased_at}</td>
-                    <td className="px-4 py-3 font-semibold text-slate-900">
-                      {skuMap.get(row.catalog_item) || `#${row.catalog_item}`}
-                    </td>
-                    <td className="px-4 py-3">{row.source}</td>
-                    <td className="px-4 py-3">{row.supplier_name || "—"}</td>
-                    <td className="px-4 py-3">{row.quantity}</td>
-                    <td className="px-4 py-3">{money(row.unit_cost)}</td>
-                    <td className="px-4 py-3">{money(row.shipping_cost)}</td>
-                    <td className="px-4 py-3">{money(row.tax_cost)}</td>
-                    <td className="px-4 py-3">{money(row.total_cost)}</td>
-                    <td className="px-4 py-3">{money(row.landed_unit_cost)}</td>
-                    <td className="px-4 py-3">{row.reference || "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      <DrawerShell
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        title="New Cost Entry"
-        width={720}
-        >
-        <div className={cx(card, "p-5")}>
-          <CatalogCostEntryForm
-            catalogItems={catalogItems.map((item) => ({
-              id: item.id,
-              sku: item.sku,
-              is_active: item.is_active,
-              base_price_override: item.base_price_override,
-              force_override: item.force_override,
-              notes: item.notes,
-            }))}
-            submitting={saving}
-            onSubmit={handleCreate}
-          />
-        </div>
-      </DrawerShell>
-    </div>
+    </form>
   );
 }

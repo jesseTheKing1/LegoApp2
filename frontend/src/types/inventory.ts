@@ -19,6 +19,15 @@ export interface LocationRow {
   is_active: boolean;
 }
 
+export interface LocationPayload {
+  name: string;
+  code: string;
+  location_type?: LocationType;
+  parent?: number | null;
+  notes?: string;
+  is_active?: boolean;
+}
+
 export type InventoryCondition =
   | "sealed"
   | "complete"
@@ -73,7 +82,7 @@ export interface InventoryRecordRow {
 }
 
 export interface InventoryRecordPayload {
-  catalog_item_id: number;
+  catalog_item_id?: number;
   location_id: number;
 
   condition?: InventoryCondition;
@@ -89,3 +98,43 @@ export interface InventoryRecordPayload {
   is_sellable?: boolean;
   is_active?: boolean;
 }
+
+export interface InventoryDashboardConditionRow {
+  condition: string;
+  count: number;
+  quantity: number;
+}
+
+export interface InventoryDashboardLocationRow {
+  location__id: number;
+  location__name: string;
+  location__code: string;
+  count: number;
+  quantity: number;
+}
+
+export interface InventoryDashboard {
+  summary: {
+    total_units: number;
+    total_reserved: number;
+    total_available: number;
+    active_skus: number;
+    total_cost: string | number;
+    total_available_cost: string | number;
+  };
+  by_condition: InventoryDashboardConditionRow[];
+  by_location: InventoryDashboardLocationRow[];
+  product_type_counts: {
+    sets: number;
+    minifigs: number;
+    part_colors: number;
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* backwards-compatible aliases so old pages keep compiling            */
+/* ------------------------------------------------------------------ */
+
+export type InventoryLocation = LocationRow;
+export type InventoryLocationPayload = LocationPayload;
+export type InventoryRecord = InventoryRecordRow;

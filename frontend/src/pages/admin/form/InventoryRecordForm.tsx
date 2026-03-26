@@ -29,6 +29,15 @@ const sourceOptions: InventorySourceType[] = [
 const selectBase =
   "w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-900";
 
+type Props = {
+  catalogItemId?: number;
+  locations: LocationRow[];
+  initialValues?: InventoryRecordRow | null;
+  submitting?: boolean;
+  onSubmit: (payload: InventoryRecordPayload) => Promise<void> | void;
+  onCancel?: () => void;
+};
+
 export function InventoryRecordForm({
   catalogItemId,
   locations,
@@ -36,14 +45,7 @@ export function InventoryRecordForm({
   submitting,
   onSubmit,
   onCancel,
-}: {
-  catalogItemId: number;
-  locations: LocationRow[];
-  initialValues?: InventoryRecordRow | null;
-  submitting?: boolean;
-  onSubmit: (payload: InventoryRecordPayload) => Promise<void> | void;
-  onCancel?: () => void;
-}) {
+}: Props) {
   const [locationId, setLocationId] = useState<number | "">("");
   const [condition, setCondition] = useState<InventoryCondition>("loose");
   const [sourceType, setSourceType] = useState<InventorySourceType>("other");
@@ -60,6 +62,15 @@ export function InventoryRecordForm({
     if (!initialValues) {
       const firstActive = locations.find((x) => x.is_active);
       setLocationId(firstActive?.id ?? "");
+      setCondition("loose");
+      setSourceType("other");
+      setQuantityOnHand("0");
+      setQuantityReserved("0");
+      setUnitCost("");
+      setAcquiredAt("");
+      setNotes("");
+      setIsSellable(true);
+      setIsActive(true);
       return;
     }
 
@@ -107,8 +118,7 @@ export function InventoryRecordForm({
       return;
     }
 
-    await onSubmit({
-      catalog_item_id: catalogItemId,
+    const payload: InventoryRecordPayload = {
       location_id: Number(locationId),
       condition,
       source_type: sourceType,
@@ -119,7 +129,13 @@ export function InventoryRecordForm({
       notes,
       is_sellable: isSellable,
       is_active: isActive,
-    });
+    };
+
+    if (catalogItemId) {
+      payload.catalog_item_id = catalogItemId;
+    }
+
+    await onSubmit(payload);
   }
 
   return (
