@@ -3,6 +3,7 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
 
+from catalog.models import CatalogItem
 from parts.models import PartColor
 from minifigs.models import Minifig
 from sets.models import Set
@@ -16,7 +17,7 @@ class LibraryPickerLookupView(APIView):
         type_param = (request.query_params.get("type") or "all").strip().lower()
         limit = min(int(request.query_params.get("limit", 30)), 100)
 
-        allowed_types = {"all", "part_color", "minifig", "set"}
+        allowed_types = {"all", "part_color", "minifig", "set", "catalog"}
         if type_param not in allowed_types:
             type_param = "all"
 
@@ -26,6 +27,35 @@ class LibraryPickerLookupView(APIView):
         include_minifigs = type_param in {"all", "minifig"}
         include_sets = type_param in {"all", "set"}
 
+        if include_catalog:
+            catalog_qs = CatalogItem.objects.all().order_by("sku")
+
+            if q:
+                catalog_qs = catalog_qs.filter(
+                    Q(sku__icontains=q)
+                    | Q(notes__icontains=q)
+                )
+
+            for row in catalog_qs[:limit]:
+                results.append({
+                    "id": row.id,
+                    "type": "catalog",
+                    "title": row.sku or f"Catalog Item {row.id}",
+                    "subtitle": "Catalog Item",
+                    "image_url": "",
+                    "search_text": " ".join([
+                        row.sku or "",
+                        row.notes or "",
+                    ]).strip(),
+                    "meta": {
+                        "sku": row.sku or "",
+                        "is_active": row.is_active,
+                        "base_price_override": str(row.base_price_override or ""),
+                        "force_override": row.force_override,
+                        "notes": row.notes or "",
+                    },
+                })
+        
         if include_part_colors:
             pc_qs = (
                 PartColor.objects
