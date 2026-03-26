@@ -190,10 +190,7 @@ function ExpandableGroup({
     group.children?.reduce((sum, child) => {
       if (child.rows) return sum + child.rows.length;
       if (child.children) {
-        return (
-          sum +
-          child.children.reduce((inner, c) => inner + (c.rows?.length || 0), 0)
-        );
+        return sum + child.children.reduce((inner, c) => inner + (c.rows?.length || 0), 0);
       }
       return sum;
     }, 0) ||
@@ -224,7 +221,6 @@ function ExpandableGroup({
                   openMap={openMap}
                   setOpenMap={setOpenMap}
                   onPick={onPick}
-                  defaultOpen={false}
                 />
               ))}
             </div>
@@ -285,18 +281,11 @@ export function GlobalLibraryPicker({
 
   useEffect(() => {
     const q = debouncedQuery.trim();
-    const cacheKey = `${activeMode}::${q}`;
+    const cacheKey = `${activeMode}::${q || "__default__"}`;
 
     let cancelled = false;
 
     async function run() {
-      if (!q) {
-        setRows([]);
-        setLoading(false);
-        setError("");
-        return;
-      }
-
       if (cacheRef.current[cacheKey]) {
         setRows(cacheRef.current[cacheKey]);
         setLoading(false);
@@ -344,8 +333,6 @@ export function GlobalLibraryPicker({
   }, [debouncedQuery, activeMode]);
 
   useEffect(() => {
-    if (!debouncedQuery.trim()) return;
-
     const groups = groupResults(rows, activeMode);
     const nextOpen: Record<string, boolean> = {};
 
@@ -358,7 +345,7 @@ export function GlobalLibraryPicker({
 
     markOpen(groups);
     setOpenMap(nextOpen);
-  }, [rows, activeMode, debouncedQuery]);
+  }, [rows, activeMode]);
 
   const grouped = useMemo(() => groupResults(rows, activeMode), [rows, activeMode]);
 
@@ -398,11 +385,7 @@ export function GlobalLibraryPicker({
         placeholder={placeholder}
       />
 
-      {!debouncedQuery.trim() ? (
-        <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
-          Start typing to search.
-        </div>
-      ) : loading ? (
+      {loading ? (
         <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">
           Searching…
         </div>
