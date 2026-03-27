@@ -18,7 +18,7 @@ const sourceOptions: CatalogCostSource[] = [
 const selectBase =
   "w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-900";
 
-export function CatalogCostEntryForm({
+export default function CatalogCostEntryForm({
   catalogItemId,
   initialValues,
   submitting,

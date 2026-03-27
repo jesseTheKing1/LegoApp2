@@ -29,7 +29,7 @@ type Props = {
   onCancel?: () => void;
 };
 
-export function CatalogCostEntryForm({
+export default function CatalogCostEntryForm({
   catalogItemId,
   catalogItems = [],
   defaultCatalogItemId,
