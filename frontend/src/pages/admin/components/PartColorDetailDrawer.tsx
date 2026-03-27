@@ -8,9 +8,9 @@ import { getListData } from "../utils/list";
 import { formatApiError } from "../utils/errors";
 import { btnBase, btnPrimary, card, cx } from "../utils/ui";
 import { RowThumb } from "./Thumbs";
-import { CatalogCostEntryForm } from "../form/CatalogCostEntryForm";
 import { InventoryRecordForm } from "../form/InventoryRecordForm";
 import { integer, money } from "../utils/number";
+import CatalogCostEntryForm from "../form/CatalogCostEntryForm";
 
 type TabKey = "overview" | "inventory" | "costs";
 
