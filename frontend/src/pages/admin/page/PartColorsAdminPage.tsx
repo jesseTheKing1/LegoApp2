@@ -718,7 +718,7 @@ export default function PartColorsPage() {
             await loadAll();
             await refreshCatalogItems();
           }}
-        />
+/>
       </DrawerShell>
     </div>
   );
