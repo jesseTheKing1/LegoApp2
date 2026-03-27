@@ -144,7 +144,7 @@ export default function PartColorsPage() {
       api.get(ENDPOINTS.partColors),
       api.get(ENDPOINTS.parts),
       api.get(ENDPOINTS.colors),
-      api.get(ENDPOINTS.catalogItems),
+      api.get(ENDPOINTS.catalog),
     ]);
 
     setItems(getListData<PartColorRow>(pcRes.data));
@@ -331,7 +331,7 @@ export default function PartColorsPage() {
   }
 
   async function refreshCatalogItems() {
-    const catRes = await api.get(ENDPOINTS.catalogItems);
+    const catRes = await api.get(ENDPOINTS.catalog);
     setCatalogItems(getListData<CatalogItemMini>(catRes.data));
   }
 
