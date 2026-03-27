@@ -741,13 +741,12 @@ export function PartColorDetailDrawer({
                         <div className="flex flex-wrap items-start justify-between gap-3">
                           <div>
                             <div className="text-sm font-semibold text-slate-900">
-                              {entry.vendor_name || entry.reference_number || "Cost entry"}
+                              {entry.purchased_at || "Cost entry"}
                             </div>
                             <div className="mt-1 text-xs text-slate-500">
                               {[
                                 entry.purchased_at || null,
-                                entry.currency || null,
-                                entry.source_type || null,
+                                entry.notes ? "has notes" : null,
                               ]
                                 .filter(Boolean)
                                 .join(" • ")}

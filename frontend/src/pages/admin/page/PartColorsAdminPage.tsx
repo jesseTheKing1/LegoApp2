@@ -1,4 +1,3 @@
-// src/pages/admin/page/PartColorsPage.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import api from "../../../api/client";
 import { ENDPOINTS } from "../../../api/endpoints";
@@ -27,6 +26,21 @@ function readStr(v: unknown) {
   return String(v ?? "").trim();
 }
 
+function asMoneyNumber(v: unknown): number | null {
+  if (v == null || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function fmtMoney(v: number | null | undefined) {
+  if (v == null || !Number.isFinite(v)) return "—";
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 2,
+  }).format(v);
+}
+
 function getGeneralCategory(p: Part): string {
   return readStr((p as any)?.general_category);
 }
@@ -53,6 +67,17 @@ function makeSpecificKey(general: string, specific: string) {
   return `${general}__${specific}`;
 }
 
+function getRowPrice(row: PartColorRow): number | null {
+  const ci = row.catalog_item;
+  if (!ci) return null;
+
+  return (
+    asMoneyNumber(ci.current_price) ??
+    asMoneyNumber(ci.base_price_override) ??
+    null
+  );
+}
+
 function sortRows(rows: PartColorRow[]) {
   rows.sort((a, b) => {
     const ac = (a.part_color_code ?? "").toLowerCase();
@@ -65,6 +90,27 @@ function sortRows(rows: PartColorRow[]) {
 
     return (a.variant ?? "").localeCompare(b.variant ?? "");
   });
+}
+
+function getShapeStats(rows: PartColorRow[]) {
+  const prices = rows
+    .map(getRowPrice)
+    .filter((v): v is number => v != null);
+
+  const variants = rows.length;
+  const pricedCount = prices.length;
+  const avgPrice =
+    pricedCount > 0 ? prices.reduce((a, b) => a + b, 0) / pricedCount : null;
+  const minPrice = pricedCount > 0 ? Math.min(...prices) : null;
+  const maxPrice = pricedCount > 0 ? Math.max(...prices) : null;
+
+  return {
+    variants,
+    pricedCount,
+    avgPrice,
+    minPrice,
+    maxPrice,
+  };
 }
 
 function groupRowsByColorThenVariant(rows: PartColorRow[]): ColorGroup[] {
@@ -117,6 +163,21 @@ function groupRowsByColorThenVariant(rows: PartColorRow[]): ColorGroup[] {
 
   colorGroups.sort((a, b) => a.colorName.localeCompare(b.colorName));
   return colorGroups;
+}
+
+function SummaryChip({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="rounded-full border border-slate-200 bg-white/90 px-3 py-1.5 text-[11px] font-bold text-slate-700 shadow-sm">
+      <span className="text-slate-400">{label}</span>{" "}
+      <span className="text-slate-900">{value}</span>
+    </div>
+  );
 }
 
 export default function PartColorsPage() {
@@ -203,7 +264,7 @@ export default function PartColorsPage() {
           const rows = partHit
             ? sg.rows
             : sg.rows.filter((pc) =>
-                `${pc.part_color_code ?? ""} ${pc.color?.name ?? ""} ${pc.variant ?? ""}`
+                `${pc.part_color_code ?? ""} ${pc.color?.name ?? ""} ${pc.variant ?? ""} ${pc.catalog_item?.sku ?? ""}`
                   .toLowerCase()
                   .includes(qq)
               );
@@ -310,11 +371,6 @@ export default function PartColorsPage() {
     setErr(null);
   }
 
-  function applyPatched(pc: PartColorRow) {
-    setSelected(pc);
-    setItems((prev) => prev.map((x) => (x.id === pc.id ? pc : x)));
-  }
-
   async function create(payload: any) {
     setSaving(true);
     setErr(null);
@@ -335,68 +391,50 @@ export default function PartColorsPage() {
     setCatalogItems(getListData<CatalogItemMini>(catRes.data));
   }
 
-  async function saveEdit(payload: any) {
-    if (!selected?.id) return;
-
-    setSaving(true);
-    setErr(null);
-
-    try {
-      const res = await api.patch(`${ENDPOINTS.partColors}${selected.id}/`, payload);
-      applyPatched(res.data);
-      await refreshCatalogItems();
-    } catch (e: any) {
-      setErr(formatApiError(e));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function removeSelected() {
-    if (!selected?.id) return;
-    if (!confirm("Delete this PartColor?")) return;
-
-    setSaving(true);
-    setErr(null);
-
-    try {
-      await api.delete(`${ENDPOINTS.partColors}${selected.id}/`);
-      closeDetail();
-      await loadAll();
-    } catch (e: any) {
-      setErr(formatApiError(e));
-    } finally {
-      setSaving(false);
-    }
-  }
-
   return (
-    <div className="space-y-3 pt-3">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-        <input
-          className={cx(inputBase, "sm:max-w-md")}
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Search category, specific category, shape, color, variant, or your ID..."
-          autoComplete="off"
-        />
+    <div className="space-y-4 pt-3">
+      <div className="rounded-[28px] border border-slate-200 bg-gradient-to-br from-white via-slate-50 to-slate-100 p-4 shadow-sm sm:p-5">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+          <div className="min-w-0 flex-1">
+            <div className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-500">
+              Part Colors
+            </div>
+            <div className="mt-1 text-2xl font-black tracking-tight text-slate-900">
+              Shape-first catalog view
+            </div>
+            <div className="mt-1 max-w-3xl text-sm text-slate-600">
+              Premium grouped browsing by category, specific category, shape, color, and variant.
+            </div>
+          </div>
 
-        <div className="flex flex-wrap gap-2">
-          <button type="button" className={btnPrimary} onClick={() => setCreateOpen(true)}>
-            + New PartColor
-          </button>
-
-          <button type="button" className={btnBase} onClick={expandAll}>
-            Expand all
-          </button>
-
-          <button type="button" className={btnBase} onClick={collapseAll}>
-            Collapse all
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className={btnPrimary} onClick={() => setCreateOpen(true)}>
+              + New PartColor
+            </button>
+            <button type="button" className={btnBase} onClick={expandAll}>
+              Expand all
+            </button>
+            <button type="button" className={btnBase} onClick={collapseAll}>
+              Collapse all
+            </button>
+          </div>
         </div>
 
-        <div className="text-xs font-semibold text-slate-500 sm:ml-auto">
-          {totalShapeGroups} shapes • {items.length} rows
+        <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center">
+          <input
+            className={cx(inputBase, "lg:max-w-xl")}
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search part ID, name, category, color, variant, SKU, or part color code..."
+            autoComplete="off"
+          />
+
+          <div className="flex flex-wrap gap-2 lg:ml-auto">
+            <SummaryChip label="Shapes" value={String(totalShapeGroups)} />
+            <SummaryChip label="Rows" value={String(items.length)} />
+            <SummaryChip label="Catalog items" value={String(catalogItems.length)} />
+            <SummaryChip label="Colors" value={String(colors.length)} />
+          </div>
         </div>
       </div>
 
@@ -406,9 +444,9 @@ export default function PartColorsPage() {
         </div>
       ) : null}
 
-      <div className={card}>
+      <div className={cx(card, "overflow-hidden rounded-[28px] p-0")}>
         {groupedByCategory.length === 0 ? (
-          <div className="p-4 text-sm text-slate-600">No results.</div>
+          <div className="p-6 text-sm text-slate-600">No results.</div>
         ) : (
           groupedByCategory.map((cg, catIdx) => {
             const catOpen = !!catExpanded[cg.category];
@@ -420,16 +458,23 @@ export default function PartColorsPage() {
                 <button
                   type="button"
                   onClick={() => toggleCategory(cg.category)}
-                  className="flex w-full items-center gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 text-left hover:bg-slate-100"
+                  className="flex w-full items-center gap-3 bg-slate-100/80 px-4 py-4 text-left transition hover:bg-slate-100"
                 >
-                  <div className="w-6 font-black text-slate-600">{catOpen ? "▾" : "▸"}</div>
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-300 bg-white text-sm font-black text-slate-700 shadow-sm">
+                    {catOpen ? "–" : "+"}
+                  </div>
 
                   <div className="min-w-0 flex-1">
-                    <div className="text-xs font-black uppercase tracking-wide text-slate-700">
-                      {cg.category}{" "}
-                      <span className="font-semibold text-slate-500">
-                        ({specificCount} specific • {shapeCount} shapes)
-                      </span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="text-sm font-black uppercase tracking-[0.18em] text-slate-800">
+                        {cg.category}
+                      </div>
+                      <div className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600">
+                        {specificCount} specific
+                      </div>
+                      <div className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600">
+                        {shapeCount} shapes
+                      </div>
                     </div>
                   </div>
 
@@ -446,14 +491,20 @@ export default function PartColorsPage() {
                           <button
                             type="button"
                             onClick={() => toggleSpecific(cg.category, scg.specificCategory)}
-                            className="flex w-full items-center gap-3 bg-white px-6 py-3 text-left hover:bg-slate-50"
+                            className="flex w-full items-center gap-3 bg-white px-6 py-3 text-left transition hover:bg-slate-50"
                           >
-                            <div className="w-6 font-black text-slate-500">{specificOpen ? "▾" : "▸"}</div>
+                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-xs font-black text-slate-600">
+                              {specificOpen ? "–" : "+"}
+                            </div>
 
                             <div className="min-w-0 flex-1">
-                              <div className="text-xs font-black uppercase tracking-wide text-slate-600">
-                                {scg.specificCategory}{" "}
-                                <span className="font-semibold text-slate-400">({scg.shapes.length})</span>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <div className="text-xs font-black uppercase tracking-[0.18em] text-slate-600">
+                                  {scg.specificCategory}
+                                </div>
+                                <div className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-bold text-slate-500">
+                                  {scg.shapes.length} shapes
+                                </div>
                               </div>
                             </div>
 
@@ -465,59 +516,85 @@ export default function PartColorsPage() {
                           {specificOpen
                             ? scg.shapes.map((sg, idx) => {
                                 const isOpen = !!expanded[sg.part.id];
+                                const stats = getShapeStats(sg.rows);
 
                                 const thumbs = sg.rows
-                                  .map((r) => r.thumb_url || r.image_url_1 || r.image_url_2 || null)
+                                  .map((r) => r.thumb_url || r.image_url_1 || r.image_url_2 || r.part?.image_url || null)
                                   .filter(Boolean)
                                   .slice(0, 4) as string[];
 
                                 const showPlaceholders = Math.max(0, 4 - thumbs.length);
 
                                 return (
-                                  <div key={sg.part.id} className={idx === 0 ? "" : "border-t border-slate-200"}>
+                                  <div
+                                    key={sg.part.id}
+                                    className={cx(
+                                      idx === 0 ? "" : "border-t border-slate-200",
+                                      "bg-white"
+                                    )}
+                                  >
                                     <button
                                       type="button"
-                                      className="flex w-full items-center gap-3 px-8 py-3 text-left hover:bg-slate-50"
+                                      className="flex w-full items-center gap-4 px-8 py-4 text-left transition hover:bg-slate-50"
                                       onClick={() => toggleShape(sg.part.id)}
                                     >
-                                      <div className="w-6 font-black text-slate-500">{isOpen ? "▾" : "▸"}</div>
+                                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-sm font-black text-slate-600 shadow-sm">
+                                        {isOpen ? "–" : "+"}
+                                      </div>
 
-                                      <div className="min-w-0 flex-1">
-                                        <div className="break-words text-sm font-extrabold text-slate-900">
-                                          {sg.part.part_id} — {sg.part.name}{" "}
-                                          <span className="font-bold text-slate-500">({sg.rows.length})</span>
-                                        </div>
-
-                                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                                      <div className="flex min-w-0 flex-1 items-center gap-4">
+                                        <div className="hidden shrink-0 items-center gap-2 md:flex">
                                           {thumbs.map((t, i) => (
                                             <MiniThumb key={`${sg.part.id}-t-${i}`} src={t} />
                                           ))}
-
                                           {Array.from({ length: showPlaceholders }).map((_, i) => (
                                             <MiniThumb key={`${sg.part.id}-p-${i}`} src={null} />
                                           ))}
+                                        </div>
 
-                                          <div className="text-xs font-semibold text-slate-500">
-                                            {thumbs.length > 0 ? "preview" : "no images yet"}
+                                        <div className="min-w-0 flex-1">
+                                          <div className="flex flex-wrap items-center gap-2">
+                                            <div className="truncate text-sm font-black text-slate-900">
+                                              {sg.part.part_id}
+                                            </div>
+                                            <div className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                                              {getActualCategory(sg.part) || "shape"}
+                                            </div>
+                                          </div>
+
+                                          <div className="mt-1 truncate text-sm text-slate-600">
+                                            {sg.part.name}
+                                          </div>
+
+                                          <div className="mt-2 flex flex-wrap gap-2">
+                                            <SummaryChip label="Variants" value={String(stats.variants)} />
+                                            <SummaryChip label="Priced" value={String(stats.pricedCount)} />
+                                            <SummaryChip label="Avg" value={fmtMoney(stats.avgPrice)} />
+                                            <SummaryChip
+                                              label="Range"
+                                              value={`${fmtMoney(stats.minPrice)} – ${fmtMoney(stats.maxPrice)}`}
+                                            />
                                           </div>
                                         </div>
                                       </div>
 
-                                      <div className="text-xs font-semibold text-slate-500">
+                                      <div className="shrink-0 text-xs font-semibold text-slate-500">
                                         {isOpen ? "hide" : "show"}
                                       </div>
                                     </button>
 
                                     {isOpen ? (
-                                      <div className="border-t border-slate-200">
+                                      <div className="border-t border-slate-200 bg-slate-50/50">
                                         {groupRowsByColorThenVariant(sg.rows).map((cg2, cgIdx) => (
                                           <div
                                             key={cg2.colorId}
                                             className={cgIdx === 0 ? "" : "border-t border-slate-200"}
                                           >
-                                            <div className="flex items-center justify-between bg-slate-50 px-4 py-2 text-xs font-black text-slate-700">
-                                              <div className="truncate">{cg2.colorName}</div>
-                                              <div className="font-semibold text-slate-500">
+                                            <div className="flex items-center justify-between gap-3 bg-slate-100/70 px-4 py-2.5">
+                                              <div className="truncate text-xs font-black uppercase tracking-[0.14em] text-slate-700">
+                                                {cg2.colorName}
+                                              </div>
+                                              <div className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-500">
                                                 {cg2.groups.reduce((sum, g) => sum + g.rows.length, 0)} rows
                                               </div>
                                             </div>
@@ -536,55 +613,62 @@ export default function PartColorsPage() {
                                                   </div>
                                                 ) : null}
 
-                                                {vg.rows.map((pc: PartColorRow, pcIdx: number) => {
+                                                {vg.rows.map((pc, pcIdx) => {
                                                   const img =
-                                                    pc.thumb_url || pc.image_url_1 || pc.image_url_2 || null;
+                                                    pc.thumb_url ||
+                                                    pc.image_url_1 ||
+                                                    pc.image_url_2 ||
+                                                    pc.part?.image_url ||
+                                                    null;
 
-                                                  const idText = pc.part_color_code
-                                                    ? `ID: ${pc.part_color_code}`
-                                                    : "ID: —";
-
-                                                  const nameText = pc.color?.name ?? "—";
-
-                                                  const priceBadge =
-                                                    pc.catalog_item && pc.catalog_item.base_price_override != null
-                                                      ? `$${pc.catalog_item.base_price_override}`
-                                                      : null;
+                                                  const rowPrice = getRowPrice(pc);
 
                                                   return (
                                                     <button
                                                       key={pc.id}
                                                       type="button"
                                                       className={cx(
-                                                        "flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-slate-50",
+                                                        "flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-white",
                                                         pcIdx === 0 ? "" : "border-t border-slate-100"
                                                       )}
                                                       onClick={() => openDetail(pc)}
                                                     >
                                                       <RowThumb src={img} />
 
-                                                      <div className="hidden w-[240px] truncate text-xs font-semibold text-slate-600 sm:block">
-                                                        {idText}
-                                                      </div>
-
                                                       <div className="min-w-0 flex-1">
-                                                        <div className="truncate text-sm font-extrabold text-slate-900">
-                                                          {nameText}
+                                                        <div className="flex flex-wrap items-center gap-2">
+                                                          <div className="truncate text-sm font-extrabold text-slate-900">
+                                                            {pc.color?.name ?? "—"}
+                                                          </div>
+
                                                           {pc.variant ? (
-                                                            <span className="font-bold text-slate-500">
-                                                              {" "}• {pc.variant}
+                                                            <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-bold text-slate-600">
+                                                              {pc.variant}
                                                             </span>
                                                           ) : null}
 
-                                                          {priceBadge ? (
-                                                            <span className="ml-2 inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-extrabold text-slate-700">
-                                                              {priceBadge}
+                                                          {pc.catalog_item?.sku ? (
+                                                            <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-bold text-slate-500">
+                                                              {pc.catalog_item.sku}
                                                             </span>
-                                                          ) : null}
+                                                          ) : (
+                                                            <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-700">
+                                                              no sku
+                                                            </span>
+                                                          )}
                                                         </div>
 
-                                                        <div className="truncate text-xs font-semibold text-slate-500 sm:hidden">
-                                                          {idText}
+                                                        <div className="mt-1 truncate text-xs font-semibold text-slate-500">
+                                                          {pc.part_color_code || "—"}
+                                                        </div>
+                                                      </div>
+
+                                                      <div className="shrink-0 text-right">
+                                                        <div className="text-sm font-extrabold text-slate-900">
+                                                          {fmtMoney(rowPrice)}
+                                                        </div>
+                                                        <div className="text-[11px] font-semibold text-slate-500">
+                                                          view details
                                                         </div>
                                                       </div>
                                                     </button>
@@ -624,10 +708,12 @@ export default function PartColorsPage() {
         open={detailOpen}
         title={selected?.part?.name ? `${selected.part.part_id} — ${selected.part.name}` : "Part Color Details"}
         onClose={closeDetail}
-        width={1180}
+        width={1320}
       >
         <PartColorDetailDrawer
           row={selected}
+          allRows={items}
+          onSelectRow={(next) => setSelected(next)}
           onUpdated={async () => {
             await loadAll();
             await refreshCatalogItems();
