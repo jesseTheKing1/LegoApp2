@@ -12,6 +12,7 @@ import InventoryRecordsPage from "./page/InventoryRecordsPage";
 import SetsAdminPage from "./page/SetsAdminPage";
 import CatalogItemsAdminPage from "./page/CatalogItemsAdmenPage";
 import CatalogCostEntriesAdminPage from "./page/CatalogCostEntriesAdminPage";
+import { CatalogCostEntryPayload } from "src/types/catalogCostEntry";
 
 
 export default function CatalogAdminRoutes() {
@@ -28,7 +29,9 @@ export default function CatalogAdminRoutes() {
         <Route path="minifigs" element={<MinifigsAdminPage />} />
 
         <Route path="catalog" element={<CatalogItemsAdminPage />} />
-        <Route path="catalog/costs" element={<CatalogCostEntriesAdminPage />} />
+        <Route path="catalog/costs" element={<CatalogCostEntriesAdminPage onSubmit={function (payload: CatalogCostEntryPayload): void | Promise<void> {
+          throw new Error("Function not implemented.");
+        } } />} />
 
         <Route path="inventory" element={<InventoryDashboardPage />} />
         <Route path="inventory/records" element={<InventoryRecordsPage />} />
