@@ -5,29 +5,54 @@
   --muted2: #64748b;
   --border: #e5e7eb;
   --border2: #e2e8f0;
+
   --cardShadow: 0 12px 30px rgba(2, 6, 23, 0.06);
   --menuShadow: 0 16px 40px rgba(2, 6, 23, 0.12);
-  --page-gutter: clamp(14px, 4vw, 24px);
+
+  --page-gutter: clamp(18px, 4vw, 32px);
+  --section-gap: 20px;
+  --card-pad-y: 30px;
+  --card-pad-x: 28px;
+  --panel-pad: 16px;
+
   --radius-sm: 12px;
   --radius-md: 16px;
   --radius-lg: 24px;
   --radius-pill: 999px;
 
-  --container: 1100px;
+  --container: 1180px;
 }
 
 * {
   box-sizing: border-box;
 }
 
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
 body {
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
-  margin: 0;
   background: var(--bg);
   color: var(--text);
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial,
     "Apple Color Emoji", "Segoe UI Emoji";
+  line-height: 1.45;
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
 }
 
 .container {
@@ -37,14 +62,13 @@ body {
   padding-right: var(--page-gutter);
 }
 
-
 .page {
-  padding: 28px var(--page-gutter) 44px;
+  padding: 34px var(--page-gutter) 52px;
 }
 
 .loading {
   color: var(--muted2);
-  padding: 18px 0;
+  padding: 22px 0;
 }
 
 /* ---------- Header ---------- */
@@ -62,8 +86,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
-  padding: 14px var(--page-gutter);
+  gap: 16px;
+  padding: 16px var(--page-gutter);
 }
 
 .brand {
@@ -78,15 +102,15 @@ body {
 .navDesktop {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .navLink {
   text-decoration: none;
   color: var(--text);
   font-weight: 650;
-  padding: 8px 10px;
-  border-radius: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
 }
 
 .navLink:hover {
@@ -105,7 +129,7 @@ body {
   border-radius: var(--radius-lg);
   background: radial-gradient(1200px 600px at 10% 0%, rgba(15, 23, 42, 0.06), transparent),
     white;
-  padding: 26px 22px;
+  padding: var(--card-pad-y) var(--card-pad-x);
   box-shadow: var(--cardShadow);
 }
 
@@ -113,7 +137,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
+  padding: 9px 14px;
   border-radius: var(--radius-pill);
   border: 1px solid var(--border2);
   background: #f8fafc;
@@ -123,14 +147,14 @@ body {
 }
 
 .h1 {
-  margin: 14px 0 10px;
+  margin: 16px 0 12px;
   font-size: 46px;
   letter-spacing: -0.03em;
   line-height: 1.05;
 }
 
 .h2 {
-  margin: 14px 0 10px;
+  margin: 16px 0 12px;
   font-size: 28px;
   letter-spacing: -0.02em;
 }
@@ -139,7 +163,7 @@ body {
   margin: 0;
   max-width: 720px;
   font-size: 16px;
-  line-height: 1.6;
+  line-height: 1.7;
   color: var(--muted);
 }
 
@@ -147,7 +171,7 @@ body {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   background: #f1f5f9;
   border: 1px solid var(--border2);
-  padding: 2px 6px;
+  padding: 3px 7px;
   border-radius: 10px;
 }
 
@@ -160,12 +184,21 @@ body {
   gap: 8px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
-  padding: 10px 12px;
+  padding: 11px 14px;
   font-weight: 850;
   text-decoration: none;
   cursor: pointer;
   user-select: none;
   line-height: 1;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    transform 0.12s ease,
+    box-shadow 0.18s ease;
+}
+
+.btn:hover {
+  box-shadow: 0 6px 18px rgba(2, 6, 23, 0.06);
 }
 
 .btn:active {
@@ -173,11 +206,11 @@ body {
 }
 
 .btnSm {
-  padding: 9px 11px;
+  padding: 9px 12px;
 }
 
 .btnLg {
-  padding: 12px 14px;
+  padding: 13px 16px;
   border-radius: 14px;
 }
 
@@ -208,7 +241,7 @@ body {
 /* ---------- Pills ---------- */
 
 .pill {
-  padding: 8px 10px;
+  padding: 9px 12px;
   border-radius: var(--radius-pill);
   background: #f1f5f9;
   border: 1px solid var(--border2);
@@ -231,16 +264,16 @@ body {
 
 .menu {
   position: absolute;
-  top: calc(100% + 8px);
+  top: calc(100% + 10px);
   right: 0;
-  width: 210px;
-  border-radius: 14px;
+  width: 230px;
+  border-radius: 16px;
   border: 1px solid var(--border);
   background: white;
   box-shadow: var(--menuShadow);
-  padding: 8px;
+  padding: 10px;
   display: grid;
-  gap: 6px;
+  gap: 8px;
   z-index: 100;
 }
 
@@ -248,7 +281,7 @@ body {
   text-decoration: none;
   color: var(--text);
   font-weight: 850;
-  padding: 10px 10px;
+  padding: 12px 12px;
   border-radius: 12px;
   border: 1px solid #f1f5f9;
   background: #fff;
@@ -261,7 +294,7 @@ body {
 .menuDivider {
   height: 1px;
   background: var(--border);
-  margin: 4px 2px;
+  margin: 6px 2px;
 }
 
 .chev {
@@ -272,23 +305,23 @@ body {
 
 .ctaRow {
   display: flex;
-  gap: 10px;
-  margin-top: 18px;
+  gap: 12px;
+  margin-top: 20px;
   flex-wrap: wrap;
 }
 
 .featureGrid {
-  margin-top: 22px;
+  margin-top: 24px;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  gap: 14px;
 }
 
 .featureCard {
   border: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.9);
   border-radius: 18px;
-  padding: 14px 14px;
+  padding: 18px 18px;
 }
 
 .featureTitle {
@@ -297,19 +330,19 @@ body {
 }
 
 .featureText {
-  margin-top: 6px;
+  margin-top: 8px;
   color: var(--muted);
-  line-height: 1.5;
+  line-height: 1.6;
   font-size: 14px;
 }
 
 /* ---------- Account meta ---------- */
 
 .meta {
-  margin-top: 14px;
+  margin-top: 16px;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 14px;
 }
 
 .metaLabel {
@@ -317,14 +350,14 @@ body {
   color: var(--muted2);
   font-weight: 800;
   font-size: 12px;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 
 .metaValue {
   border: 1px solid var(--border);
   background: #ffffff;
   border-radius: 14px;
-  padding: 12px 12px;
+  padding: 14px 14px;
   font-weight: 800;
 }
 
@@ -334,8 +367,8 @@ body {
   border: 1px solid var(--border);
   background: white;
   border-radius: 12px;
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -344,11 +377,10 @@ body {
 }
 
 .iconBtnBars {
+  position: relative;
   width: 18px;
   height: 2px;
   background: var(--text);
-  position: relative;
-  display: inline-block;
   border-radius: 2px;
 }
 
@@ -380,7 +412,7 @@ body {
   border: 1px solid var(--border);
   border-radius: 18px;
   box-shadow: var(--menuShadow);
-  padding: 12px;
+  padding: 14px;
   z-index: 120;
 }
 
@@ -389,7 +421,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding-bottom: 10px;
+  padding-bottom: 12px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -399,7 +431,7 @@ body {
 }
 
 .mobileLinks {
-  padding-top: 10px;
+  padding-top: 12px;
   display: grid;
   gap: 8px;
 }
@@ -408,7 +440,7 @@ body {
   text-decoration: none;
   color: var(--text);
   font-weight: 900;
-  padding: 12px 12px;
+  padding: 13px 13px;
   border-radius: 14px;
   border: 1px solid #f1f5f9;
   background: #fff;
@@ -421,13 +453,13 @@ body {
 .mobileDivider {
   height: 1px;
   background: var(--border);
-  margin: 4px 0;
+  margin: 6px 0;
 }
 
 .mobileGroup {
   border: 1px solid var(--border);
   border-radius: 16px;
-  padding: 10px;
+  padding: 12px;
   display: grid;
   gap: 8px;
   background: rgba(248, 250, 252, 0.6);
@@ -452,9 +484,14 @@ body {
   .navDesktop {
     display: none;
   }
+
   .navMobile {
     display: block;
     position: relative;
+  }
+
+  .page {
+    padding: 26px var(--page-gutter) 42px;
   }
 
   .h1 {
@@ -462,7 +499,7 @@ body {
   }
 
   .card {
-    padding: 22px 18px;
+    padding: 24px 20px;
   }
 
   .featureGrid {
@@ -475,10 +512,31 @@ body {
 }
 
 @media (max-width: 420px) {
-  .container {
-    padding: 0 14px;
+  :root {
+    --page-gutter: 16px;
   }
+
+  .container {
+    padding-left: var(--page-gutter);
+    padding-right: var(--page-gutter);
+  }
+
+  .page {
+    padding: 22px var(--page-gutter) 36px;
+  }
+
   .h1 {
     font-size: 32px;
+  }
+
+  .card {
+    padding: 20px 18px;
+    border-radius: 20px;
+  }
+
+  .featureCard,
+  .metaValue,
+  .mobileGroup {
+    padding: 14px;
   }
 }
