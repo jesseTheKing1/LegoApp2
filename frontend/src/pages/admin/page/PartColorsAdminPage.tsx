@@ -727,8 +727,12 @@ export default function PartColorsPage() {
         allRows={items}
         onSelectRow={(next) => setSelected(next)}
         onUpdated={async () => {
-          await loadAll();
-          await refreshCatalogItems();
+          const fresh = await loadAll();
+
+          if (selected) {
+            const refreshedSelected = fresh.items.find((x) => x.id === selected.id) ?? null;
+            setSelected(refreshedSelected);
+          }
         }}
       />
       </DrawerShell>

@@ -434,8 +434,8 @@ export function PartColorDetailDrawer({
         });
       }
 
-      setShowCatalogEditor(false);
       await onUpdated?.();
+      setShowCatalogEditor(false);
     } catch (e: any) {
       setError(formatApiError(e));
     } finally {
