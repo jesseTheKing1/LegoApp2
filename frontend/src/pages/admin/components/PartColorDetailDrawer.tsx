@@ -20,6 +20,75 @@ import { integer, money } from "../utils/number";
 import CatalogCostEntryForm from "../form/CatalogCostEntryForm";
 
 type TabKey = "overview" | "inventory" | "costs";
+function getBrickLinkRef(row: PartColorRow): number | null {
+  const v = row.catalog_item?.bricklink_reference_price;
+  if (v == null || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+type RarityTier = {
+  label: string;
+  className: string;
+};
+
+function getRarityTier(
+  row: PartColorRow,
+  familyRows: PartColorRow[]
+): RarityTier | null {
+  const current = getBrickLinkRef(row);
+  if (current == null) return null;
+
+  const priced = familyRows
+    .map(getBrickLinkRef)
+    .filter((v): v is number => v != null)
+    .sort((a, b) => a - b);
+
+  if (priced.length < 2) {
+    return {
+      label: "Unclear",
+      className: "border-slate-200 bg-slate-50 text-slate-600",
+    };
+  }
+
+  const min = priced[0];
+  const max = priced[priced.length - 1];
+
+  if (min <= 0 || max <= 0 || min === max) {
+    return {
+      label: "Even",
+      className: "border-slate-200 bg-slate-50 text-slate-600",
+    };
+  }
+
+  const ratio = current / min;
+
+  if (ratio >= 8) {
+    return {
+      label: "Rare",
+      className: "border-rose-200 bg-rose-50 text-rose-700",
+    };
+  }
+
+  if (ratio >= 4) {
+    return {
+      label: "Scarce",
+      className: "border-amber-200 bg-amber-50 text-amber-700",
+    };
+  }
+
+  if (ratio >= 2) {
+    return {
+      label: "Less Common",
+      className: "border-sky-200 bg-sky-50 text-sky-700",
+    };
+  }
+
+  return {
+    label: "Common",
+    className: "border-slate-200 bg-slate-50 text-slate-600",
+  };
+}
 
 function asMoneyNumber(v: unknown): number | null {
   if (v == null || v === "") return null;
@@ -577,20 +646,22 @@ export function PartColorDetailDrawer({
           <div className="mt-3 max-h-[320px] overflow-auto rounded-2xl border border-slate-200">
             <div className="grid grid-cols-1 divide-y divide-slate-200">
               {siblingRows.map((sib) => {
-              const selected = sib.id === row.id;
-              const sku = sib.catalog_item?.sku || "—";
-              const price =
-                sib.catalog_item?.current_price ||
-                sib.catalog_item?.base_price_override ||
-                "—";
+                const rarity = getRarityTier(sib, siblingRows);
+                const bricklinkRef = sib.catalog_item?.bricklink_reference_price || "—";
+                const selected = sib.id === row.id;
+                const sku = sib.catalog_item?.sku || "—";
+                const price =
+                  sib.catalog_item?.current_price ||
+                  sib.catalog_item?.base_price_override ||
+                  "—";
 
-              return (
+                return (
                 <button
                   key={sib.id}
                   type="button"
                   onClick={() => onSelectRow?.(sib)}
                   className={cx(
-                    "grid grid-cols-[92px_minmax(0,1fr)_90px_80px] items-center gap-3 px-3 py-2 text-left transition",
+                    "grid grid-cols-[92px_minmax(0,1fr)_90px_120px] items-center gap-3 px-3 py-2 text-left transition",
                     selected ? "bg-slate-900 text-white" : "bg-white hover:bg-slate-50"
                   )}
                 >
@@ -607,12 +678,39 @@ export function PartColorDetailDrawer({
                     </div>
                   </div>
 
-                  <div className={cx("truncate text-xs font-semibold", selected ? "text-slate-100" : "text-slate-600")}>
-                    {sku}
+                  <div className="text-right">
+                    <div className={cx("text-xs font-bold", selected ? "text-slate-100" : "text-slate-700")}>
+                      {bricklinkRef !== "—" ? `$${bricklinkRef}` : "—"}
+                    </div>
+                    <div className={cx("text-[10px]", selected ? "text-slate-300" : "text-slate-400")}>
+                      BrickLink
+                    </div>
                   </div>
 
-                  <div className={cx("text-right text-xs font-bold", selected ? "text-slate-100" : "text-slate-700")}>
-                    {price !== "—" ? `$${price}` : "—"}
+                  <div className="flex justify-end">
+                    {rarity ? (
+                      <span
+                        className={cx(
+                          "rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em]",
+                          selected
+                            ? "border-white/20 bg-white/10 text-white"
+                            : rarity.className
+                        )}
+                      >
+                        {rarity.label}
+                      </span>
+                    ) : (
+                      <span
+                        className={cx(
+                          "rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em]",
+                          selected
+                            ? "border-white/20 bg-white/10 text-white"
+                            : "border-slate-200 bg-slate-50 text-slate-400"
+                        )}
+                      >
+                        No Data
+                      </span>
+                    )}
                   </div>
                 </button>
               );
