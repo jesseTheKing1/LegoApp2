@@ -648,6 +648,14 @@ export function PartColorDetailDrawer({
             <MiniMeta label="Variant" value={metaValue(row.variant)} />
             <MiniMeta label="SKU" value={metaValue(row.catalog_item?.sku)} />
             <MiniMeta label="Pricing Source" value={metaValue(row.catalog_item?.pricing_source)} />
+            <MiniMeta
+              label="LEGO Reference"
+              value={money(row.catalog_item?.lego_reference_price)}
+            />
+            <MiniMeta
+              label="BrickLink Reference"
+              value={money(row.catalog_item?.bricklink_reference_price)}
+            />
           </div>
 
           {showCatalogEditor ? (
@@ -730,18 +738,35 @@ export function PartColorDetailDrawer({
                           {money(row.catalog_item.current_price)}
                         </span>
                       </div>
+
                       <div className="flex items-center justify-between gap-3">
                         <span className="text-slate-500">Base override</span>
                         <span className="font-semibold text-slate-900">
                           {money(row.catalog_item.base_price_override)}
                         </span>
                       </div>
+
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-slate-500">LEGO reference</span>
+                        <span className="font-semibold text-slate-900">
+                          {money(row.catalog_item.lego_reference_price)}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-slate-500">BrickLink reference</span>
+                        <span className="font-semibold text-slate-900">
+                          {money(row.catalog_item.bricklink_reference_price)}
+                        </span>
+                      </div>
+
                       <div className="flex items-center justify-between gap-3">
                         <span className="text-slate-500">Current cost</span>
                         <span className="font-semibold text-slate-900">
                           {money(row.catalog_item.current_cost)}
                         </span>
                       </div>
+
                       <div className="flex items-center justify-between gap-3">
                         <span className="text-slate-500">Margin</span>
                         <span className="font-semibold text-slate-900">
