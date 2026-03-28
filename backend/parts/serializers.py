@@ -1,20 +1,7 @@
 from rest_framework import serializers
 from .models import Color, Part, PartColor
 from catalog.models import CatalogItem
-
-
-class CatalogItemMiniSerializer(serializers.ModelSerializer):
-    """Small read-only view of the catalog item (good for embedding in PartColor)."""
-    class Meta:
-        model = CatalogItem
-        fields = [
-            "id",
-            "sku",
-            "is_active",
-            "base_price_override",
-            "force_override",
-            "notes",
-        ]
+from catalog.serializers import CatalogItemMiniSerializer
 
 
 class ColorSerializer(serializers.ModelSerializer):
@@ -45,11 +32,9 @@ class PartSerializer(serializers.ModelSerializer):
 
 
 class PartColorSerializer(serializers.ModelSerializer):
-    # read-only nested objects (nice for frontend rendering)
     part = PartSerializer(read_only=True)
     color = ColorSerializer(read_only=True)
 
-    # write-only IDs (nice for create/update)
     part_id = serializers.PrimaryKeyRelatedField(
         queryset=Part.objects.all(),
         source="part",
@@ -61,10 +46,8 @@ class PartColorSerializer(serializers.ModelSerializer):
         write_only=True,
     )
 
-    # READ: include catalog item info on GET
     catalog_item = CatalogItemMiniSerializer(read_only=True)
 
-    # WRITE: attach/detach catalog item by id on POST/PATCH
     catalog_item_id = serializers.PrimaryKeyRelatedField(
         queryset=CatalogItem.objects.all(),
         source="catalog_item",
@@ -76,8 +59,9 @@ class PartColorSerializer(serializers.ModelSerializer):
     variant = serializers.CharField(
         required=False,
         allow_blank=True,
-        default=""   # ✅ key change
+        default="",
     )
+
     class Meta:
         model = PartColor
         fields = [

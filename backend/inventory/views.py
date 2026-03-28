@@ -15,6 +15,21 @@ class LocationViewSet(viewsets.ModelViewSet):
     serializer_class = LocationSerializer
     permission_classes = [IsAuthenticated]
 
+    def get_queryset(self):
+        qs = super().get_queryset()
+
+        is_active = self.request.query_params.get("is_active")
+        location_type = self.request.query_params.get("location_type")
+
+        if is_active is not None:
+            value = str(is_active).lower() in ["1", "true", "yes"]
+            qs = qs.filter(is_active=value)
+
+        if location_type:
+            qs = qs.filter(location_type=location_type)
+
+        return qs
+
 
 class InventoryRecordViewSet(viewsets.ModelViewSet):
     queryset = (
@@ -28,12 +43,23 @@ class InventoryRecordViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset()
+
         catalog_item_id = self.request.query_params.get("catalog_item")
+        location_id = self.request.query_params.get("location")
+        is_active = self.request.query_params.get("is_active")
 
         if catalog_item_id:
             qs = qs.filter(catalog_item_id=catalog_item_id)
 
+        if location_id:
+            qs = qs.filter(location_id=location_id)
+
+        if is_active is not None:
+            value = str(is_active).lower() in ["1", "true", "yes"]
+            qs = qs.filter(is_active=value)
+
         return qs
+
 
 class InventoryDashboardView(APIView):
     permission_classes = [IsAuthenticated]
