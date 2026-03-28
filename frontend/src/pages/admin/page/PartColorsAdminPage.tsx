@@ -208,10 +208,22 @@ export default function PartColorsPage() {
       api.get(ENDPOINTS.catalog),
     ]);
 
-    setItems(getListData<PartColorRow>(pcRes.data));
-    setParts(getListData<Part>(pRes.data));
-    setColors(getListData<Color>(cRes.data));
-    setCatalogItems(getListData<CatalogItemMini>(catRes.data));
+    const nextItems = getListData<PartColorRow>(pcRes.data);
+    const nextParts = getListData<Part>(pRes.data);
+    const nextColors = getListData<Color>(cRes.data);
+    const nextCatalogItems = getListData<CatalogItemMini>(catRes.data);
+
+    setItems(nextItems);
+    setParts(nextParts);
+    setColors(nextColors);
+    setCatalogItems(nextCatalogItems);
+
+    return {
+      items: nextItems,
+      parts: nextParts,
+      colors: nextColors,
+      catalogItems: nextCatalogItems,
+    };
   }
 
   useEffect(() => {

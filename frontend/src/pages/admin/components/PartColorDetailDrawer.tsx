@@ -151,17 +151,7 @@ function CatalogEditor({
     setLegoReferencePrice(row.catalog_item?.lego_reference_price ?? "");
     setBricklinkReferencePrice(row.catalog_item?.bricklink_reference_price ?? "");
     setNotes(row.catalog_item?.notes ?? "");
-  }, [
-    row.id,
-    row.catalog_item?.id,
-    row.catalog_item?.sku,
-    row.catalog_item?.is_active,
-    row.catalog_item?.base_price_override,
-    row.catalog_item?.force_override,
-    row.catalog_item?.lego_reference_price,
-    row.catalog_item?.bricklink_reference_price,
-    row.catalog_item?.notes,
-  ]);
+  }, [row]);
 
   function cleanNullable(v: string) {
     const s = v.trim();
