@@ -135,19 +135,33 @@ function CatalogEditor({
   onSubmit: (payload: CatalogItemPayload) => Promise<void> | void;
   onCancel: () => void;
 }) {
-  const [sku, setSku] = useState(row.catalog_item?.sku ?? "");
-  const [isActive, setIsActive] = useState(row.catalog_item?.is_active ?? true);
-  const [basePriceOverride, setBasePriceOverride] = useState(
-    row.catalog_item?.base_price_override ?? ""
-  );
-  const [forceOverride, setForceOverride] = useState(row.catalog_item?.force_override ?? false);
-  const [legoReferencePrice, setLegoReferencePrice] = useState(
-    row.catalog_item?.lego_reference_price ?? ""
-  );
-  const [bricklinkReferencePrice, setBricklinkReferencePrice] = useState(
-    row.catalog_item?.bricklink_reference_price ?? ""
-  );
-  const [notes, setNotes] = useState(row.catalog_item?.notes ?? "");
+  const [sku, setSku] = useState("");
+  const [isActive, setIsActive] = useState(true);
+  const [basePriceOverride, setBasePriceOverride] = useState("");
+  const [forceOverride, setForceOverride] = useState(false);
+  const [legoReferencePrice, setLegoReferencePrice] = useState("");
+  const [bricklinkReferencePrice, setBricklinkReferencePrice] = useState("");
+  const [notes, setNotes] = useState("");
+
+  useEffect(() => {
+    setSku(row.catalog_item?.sku ?? "");
+    setIsActive(row.catalog_item?.is_active ?? true);
+    setBasePriceOverride(row.catalog_item?.base_price_override ?? "");
+    setForceOverride(row.catalog_item?.force_override ?? false);
+    setLegoReferencePrice(row.catalog_item?.lego_reference_price ?? "");
+    setBricklinkReferencePrice(row.catalog_item?.bricklink_reference_price ?? "");
+    setNotes(row.catalog_item?.notes ?? "");
+  }, [
+    row.id,
+    row.catalog_item?.id,
+    row.catalog_item?.sku,
+    row.catalog_item?.is_active,
+    row.catalog_item?.base_price_override,
+    row.catalog_item?.force_override,
+    row.catalog_item?.lego_reference_price,
+    row.catalog_item?.bricklink_reference_price,
+    row.catalog_item?.notes,
+  ]);
 
   function cleanNullable(v: string) {
     const s = v.trim();
@@ -573,36 +587,46 @@ export function PartColorDetailDrawer({
           <div className="mt-3 max-h-[320px] overflow-auto rounded-2xl border border-slate-200">
             <div className="grid grid-cols-1 divide-y divide-slate-200">
               {siblingRows.map((sib) => {
-                const selected = sib.id === row.id;
-                return (
-                  <button
-                    key={sib.id}
-                    type="button"
-                    onClick={() => onSelectRow?.(sib)}
-                    className={cx(
-                      "grid grid-cols-[92px_minmax(0,1fr)_70px] items-center gap-3 px-3 py-2.5 text-left transition",
-                      selected ? "bg-slate-900 text-white" : "bg-white hover:bg-slate-50"
-                    )}
-                  >
-                    <div className="truncate text-xs font-black">
-                      {metaValue(sib.part_color_code)}
-                    </div>
+              const selected = sib.id === row.id;
+              const sku = sib.catalog_item?.sku || "—";
+              const price =
+                sib.catalog_item?.current_price ||
+                sib.catalog_item?.base_price_override ||
+                "—";
 
-                    <div className="min-w-0">
-                      <div className={cx("truncate text-sm font-bold", selected ? "text-white" : "text-slate-900")}>
-                        {metaValue(sib.color?.name)}
-                      </div>
-                      <div className={cx("truncate text-[11px]", selected ? "text-slate-200" : "text-slate-500")}>
-                        {sib.variant ? sib.variant : "—"}
-                      </div>
-                    </div>
+              return (
+                <button
+                  key={sib.id}
+                  type="button"
+                  onClick={() => onSelectRow?.(sib)}
+                  className={cx(
+                    "grid grid-cols-[92px_minmax(0,1fr)_90px_80px] items-center gap-3 px-3 py-2 text-left transition",
+                    selected ? "bg-slate-900 text-white" : "bg-white hover:bg-slate-50"
+                  )}
+                >
+                  <div className="truncate text-xs font-black">
+                    {metaValue(sib.part_color_code)}
+                  </div>
 
-                    <div className={cx("text-right text-xs font-bold", selected ? "text-slate-100" : "text-slate-700")}>
-                      {moneyText(getDisplayPrice(sib))}
+                  <div className="min-w-0">
+                    <div className={cx("truncate text-sm font-bold", selected ? "text-white" : "text-slate-900")}>
+                      {metaValue(sib.color?.name)}
                     </div>
-                  </button>
-                );
-              })}
+                    <div className={cx("truncate text-[11px]", selected ? "text-slate-200" : "text-slate-500")}>
+                      {sib.variant ? sib.variant : "—"}
+                    </div>
+                  </div>
+
+                  <div className={cx("truncate text-xs font-semibold", selected ? "text-slate-100" : "text-slate-600")}>
+                    {sku}
+                  </div>
+
+                  <div className={cx("text-right text-xs font-bold", selected ? "text-slate-100" : "text-slate-700")}>
+                    {price !== "—" ? `$${price}` : "—"}
+                  </div>
+                </button>
+              );
+            })}
             </div>
           </div>
         </div>
@@ -643,6 +667,7 @@ export function PartColorDetailDrawer({
               </div>
 
               <CatalogEditor
+                key={`${row.id}-${row.catalog_item?.id ?? "none"}`}
                 row={row}
                 submitting={savingCatalog}
                 onSubmit={handleSaveCatalog}

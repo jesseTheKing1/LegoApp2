@@ -166,3 +166,22 @@ class CatalogItemSerializer(serializers.ModelSerializer):
         if not v:
             raise serializers.ValidationError("SKU cannot be blank.")
         return v
+
+class CatalogItemMiniSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CatalogItem
+        fields = [
+            "id",
+            "sku",
+            "is_active",
+            "base_price_override",
+            "force_override",
+            "lego_reference_price",
+            "bricklink_reference_price",
+            "current_price",
+            "pricing_source",
+            "current_cost",
+            "margin_amount",
+            "margin_percent",
+            "notes",
+        ]
