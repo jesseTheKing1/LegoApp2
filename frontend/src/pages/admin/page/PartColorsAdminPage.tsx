@@ -710,15 +710,15 @@ export default function PartColorsPage() {
         onClose={closeDetail}
         width={1320}
       >
-        <PartColorDetailDrawer
-          row={selected}
-          allRows={items}
-          onSelectRow={(next) => setSelected(next)}
-          onUpdated={async () => {
-            await loadAll();
-            await refreshCatalogItems();
-          }}
-/>
+      <PartColorDetailDrawer
+        row={selected}
+        allRows={items}
+        onSelectRow={(next) => setSelected(next)}
+        onUpdated={async () => {
+          await loadAll();
+          await refreshCatalogItems();
+        }}
+      />
       </DrawerShell>
     </div>
   );
