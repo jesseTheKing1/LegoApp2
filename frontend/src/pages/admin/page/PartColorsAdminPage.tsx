@@ -22,6 +22,9 @@ type CategoryGroup = { category: string; specifics: SpecificCategoryGroup[] };
 type VariantGroup = { variantLabel: string; rows: PartColorRow[] };
 type ColorGroup = { colorId: number; colorName: string; groups: VariantGroup[] };
 
+const [editOpen, setEditOpen] = useState(false);
+const [editingRow, setEditingRow] = useState<PartColorRow | null>(null);
+
 function readStr(v: unknown) {
   return String(v ?? "").trim();
 }
@@ -370,6 +373,17 @@ export default function PartColorsPage() {
     setSpecificExpanded({});
     setExpanded({});
   }
+  function openEdit(pc: PartColorRow) {
+  setEditingRow(pc);
+  setEditOpen(true);
+  setErr(null);
+}
+
+function closeEdit() {
+  setEditOpen(false);
+  setEditingRow(null);
+  setErr(null);
+}
 
   function openDetail(pc: PartColorRow) {
     setSelected(pc);
@@ -402,6 +416,29 @@ export default function PartColorsPage() {
     const catRes = await api.get(ENDPOINTS.catalog);
     setCatalogItems(getListData<CatalogItemMini>(catRes.data));
   }
+
+  async function updatePartColor(payload: any) {
+  if (!editingRow) return;
+
+  setSaving(true);
+  setErr(null);
+
+  try {
+    await api.patch(`${ENDPOINTS.partColors}${editingRow.id}/`, payload);
+    const fresh = await loadAll();
+
+    const refreshedSelected =
+      fresh.items.find((x) => x.id === editingRow.id) ?? null;
+
+    setSelected(refreshedSelected);
+    setEditingRow(refreshedSelected);
+    setEditOpen(false);
+  } catch (e: any) {
+    setErr(formatApiError(e));
+  } finally {
+    setSaving(false);
+  }
+}
 
   return (
     <div className="space-y-4 pt-3">
@@ -726,6 +763,7 @@ export default function PartColorsPage() {
         row={selected}
         allRows={items}
         onSelectRow={(next) => setSelected(next)}
+        onEditPartColor={(next) => openEdit(next)}
         onUpdated={async () => {
           const fresh = await loadAll();
 
@@ -735,6 +773,27 @@ export default function PartColorsPage() {
           }
         }}
       />
+      </DrawerShell>
+      <DrawerShell
+        open={editOpen}
+        title={
+          editingRow?.part?.name
+            ? `Edit ${editingRow.part.part_id} — ${editingRow.part.name}`
+            : "Edit Part Color"
+        }
+        onClose={closeEdit}
+        width={980}
+      >
+        {editingRow ? (
+          <PartColorForm
+            parts={parts}
+            colors={colors}
+            catalogItems={catalogItems}
+            initialValues={editingRow}
+            submitting={saving}
+            onSubmit={updatePartColor}
+          />
+        ) : null}
       </DrawerShell>
     </div>
   );

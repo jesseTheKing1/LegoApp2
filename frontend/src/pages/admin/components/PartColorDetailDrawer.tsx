@@ -332,11 +332,13 @@ export function PartColorDetailDrawer({
   row,
   allRows,
   onSelectRow,
+  onEditPartColor,
   onUpdated,
 }: {
   row: PartColorRow | null;
   allRows: PartColorRow[];
   onSelectRow?: (row: PartColorRow) => void;
+  onEditPartColor?: (row: PartColorRow) => void;
   onUpdated?: () => void;
 }) {
   const [tab, setTab] = useState<TabKey>("overview");
@@ -724,17 +726,28 @@ export function PartColorDetailDrawer({
         <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex items-center justify-between gap-3">
             <div className="text-sm font-black text-slate-900">Selected Details</div>
-            <button
-              type="button"
-              className={btnBase}
-              onClick={() => setShowCatalogEditor((v) => !v)}
-            >
-              {showCatalogEditor
-                ? "Close Catalog"
-                : row.catalog_item
-                ? "Edit Catalog"
-                : "Add Catalog"}
-            </button>
+
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className={btnBase}
+                onClick={() => onEditPartColor?.(row)}
+              >
+                Edit Part
+              </button>
+
+              <button
+                type="button"
+                className={btnBase}
+                onClick={() => setShowCatalogEditor((v) => !v)}
+              >
+                {showCatalogEditor
+                  ? "Close Catalog"
+                  : row.catalog_item
+                  ? "Edit Catalog"
+                  : "Add Catalog"}
+              </button>
+            </div>
           </div>
 
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
