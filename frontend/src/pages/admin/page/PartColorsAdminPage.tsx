@@ -22,9 +22,6 @@ type CategoryGroup = { category: string; specifics: SpecificCategoryGroup[] };
 type VariantGroup = { variantLabel: string; rows: PartColorRow[] };
 type ColorGroup = { colorId: number; colorName: string; groups: VariantGroup[] };
 
-const [editOpen, setEditOpen] = useState(false);
-const [editingRow, setEditingRow] = useState<PartColorRow | null>(null);
-
 function readStr(v: unknown) {
   return String(v ?? "").trim();
 }
@@ -184,6 +181,8 @@ function SummaryChip({
 }
 
 export default function PartColorsPage() {
+  const [editOpen, setEditOpen] = useState(false);
+  const [editingRow, setEditingRow] = useState<PartColorRow | null>(null);
   const [items, setItems] = useState<PartColorRow[]>([]);
   const [parts, setParts] = useState<Part[]>([]);
   const [colors, setColors] = useState<Color[]>([]);
