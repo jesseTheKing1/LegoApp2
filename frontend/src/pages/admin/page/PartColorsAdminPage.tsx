@@ -417,26 +417,26 @@ function closeEdit() {
   }
 
   async function updatePartColor(payload: any) {
+  async function updatePartColor(payload: any) {
   if (!editingRow) return;
 
   setSaving(true);
   setErr(null);
 
   try {
-    await api.patch(`${ENDPOINTS.partColors}${editingRow.id}/`, payload);
-    const fresh = await loadAll();
+    const res = await api.patch(`${ENDPOINTS.partColors}${editingRow.id}/`, payload);
+    const updated = res.data;
 
-    const refreshedSelected =
-      fresh.items.find((x) => x.id === editingRow.id) ?? null;
-
-    setSelected(refreshedSelected);
-    setEditingRow(refreshedSelected);
+    setItems((prev) => prev.map((x) => (x.id === updated.id ? updated : x)));
+    setSelected((prev) => (prev?.id === updated.id ? updated : prev));
+    setEditingRow(updated);
     setEditOpen(false);
   } catch (e: any) {
     setErr(formatApiError(e));
   } finally {
     setSaving(false);
   }
+}
 }
 
   return (
