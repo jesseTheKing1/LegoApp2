@@ -416,19 +416,28 @@ function closeEdit() {
     setCatalogItems(getListData<CatalogItemMini>(catRes.data));
   }
 
-  async function updatePartColor(payload: any) {
-  async function updatePartColor(payload: any) {
+async function updatePartColor(payload: any) {
   if (!editingRow) return;
 
   setSaving(true);
   setErr(null);
 
   try {
-    const res = await api.patch(`${ENDPOINTS.partColors}${editingRow.id}/`, payload);
+    const res = await api.patch(
+      `${ENDPOINTS.partColors}${editingRow.id}/`,
+      payload
+    );
+
     const updated = res.data;
 
-    setItems((prev) => prev.map((x) => (x.id === updated.id ? updated : x)));
-    setSelected((prev) => (prev?.id === updated.id ? updated : prev));
+    setItems((prev) =>
+      prev.map((x) => (x.id === updated.id ? updated : x))
+    );
+
+    setSelected((prev) =>
+      prev?.id === updated.id ? updated : prev
+    );
+
     setEditingRow(updated);
     setEditOpen(false);
   } catch (e: any) {
@@ -436,7 +445,6 @@ function closeEdit() {
   } finally {
     setSaving(false);
   }
-}
 }
 
   return (

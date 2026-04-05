@@ -7,6 +7,10 @@ export type CatalogCostSource =
   | "other";
 
 export interface CatalogCostEntry {
+  reference_number: any;
+  vendor_name: any;
+  source_type: null;
+  currency: null;
   id: number;
   catalog_item: number;
 
