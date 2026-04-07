@@ -1,12 +1,20 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import type {
-  InventoryCondition,
+  InventoryLocation,
+  InventoryRecord,
   InventoryRecordPayload,
-  InventoryRecordRow,
+  InventoryCondition,
   InventorySourceType,
-  LocationRow,
 } from "../../../types/inventory";
-import { btnBase, btnPrimary, inputBase, cx } from "../utils/ui";
+
+type Props = {
+  locations: InventoryLocation[];
+  initialValues?: Partial<InventoryRecord> | null;
+  catalogItemId?: number;
+  submitting?: boolean;
+  onSubmit: (payload: InventoryRecordPayload) => Promise<void> | void;
+  onCancel?: () => void;
+};
 
 const conditionOptions: InventoryCondition[] = [
   "sealed",
@@ -26,143 +34,217 @@ const sourceOptions: InventorySourceType[] = [
   "other",
 ];
 
-const selectBase =
-  "w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-900";
+function normalize(v: unknown) {
+  return String(v ?? "").trim();
+}
 
-type Props = {
-  catalogItemId?: number;
-  locations: LocationRow[];
-  initialValues?: InventoryRecordRow | null;
-  submitting?: boolean;
-  onSubmit: (payload: InventoryRecordPayload) => Promise<void> | void;
-  onCancel?: () => void;
-};
+function buildLocationLabel(loc: InventoryLocation) {
+  const parent = [loc.parent_code, loc.parent_name].filter(Boolean).join(" — ");
+  return parent
+    ? `${loc.code} — ${loc.name} (${parent})`
+    : `${loc.code} — ${loc.name}`;
+}
 
 export function InventoryRecordForm({
-  catalogItemId,
   locations,
   initialValues,
-  submitting,
+  catalogItemId,
+  submitting = false,
   onSubmit,
   onCancel,
 }: Props) {
+  const [locationSearch, setLocationSearch] = useState("");
+  const [locationOpen, setLocationOpen] = useState(false);
+
   const [locationId, setLocationId] = useState<number | "">("");
-  const [condition, setCondition] = useState<InventoryCondition>("loose");
+  const [condition, setCondition] = useState<InventoryCondition>("complete");
   const [sourceType, setSourceType] = useState<InventorySourceType>("other");
-  const [quantityOnHand, setQuantityOnHand] = useState("0");
-  const [quantityReserved, setQuantityReserved] = useState("0");
+  const [quantityOnHand, setQuantityOnHand] = useState<number>(0);
+  const [quantityReserved, setQuantityReserved] = useState<number>(0);
   const [unitCost, setUnitCost] = useState("");
   const [acquiredAt, setAcquiredAt] = useState("");
   const [notes, setNotes] = useState("");
   const [isSellable, setIsSellable] = useState(true);
   const [isActive, setIsActive] = useState(true);
-  const [formError, setFormError] = useState<string>("");
+
+  const boxRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (!initialValues) {
-      const firstActive = locations.find((x) => x.is_active);
-      setLocationId(firstActive?.id ?? "");
-      setCondition("loose");
-      setSourceType("other");
-      setQuantityOnHand("0");
-      setQuantityReserved("0");
-      setUnitCost("");
-      setAcquiredAt("");
-      setNotes("");
-      setIsSellable(true);
-      setIsActive(true);
-      return;
+    const nextLocationId =
+      initialValues?.location?.id ??
+      (typeof initialValues?.location === "number" ? initialValues.location : null);
+
+    setLocationId(nextLocationId ?? "");
+    setCondition((initialValues?.condition as InventoryCondition) ?? "complete");
+    setSourceType((initialValues?.source_type as InventorySourceType) ?? "other");
+    setQuantityOnHand(Number(initialValues?.quantity_on_hand ?? 0));
+    setQuantityReserved(Number(initialValues?.quantity_reserved ?? 0));
+    setUnitCost(initialValues?.unit_cost ? String(initialValues.unit_cost) : "");
+    setAcquiredAt(initialValues?.acquired_at ? String(initialValues.acquired_at).slice(0, 10) : "");
+    setNotes(normalize(initialValues?.notes));
+    setIsSellable(initialValues?.is_sellable ?? true);
+    setIsActive(initialValues?.is_active ?? true);
+  }, [initialValues]);
+
+  const selectedLocation = useMemo(
+    () => locations.find((x) => x.id === locationId) ?? null,
+    [locations, locationId]
+  );
+
+  useEffect(() => {
+    if (selectedLocation) {
+      setLocationSearch(buildLocationLabel(selectedLocation));
+    } else if (!locationOpen) {
+      setLocationSearch("");
+    }
+  }, [selectedLocation, locationOpen]);
+
+  const filteredLocations = useMemo(() => {
+    const qq = locationSearch.trim().toLowerCase();
+
+    const base = [...locations].sort((a, b) => {
+      const ac = `${a.code} ${a.name}`.toLowerCase();
+      const bc = `${b.code} ${b.name}`.toLowerCase();
+      return ac.localeCompare(bc);
+    });
+
+    if (!qq) return base;
+
+    return base.filter((loc) =>
+      [
+        loc.code,
+        loc.name,
+        loc.location_type,
+        loc.parent_code ?? "",
+        loc.parent_name ?? "",
+        loc.notes ?? "",
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(qq)
+    );
+  }, [locations, locationSearch]);
+
+  useEffect(() => {
+    function onDocClick(e: MouseEvent) {
+      if (!boxRef.current) return;
+      if (!boxRef.current.contains(e.target as Node)) {
+        setLocationOpen(false);
+      }
     }
 
-    setLocationId(initialValues.location?.id ?? "");
-    setCondition(initialValues.condition ?? "loose");
-    setSourceType(initialValues.source_type ?? "other");
-    setQuantityOnHand(String(initialValues.quantity_on_hand ?? 0));
-    setQuantityReserved(String(initialValues.quantity_reserved ?? 0));
-    setUnitCost(initialValues.unit_cost ?? "");
-    setAcquiredAt(initialValues.acquired_at ?? "");
-    setNotes(initialValues.notes ?? "");
-    setIsSellable(Boolean(initialValues.is_sellable));
-    setIsActive(Boolean(initialValues.is_active));
-  }, [initialValues, locations]);
-
-  const activeLocations = useMemo(
-    () => locations.filter((x) => x.is_active),
-    [locations]
-  );
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setFormError("");
-
-    const qoh = Number(quantityOnHand);
-    const qr = Number(quantityReserved);
 
     if (!locationId) {
-      setFormError("Please choose a location.");
-      return;
-    }
-
-    if (!Number.isFinite(qoh) || qoh < 0) {
-      setFormError("Quantity on hand must be 0 or greater.");
-      return;
-    }
-
-    if (!Number.isFinite(qr) || qr < 0) {
-      setFormError("Reserved quantity must be 0 or greater.");
-      return;
-    }
-
-    if (qr > qoh) {
-      setFormError("Reserved quantity cannot be greater than quantity on hand.");
       return;
     }
 
     const payload: InventoryRecordPayload = {
+      catalog_item_id:
+        catalogItemId ??
+        initialValues?.catalog_item?.id ??
+        undefined,
       location_id: Number(locationId),
       condition,
       source_type: sourceType,
-      quantity_on_hand: qoh,
-      quantity_reserved: qr,
+      quantity_on_hand: Number(quantityOnHand || 0),
+      quantity_reserved: Number(quantityReserved || 0),
       unit_cost: unitCost.trim() ? unitCost.trim() : null,
-      acquired_at: acquiredAt || null,
-      notes,
+      acquired_at: acquiredAt.trim() ? acquiredAt.trim() : null,
+      notes: notes.trim(),
       is_sellable: isSellable,
       is_active: isActive,
     };
-
-    if (catalogItemId) {
-      payload.catalog_item_id = catalogItemId;
-    }
 
     await onSubmit(payload);
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+    <form onSubmit={handleSubmit} className="space-y-5">
       <div className="grid gap-4 md:grid-cols-2">
-        <label className="space-y-1">
-          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Location</div>
-          <select
-            className={selectBase}
-            value={locationId}
-            onChange={(e) => setLocationId(e.target.value ? Number(e.target.value) : "")}
-          >
-            <option value="">Select location</option>
-            {activeLocations.map((loc) => (
-              <option key={loc.id} value={loc.id}>
-                {loc.code} — {loc.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="md:col-span-2" ref={boxRef}>
+          <label className="mb-1.5 block text-xs font-black uppercase tracking-[0.16em] text-slate-500">
+            Location
+          </label>
 
-        <label className="space-y-1">
-          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Condition</div>
+          <div className="relative">
+            <input
+              value={locationSearch}
+              onChange={(e) => {
+                setLocationSearch(e.target.value);
+                setLocationOpen(true);
+              }}
+              onFocus={() => setLocationOpen(true)}
+              placeholder="Search location code, name, type..."
+              className="w-full rounded-2xl border border-slate-300 bg-white px-3.5 py-3 text-sm outline-none focus:border-slate-500 focus:ring-4 focus:ring-slate-200/70"
+            />
+
+            {locationOpen ? (
+              <div className="absolute z-20 mt-2 max-h-80 w-full overflow-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-[0_20px_50px_rgba(15,23,42,0.18)]">
+                {filteredLocations.length === 0 ? (
+                  <div className="px-3 py-3 text-sm text-slate-500">
+                    No locations found.
+                  </div>
+                ) : (
+                  filteredLocations.map((loc) => {
+                    const active = loc.id === locationId;
+
+                    return (
+                      <button
+                        key={loc.id}
+                        type="button"
+                        onClick={() => {
+                          setLocationId(loc.id);
+                          setLocationSearch(buildLocationLabel(loc));
+                          setLocationOpen(false);
+                        }}
+                        className={`mb-1 w-full rounded-xl border px-3 py-3 text-left transition ${
+                          active
+                            ? "border-slate-900 bg-slate-900 text-white"
+                            : "border-slate-200 bg-white hover:bg-slate-50"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className={`truncate text-sm font-black ${active ? "text-white" : "text-slate-900"}`}>
+                              {loc.code} — {loc.name}
+                            </div>
+                            <div className={`mt-1 text-xs ${active ? "text-slate-200" : "text-slate-500"}`}>
+                              {loc.location_type}
+                              {loc.parent_code || loc.parent_name
+                                ? ` • parent: ${loc.parent_code ?? ""} ${loc.parent_name ?? ""}`.trim()
+                                : ""}
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            ) : null}
+          </div>
+
+          {!locationId ? (
+            <div className="mt-1.5 text-xs text-rose-600">
+              Select a location before saving.
+            </div>
+          ) : null}
+        </div>
+
+        <div>
+          <label className="mb-1.5 block text-xs font-black uppercase tracking-[0.16em] text-slate-500">
+            Condition
+          </label>
           <select
-            className={selectBase}
             value={condition}
             onChange={(e) => setCondition(e.target.value as InventoryCondition)}
+            className="w-full rounded-2xl border border-slate-300 bg-white px-3.5 py-3 text-sm outline-none focus:border-slate-500"
           >
             {conditionOptions.map((opt) => (
               <option key={opt} value={opt}>
@@ -170,14 +252,16 @@ export function InventoryRecordForm({
               </option>
             ))}
           </select>
-        </label>
+        </div>
 
-        <label className="space-y-1">
-          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Source</div>
+        <div>
+          <label className="mb-1.5 block text-xs font-black uppercase tracking-[0.16em] text-slate-500">
+            Source
+          </label>
           <select
-            className={selectBase}
             value={sourceType}
             onChange={(e) => setSourceType(e.target.value as InventorySourceType)}
+            className="w-full rounded-2xl border border-slate-300 bg-white px-3.5 py-3 text-sm outline-none focus:border-slate-500"
           >
             {sourceOptions.map((opt) => (
               <option key={opt} value={opt}>
@@ -185,66 +269,74 @@ export function InventoryRecordForm({
               </option>
             ))}
           </select>
-        </label>
+        </div>
 
-        <label className="space-y-1">
-          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Acquired date</div>
-          <input
-            type="date"
-            className={inputBase}
-            value={acquiredAt}
-            onChange={(e) => setAcquiredAt(e.target.value)}
-          />
-        </label>
-
-        <label className="space-y-1">
-          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Quantity on hand</div>
+        <div>
+          <label className="mb-1.5 block text-xs font-black uppercase tracking-[0.16em] text-slate-500">
+            Quantity On Hand
+          </label>
           <input
             type="number"
             min={0}
-            className={inputBase}
             value={quantityOnHand}
-            onChange={(e) => setQuantityOnHand(e.target.value)}
+            onChange={(e) => setQuantityOnHand(Number(e.target.value))}
+            className="w-full rounded-2xl border border-slate-300 bg-white px-3.5 py-3 text-sm outline-none focus:border-slate-500"
           />
-        </label>
+        </div>
 
-        <label className="space-y-1">
-          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Quantity reserved</div>
+        <div>
+          <label className="mb-1.5 block text-xs font-black uppercase tracking-[0.16em] text-slate-500">
+            Quantity Reserved
+          </label>
           <input
             type="number"
             min={0}
-            className={inputBase}
             value={quantityReserved}
-            onChange={(e) => setQuantityReserved(e.target.value)}
+            onChange={(e) => setQuantityReserved(Number(e.target.value))}
+            className="w-full rounded-2xl border border-slate-300 bg-white px-3.5 py-3 text-sm outline-none focus:border-slate-500"
           />
-        </label>
+        </div>
 
-        <label className="space-y-1">
-          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Unit cost</div>
+        <div>
+          <label className="mb-1.5 block text-xs font-black uppercase tracking-[0.16em] text-slate-500">
+            Unit Cost
+          </label>
           <input
-            type="number"
-            step="0.0001"
-            min={0}
-            className={inputBase}
             value={unitCost}
             onChange={(e) => setUnitCost(e.target.value)}
-            placeholder="0.0000"
+            placeholder="e.g. 1.2500"
+            className="w-full rounded-2xl border border-slate-300 bg-white px-3.5 py-3 text-sm outline-none focus:border-slate-500"
           />
-        </label>
+        </div>
+
+        <div>
+          <label className="mb-1.5 block text-xs font-black uppercase tracking-[0.16em] text-slate-500">
+            Acquired At
+          </label>
+          <input
+            type="date"
+            value={acquiredAt}
+            onChange={(e) => setAcquiredAt(e.target.value)}
+            className="w-full rounded-2xl border border-slate-300 bg-white px-3.5 py-3 text-sm outline-none focus:border-slate-500"
+          />
+        </div>
+
+        <div className="md:col-span-2">
+          <label className="mb-1.5 block text-xs font-black uppercase tracking-[0.16em] text-slate-500">
+            Notes
+          </label>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={4}
+            className="w-full rounded-2xl border border-slate-300 bg-white px-3.5 py-3 text-sm outline-none focus:border-slate-500"
+            placeholder="Optional notes..."
+          />
+        </div>
       </div>
 
-      <label className="space-y-1 block">
-        <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Notes</div>
-        <textarea
-          className={cx(inputBase, "min-h-[84px]")}
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          placeholder="Optional notes about this stock row"
-        />
-      </label>
-
-      <div className="flex flex-wrap gap-4">
-        <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+      <div className="flex flex-wrap items-center gap-5">
+        <label className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700">
           <input
             type="checkbox"
             checked={isSellable}
@@ -253,7 +345,7 @@ export function InventoryRecordForm({
           Sellable
         </label>
 
-        <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+        <label className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700">
           <input
             type="checkbox"
             checked={isActive}
@@ -263,18 +355,21 @@ export function InventoryRecordForm({
         </label>
       </div>
 
-      {formError ? (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-          {formError}
-        </div>
-      ) : null}
-
-      <div className="flex items-center gap-2">
-        <button type="submit" className={btnPrimary} disabled={submitting}>
-          {submitting ? "Saving..." : initialValues ? "Update inventory" : "Add inventory"}
+      <div className="flex flex-wrap gap-2 pt-2">
+        <button
+          type="submit"
+          disabled={submitting || !locationId}
+          className="rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60"
+        >
+          {submitting ? "Saving..." : "Save Inventory"}
         </button>
+
         {onCancel ? (
-          <button type="button" className={btnBase} onClick={onCancel}>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-2xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700"
+          >
             Cancel
           </button>
         ) : null}
