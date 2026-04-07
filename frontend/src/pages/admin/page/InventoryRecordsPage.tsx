@@ -25,16 +25,20 @@ export default function InventoryRecordsPage() {
   const [err, setErr] = useState<string | null>(null);
 
   async function loadAll() {
-    setErr(null);
+  setErr(null);
 
-    const [recordsRes, locationsRes] = await Promise.all([
-      api.get(ENDPOINTS.inventoryRecords),
-      api.get(`${ENDPOINTS.inventoryLocations}?is_active=true`),
-    ]);
+  const [recordsRes, locationsRes] = await Promise.all([
+    api.get(ENDPOINTS.inventoryRecords),
+    api.get(`${ENDPOINTS.inventoryLocations}?is_active=true`),
+  ]);
 
-    setItems(getListData<InventoryRecord>(recordsRes.data));
-    setLocations(getListData<InventoryLocation>(locationsRes.data));
-  }
+  console.log("RAW locationsRes.data:", locationsRes.data);
+
+  setItems(getListData<InventoryRecord>(recordsRes.data));
+
+  // temporary: bypass helper
+  setLocations(Array.isArray(locationsRes.data) ? locationsRes.data : locationsRes.data?.results ?? []);
+}
 
   useEffect(() => {
     loadAll().catch((e) => setErr(formatApiError(e)));
