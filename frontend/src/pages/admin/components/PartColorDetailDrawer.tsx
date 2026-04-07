@@ -395,7 +395,16 @@ export function PartColorDetailDrawer({
 
         setInventoryRows(getListData<InventoryRecordRow>(inventoryRes.data));
         setCostRows(getListData<CatalogCostEntry>(costRes.data));
-        setLocations(getListData<LocationRow>(locationsRes.data));
+        const nextLocations = Array.isArray(locationsRes.data)
+          ? locationsRes.data
+          : Array.isArray(locationsRes.data?.results)
+          ? locationsRes.data.results
+          : [];
+
+        console.log("locationsRes.data", locationsRes.data);
+        console.log("nextLocations", nextLocations);
+
+        setLocations(nextLocations);
       } catch (e: any) {
         if (!cancelled) setError(formatApiError(e));
       } finally {
