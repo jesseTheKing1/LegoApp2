@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import api from "../../../api/client";
 import { ENDPOINTS } from "../../../api/endpoints";
 import type {
-  InventoryLocation,
   InventoryRecord,
   InventoryRecordPayload,
 } from "../../../types/inventory";
@@ -14,34 +13,57 @@ import { getListData } from "../utils/list";
 const shellCard =
   "rounded-[28px] border border-slate-200/80 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.06)]";
 
+function getRows<T>(data: unknown): T[] {
+  if (Array.isArray(data)) return data as T[];
+
+  if (
+    data &&
+    typeof data === "object" &&
+    "results" in data &&
+    Array.isArray((data as { results?: unknown[] }).results)
+  ) {
+    return (data as { results: T[] }).results;
+  }
+
+  return [];
+}
+
 export default function InventoryRecordsPage() {
   const [items, setItems] = useState<InventoryRecord[]>([]);
-  const [locations, setLocations] = useState<InventoryLocation[]>([]);
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState<InventoryRecord | null>(null);
+
   const [createOpen, setCreateOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
+
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   async function loadAll() {
-  setErr(null);
+    setLoading(true);
+    setErr(null);
 
-  const [recordsRes, locationsRes] = await Promise.all([
-    api.get(ENDPOINTS.inventoryRecords),
-    api.get(`${ENDPOINTS.inventoryLocations}?is_active=true`),
-  ]);
+    try {
+      const recordsRes = await api.get(ENDPOINTS.inventoryRecords);
 
-  console.log("RAW locationsRes.data:", locationsRes.data);
+      const recordRows =
+        typeof getListData === "function"
+          ? getListData<InventoryRecord>(recordsRes.data)
+          : getRows<InventoryRecord>(recordsRes.data);
 
-  setItems(getListData<InventoryRecord>(recordsRes.data));
-
-  // temporary: bypass helper
-  setLocations(Array.isArray(locationsRes.data) ? locationsRes.data : locationsRes.data?.results ?? []);
-}
+      setItems(recordRows);
+    } catch (e: any) {
+      console.error("Failed loading inventory page data:", e);
+      setItems([]);
+      setErr(formatApiError(e));
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
-    loadAll().catch((e) => setErr(formatApiError(e)));
+    loadAll();
   }, []);
 
   const filtered = useMemo(() => {
@@ -66,11 +88,13 @@ export default function InventoryRecordsPage() {
   async function create(payload: InventoryRecordPayload) {
     setSaving(true);
     setErr(null);
+
     try {
       await api.post(ENDPOINTS.inventoryRecords, payload);
       setCreateOpen(false);
       await loadAll();
     } catch (e: any) {
+      console.error("Failed creating inventory record:", e);
       setErr(formatApiError(e));
     } finally {
       setSaving(false);
@@ -82,12 +106,14 @@ export default function InventoryRecordsPage() {
 
     setSaving(true);
     setErr(null);
+
     try {
       await api.patch(`${ENDPOINTS.inventoryRecords}${selected.id}/`, payload);
       setDetailOpen(false);
       setSelected(null);
       await loadAll();
     } catch (e: any) {
+      console.error("Failed updating inventory record:", e);
       setErr(formatApiError(e));
     } finally {
       setSaving(false);
@@ -105,6 +131,11 @@ export default function InventoryRecordsPage() {
       <div className={shellCard}>
         <div className="border-b border-slate-200 px-5 py-4">
           <div className="text-lg font-black text-slate-950">Inventory Records</div>
+          <div className="mt-1 text-sm text-slate-500">
+            {loading
+              ? "Loading inventory records..."
+              : `${items.length} record${items.length === 1 ? "" : "s"}`}
+          </div>
         </div>
 
         <div className="space-y-4 p-5">
@@ -125,13 +156,17 @@ export default function InventoryRecordsPage() {
             </button>
           </div>
 
-          <div className="space-y-3">
-            {filtered.length === 0 ? (
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">
-                No inventory records found.
-              </div>
-            ) : (
-              filtered.map((row) => (
+          {loading ? (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">
+              Loading inventory records...
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">
+              No inventory records found.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filtered.map((row) => (
                 <button
                   key={row.id}
                   type="button"
@@ -139,37 +174,57 @@ export default function InventoryRecordsPage() {
                     setSelected(row);
                     setDetailOpen(true);
                   }}
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-left hover:bg-slate-100"
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-left transition hover:bg-slate-100"
                 >
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm font-black text-slate-950">
-                        {row.catalog_item?.sku}
+                        {row.catalog_item?.sku || "No SKU"}
                       </div>
                       <div className="mt-1 text-xs text-slate-500">
-                        {row.location?.code} — {row.location?.name} • {row.condition} • {row.source_type}
+                        {row.location?.code || "—"} — {row.location?.name || "No location"} •{" "}
+                        {row.condition} • {row.source_type}
                       </div>
+                      {row.notes ? (
+                        <div className="mt-2 line-clamp-2 text-xs text-slate-500">
+                          {row.notes}
+                        </div>
+                      ) : null}
                     </div>
 
                     <div className="grid grid-cols-3 gap-3 text-center lg:w-[360px]">
                       <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
-                        <div className="text-[10px] uppercase tracking-wide text-slate-500">On Hand</div>
-                        <div className="text-sm font-black text-slate-950">{row.quantity_on_hand}</div>
+                        <div className="text-[10px] uppercase tracking-wide text-slate-500">
+                          On Hand
+                        </div>
+                        <div className="text-sm font-black text-slate-950">
+                          {row.quantity_on_hand}
+                        </div>
                       </div>
+
                       <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
-                        <div className="text-[10px] uppercase tracking-wide text-slate-500">Reserved</div>
-                        <div className="text-sm font-black text-slate-950">{row.quantity_reserved}</div>
+                        <div className="text-[10px] uppercase tracking-wide text-slate-500">
+                          Reserved
+                        </div>
+                        <div className="text-sm font-black text-slate-950">
+                          {row.quantity_reserved}
+                        </div>
                       </div>
+
                       <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
-                        <div className="text-[10px] uppercase tracking-wide text-slate-500">Available</div>
-                        <div className="text-sm font-black text-slate-950">{row.quantity_available}</div>
+                        <div className="text-[10px] uppercase tracking-wide text-slate-500">
+                          Available
+                        </div>
+                        <div className="text-sm font-black text-slate-950">
+                          {row.quantity_available}
+                        </div>
                       </div>
                     </div>
                   </div>
                 </button>
-              ))
-            )}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -180,7 +235,6 @@ export default function InventoryRecordsPage() {
         width={1200}
       >
         <InventoryRecordForm
-          locations={locations}
           submitting={saving}
           onSubmit={create}
           onCancel={() => setCreateOpen(false)}
@@ -199,7 +253,6 @@ export default function InventoryRecordsPage() {
         {selected ? (
           <InventoryRecordForm
             initialValues={selected}
-            locations={locations}
             submitting={saving}
             onSubmit={update}
             onCancel={() => {
