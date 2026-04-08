@@ -960,7 +960,6 @@ export function PartColorDetailDrawer({
                       <div className="mt-3">
                         <InventoryRecordForm
                           catalogItemId={row.catalog_item.id}
-                          locations={locations}
                           initialValues={editingInventory}
                           submitting={savingInventory}
                           onSubmit={handleSaveInventory}
