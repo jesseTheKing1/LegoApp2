@@ -1,4 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import api from "../../../api/client";
+import { ENDPOINTS } from "../../../api/endpoints";
+
 import type {
   InventoryLocation,
   InventoryRecord,
@@ -8,7 +11,6 @@ import type {
 } from "../../../types/inventory";
 
 type Props = {
-  locations: InventoryLocation[];
   initialValues?: Partial<InventoryRecord> | null;
   catalogItemId?: number;
   submitting?: boolean;
@@ -45,14 +47,32 @@ function buildLocationLabel(loc: InventoryLocation) {
     : `${loc.code} — ${loc.name}`;
 }
 
+function getLocationRows(data: unknown): InventoryLocation[] {
+  if (Array.isArray(data)) return data as InventoryLocation[];
+
+  if (
+    data &&
+    typeof data === "object" &&
+    "results" in data &&
+    Array.isArray((data as { results?: unknown[] }).results)
+  ) {
+    return (data as { results: InventoryLocation[] }).results;
+  }
+
+  return [];
+}
+
 export function InventoryRecordForm({
-  locations,
   initialValues,
   catalogItemId,
   submitting = false,
   onSubmit,
   onCancel,
 }: Props) {
+  const [locations, setLocations] = useState<InventoryLocation[]>([]);
+  const [locationsLoading, setLocationsLoading] = useState(false);
+  const [locationsError, setLocationsError] = useState<string | null>(null);
+
   const [locationSearch, setLocationSearch] = useState("");
   const [locationOpen, setLocationOpen] = useState(false);
 
@@ -70,9 +90,38 @@ export function InventoryRecordForm({
   const boxRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
+    async function loadLocations() {
+      setLocationsLoading(true);
+      setLocationsError(null);
+
+      try {
+        const url = `${ENDPOINTS.inventoryLocations}?is_active=true`;
+        const res = await api.get(url);
+        const rows = getLocationRows(res.data);
+
+        setLocations(rows);
+      } catch (err: any) {
+        console.error("Failed to load locations", err);
+        setLocations([]);
+        setLocationsError(
+          err?.response?.data?.detail ||
+            err?.message ||
+            "Failed to load locations."
+        );
+      } finally {
+        setLocationsLoading(false);
+      }
+    }
+
+    loadLocations();
+  }, []);
+
+  useEffect(() => {
     const nextLocationId =
       initialValues?.location?.id ??
-      (typeof initialValues?.location === "number" ? initialValues.location : null);
+      (typeof initialValues?.location === "number"
+        ? initialValues.location
+        : null);
 
     setLocationId(nextLocationId ?? "");
     setCondition((initialValues?.condition as InventoryCondition) ?? "complete");
@@ -80,7 +129,11 @@ export function InventoryRecordForm({
     setQuantityOnHand(Number(initialValues?.quantity_on_hand ?? 0));
     setQuantityReserved(Number(initialValues?.quantity_reserved ?? 0));
     setUnitCost(initialValues?.unit_cost ? String(initialValues.unit_cost) : "");
-    setAcquiredAt(initialValues?.acquired_at ? String(initialValues.acquired_at).slice(0, 10) : "");
+    setAcquiredAt(
+      initialValues?.acquired_at
+        ? String(initialValues.acquired_at).slice(0, 10)
+        : ""
+    );
     setNotes(normalize(initialValues?.notes));
     setIsSellable(initialValues?.is_sellable ?? true);
     setIsActive(initialValues?.is_active ?? true);
@@ -140,15 +193,10 @@ export function InventoryRecordForm({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    if (!locationId) {
-      return;
-    }
+    if (!locationId) return;
 
     const payload: InventoryRecordPayload = {
-      catalog_item_id:
-        catalogItemId ??
-        initialValues?.catalog_item?.id ??
-        undefined,
+      catalog_item_id: catalogItemId ?? initialValues?.catalog_item?.id ?? undefined,
       location_id: Number(locationId),
       condition,
       source_type: sourceType,
@@ -180,13 +228,25 @@ export function InventoryRecordForm({
                 setLocationOpen(true);
               }}
               onFocus={() => setLocationOpen(true)}
-              placeholder="Search location code, name, type..."
+              placeholder={
+                locationsLoading
+                  ? "Loading locations..."
+                  : "Search location code, name, type..."
+              }
               className="w-full rounded-2xl border border-slate-300 bg-white px-3.5 py-3 text-sm outline-none focus:border-slate-500 focus:ring-4 focus:ring-slate-200/70"
             />
 
             {locationOpen ? (
               <div className="absolute z-20 mt-2 max-h-80 w-full overflow-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-[0_20px_50px_rgba(15,23,42,0.18)]">
-                {filteredLocations.length === 0 ? (
+                {locationsLoading ? (
+                  <div className="px-3 py-3 text-sm text-slate-500">
+                    Loading locations...
+                  </div>
+                ) : locationsError ? (
+                  <div className="px-3 py-3 text-sm text-rose-600">
+                    {locationsError}
+                  </div>
+                ) : filteredLocations.length === 0 ? (
                   <div className="px-3 py-3 text-sm text-slate-500">
                     No locations found.
                   </div>
@@ -211,10 +271,18 @@ export function InventoryRecordForm({
                       >
                         <div className="flex items-center justify-between gap-3">
                           <div className="min-w-0">
-                            <div className={`truncate text-sm font-black ${active ? "text-white" : "text-slate-900"}`}>
+                            <div
+                              className={`truncate text-sm font-black ${
+                                active ? "text-white" : "text-slate-900"
+                              }`}
+                            >
                               {loc.code} — {loc.name}
                             </div>
-                            <div className={`mt-1 text-xs ${active ? "text-slate-200" : "text-slate-500"}`}>
+                            <div
+                              className={`mt-1 text-xs ${
+                                active ? "text-slate-200" : "text-slate-500"
+                              }`}
+                            >
                               {loc.location_type}
                               {loc.parent_code || loc.parent_name
                                 ? ` • parent: ${loc.parent_code ?? ""} ${loc.parent_name ?? ""}`.trim()
@@ -358,7 +426,7 @@ export function InventoryRecordForm({
       <div className="flex flex-wrap gap-2 pt-2">
         <button
           type="submit"
-          disabled={submitting || !locationId}
+          disabled={submitting || !locationId || locationsLoading}
           className="rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60"
         >
           {submitting ? "Saving..." : "Save Inventory"}
