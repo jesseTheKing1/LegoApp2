@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import api from "../../../api/client";
 import { ENDPOINTS } from "../../../api/endpoints";
 import type {
+  InventoryLocation,
   InventoryRecord,
   InventoryRecordPayload,
 } from "../../../types/inventory";
@@ -30,6 +31,7 @@ function getRows<T>(data: unknown): T[] {
 
 export default function InventoryRecordsPage() {
   const [items, setItems] = useState<InventoryRecord[]>([]);
+  const [locations, setLocations] = useState<InventoryLocation[]>([]);
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState<InventoryRecord | null>(null);
 
@@ -41,26 +43,36 @@ export default function InventoryRecordsPage() {
   const [err, setErr] = useState<string | null>(null);
 
   async function loadAll() {
-    setLoading(true);
-    setErr(null);
+  setLoading(true);
+  setErr(null);
 
-    try {
-      const recordsRes = await api.get(ENDPOINTS.inventoryRecords);
+  try {
+    const [recordsRes, locationsRes] = await Promise.all([
+      api.get(ENDPOINTS.inventoryRecords),
+      api.get(`${ENDPOINTS.inventoryLocations}?is_active=true`),
+    ]);
 
-      const recordRows =
-        typeof getListData === "function"
-          ? getListData<InventoryRecord>(recordsRes.data)
-          : getRows<InventoryRecord>(recordsRes.data);
+    const recordRows =
+      typeof getListData === "function"
+        ? getListData<InventoryRecord>(recordsRes.data)
+        : getRows<InventoryRecord>(recordsRes.data);
 
-      setItems(recordRows);
-    } catch (e: any) {
-      console.error("Failed loading inventory page data:", e);
-      setItems([]);
-      setErr(formatApiError(e));
-    } finally {
-      setLoading(false);
-    }
+    const locationRows = getRows<InventoryLocation>(locationsRes.data);
+
+    console.log("locationsRes.data", locationsRes.data);
+    console.log("locationRows", locationRows);
+
+    setItems(recordRows);
+    setLocations(locationRows);
+  } catch (e: any) {
+    console.error("Failed loading inventory page data:", e);
+    setItems([]);
+    setLocations([]);
+    setErr(formatApiError(e));
+  } finally {
+    setLoading(false);
   }
+}
 
   useEffect(() => {
     loadAll();
@@ -235,6 +247,7 @@ export default function InventoryRecordsPage() {
         width={1200}
       >
         <InventoryRecordForm
+          locations={locations}
           submitting={saving}
           onSubmit={create}
           onCancel={() => setCreateOpen(false)}
@@ -252,6 +265,7 @@ export default function InventoryRecordsPage() {
       >
         {selected ? (
           <InventoryRecordForm
+            locations={locations}
             initialValues={selected}
             submitting={saving}
             onSubmit={update}

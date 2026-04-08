@@ -967,6 +967,7 @@ export function PartColorDetailDrawer({
                             setShowInventoryForm(false);
                             setEditingInventory(null);
                           }}
+                          locations={locations}
                         />
                       </div>
                     ) : null}
