@@ -420,26 +420,47 @@ export function PartColorDetailDrawer({
   }, [catalogItemId]);
 
   const inventorySummary = useMemo(() => {
-    let onHand = 0;
-    let reserved = 0;
-    let available = 0;
-    let totalCost = 0;
+  let onHand = 0;
+  let reserved = 0;
+  let available = 0;
+  let totalCost = 0;
 
-    for (const rec of inventoryRows) {
-      onHand += Number(rec.quantity_on_hand || 0);
-      reserved += Number(rec.quantity_reserved || 0);
-      available += Number(rec.quantity_available || 0);
-      totalCost += Number(rec.total_cost || 0);
-    }
+  const sellingPrice = Number(row?.catalog_item?.current_price ?? row?.catalog_item?.base_price_override ?? 0);
+  const bricklinkFallback = Number(row?.catalog_item?.bricklink_reference_price ?? 0);
 
-    return {
-      onHand,
-      reserved,
-      available,
-      totalCost,
-      locations: new Set(inventoryRows.map((x) => x.location?.id)).size,
-    };
-  }, [inventoryRows]);
+  let estimatedRetailValue = 0;
+  let estimatedInvestedCost = 0;
+
+  for (const rec of inventoryRows) {
+    const qtyOnHand = Number(rec.quantity_on_hand || 0);
+    const qtyReserved = Number(rec.quantity_reserved || 0);
+    const qtyAvailable = Number(rec.quantity_available || 0);
+
+    onHand += qtyOnHand;
+    reserved += qtyReserved;
+    available += qtyAvailable;
+    totalCost += Number(rec.total_cost || 0);
+
+    const recordUnitCost =
+      rec.unit_cost !== null && rec.unit_cost !== undefined && rec.unit_cost !== ""
+        ? Number(rec.unit_cost)
+        : bricklinkFallback;
+
+    estimatedInvestedCost += qtyOnHand * (Number.isFinite(recordUnitCost) ? recordUnitCost : 0);
+    estimatedRetailValue += qtyAvailable * (Number.isFinite(sellingPrice) ? sellingPrice : 0);
+  }
+
+  return {
+    onHand,
+    reserved,
+    available,
+    totalCost,
+    estimatedRetailValue,
+    estimatedInvestedCost,
+    estimatedProfitEstimate: estimatedRetailValue - estimatedInvestedCost,
+    locations: new Set(inventoryRows.map((x) => x.location?.id)).size,
+  };
+}, [inventoryRows, row]);
 
   const siblingRows = useMemo(() => {
     if (!row?.part?.part_id) return [];
@@ -831,11 +852,14 @@ export function PartColorDetailDrawer({
             </div>
           ) : (
             <>
-              <div className="mt-3 grid grid-cols-4 gap-2">
+              <div className="mt-3 grid grid-cols-2 gap-2 lg:grid-cols-4">
                 <CompactStat label="On Hand" value={integer(inventorySummary.onHand)} />
                 <CompactStat label="Reserved" value={integer(inventorySummary.reserved)} />
                 <CompactStat label="Available" value={integer(inventorySummary.available)} />
-                <CompactStat label="Stock Cost" value={money(inventorySummary.totalCost)} />
+                <CompactStat label="Recorded Cost" value={money(inventorySummary.totalCost)} />
+                <CompactStat label="Estimated Invested" value={money(inventorySummary.estimatedInvestedCost)} />
+                <CompactStat label="Retail Value" value={money(inventorySummary.estimatedRetailValue)} />
+                <CompactStat label="Est. Profit" value={money(inventorySummary.estimatedProfitEstimate)} />
               </div>
 
               {loading ? (
