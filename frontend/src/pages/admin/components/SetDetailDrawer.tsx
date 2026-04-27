@@ -4,7 +4,7 @@ import { ENDPOINTS } from "../../../api/endpoints";
 
 import type { CatalogItemMini } from "../../../types/catalog";
 import type { Theme, Minifig } from "../../../types/minifig";
-import type { PartColor } from "../../../types/partColor";
+import type { PartColorRow } from "../../../types/partColor";
 import type { LegoSet, SetPayload } from "../../../types/set";
 
 import { DrawerShell } from "./DrawerShell";
@@ -30,7 +30,7 @@ export function SetDetailDrawer({
   selected: LegoSet | null;
   themes: Theme[];
   catalogItems: CatalogItemMini[];
-  partColors: PartColor[];
+  partColors: PartColorRow[];
   minifigs: Minifig[];
   saving: boolean;
   setSaving: (v: boolean) => void;
@@ -46,6 +46,7 @@ export function SetDetailDrawer({
   async function submit(payload: SetPayload) {
     setSaving(true);
     setErr(null);
+
     try {
       const res = await api.patch(`${ENDPOINTS.sets}${setItem.set_num}/`, payload);
       onPatched(res.data as LegoSet);
@@ -62,6 +63,7 @@ export function SetDetailDrawer({
 
     setSaving(true);
     setErr(null);
+
     try {
       await api.delete(`${ENDPOINTS.sets}${setItem.set_num}/`);
       onDeleted();
@@ -100,6 +102,7 @@ export function SetDetailDrawer({
         <SetForm
           themes={themes}
           catalogItems={catalogItems}
+          partColors={partColors}
           minifigs={minifigs}
           initialValues={setItem}
           submitting={saving}
