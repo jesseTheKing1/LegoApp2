@@ -4,7 +4,7 @@ import { ENDPOINTS } from "../../../api/endpoints";
 
 import type { CatalogItemMini } from "../../../types/catalog";
 import type { Theme, Minifig } from "../../../types/minifig";
-import type { PartColor } from "../../../types/partColor";
+import type { PartColorRow } from "../../../types/partColor";
 import type { LegoSet, SetPayload } from "../../../types/set";
 
 import { DrawerShell } from "../components/DrawerShell";
@@ -28,7 +28,7 @@ export default function SetsAdminPage() {
   const [items, setItems] = useState<LegoSet[]>([]);
   const [themes, setThemes] = useState<Theme[]>([]);
   const [catalogItems, setCatalogItems] = useState<CatalogItemMini[]>([]);
-  const [partColors, setPartColors] = useState<PartColor[]>([]);
+  const [partColors, setPartColors] = useState<PartColorRow[]>([]);
   const [minifigs, setMinifigs] = useState<Minifig[]>([]);
 
   const [q, setQ] = useState("");
@@ -55,7 +55,7 @@ export default function SetsAdminPage() {
     setItems(getListData<LegoSet>(setRes.data));
     setThemes(getListData<Theme>(themeRes.data));
     setCatalogItems(getListData<CatalogItemMini>(catRes.data));
-    setPartColors(getListData<PartColor>(partColorRes.data));
+    setPartColors(getListData<PartColorRow>(partColorRes.data));
     setMinifigs(getListData<Minifig>(minifigRes.data));
   }
 
@@ -73,8 +73,7 @@ export default function SetsAdminPage() {
           .toLowerCase()
           .includes(qq);
 
-      const matchesTheme =
-        !themeFilter || String(item.theme?.id ?? "") === themeFilter;
+      const matchesTheme = !themeFilter || String(item.theme?.id ?? "") === themeFilter;
 
       return matchesSearch && matchesTheme;
     });
@@ -109,6 +108,7 @@ export default function SetsAdminPage() {
   async function create(payload: SetPayload) {
     setSaving(true);
     setErr(null);
+
     try {
       await api.post(ENDPOINTS.sets, payload);
       setCreateOpen(false);
@@ -135,9 +135,7 @@ export default function SetsAdminPage() {
               <div className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-500">
                 {stat.label}
               </div>
-              <div className="mt-1 text-2xl font-black text-slate-950">
-                {stat.value}
-              </div>
+              <div className="mt-1 text-2xl font-black text-slate-950">{stat.value}</div>
             </div>
           </div>
         ))}
@@ -180,7 +178,11 @@ export default function SetsAdminPage() {
               <button
                 type="button"
                 className="rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-slate-800"
-                onClick={() => setCreateOpen(true)}
+                onClick={() => {
+                  setSelected(null);
+                  setErr(null);
+                  setCreateOpen(true);
+                }}
               >
                 + New set
               </button>
@@ -291,7 +293,10 @@ export default function SetsAdminPage() {
       <DrawerShell
         open={createOpen}
         title="New Set"
-        onClose={() => setCreateOpen(false)}
+        onClose={() => {
+          setCreateOpen(false);
+          setErr(null);
+        }}
         width={1440}
       >
         <SetForm

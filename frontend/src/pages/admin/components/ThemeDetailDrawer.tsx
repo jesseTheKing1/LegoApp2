@@ -5,6 +5,7 @@ import type { Theme } from "../../../types/minifig";
 import { DrawerShell } from "../components/DrawerShell";
 import { formatApiError } from "../utils/errors";
 import { ThemeForm, type ThemePayload } from "../form/ThemeForm";
+import type { PartColorRow } from "../../../types/partColor";
 
 export function ThemeDetailDrawer({
   open,

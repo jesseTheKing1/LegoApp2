@@ -63,19 +63,24 @@ class SetReadSerializer(serializers.ModelSerializer):
     minifigs = SetMinifigReadSerializer(many=True, read_only=True)
     theme = ThemeSerializer(read_only=True)
     catalog_item = CatalogItemMiniSerializer(read_only=True)
+    part_color_detail = PartColorSerializer(source="part_color", read_only=True)
+
 
     class Meta:
-        model = Set
+        model = SetPart
         fields = [
             "id",
-            "set_num",
-            "name",
-            "image_url",
-            "theme",
-            "official_piece_count",
-            "catalog_item",
-            "parts",
-            "minifigs",
+            "part_color",
+            "part_color_detail",
+            "quantity",
+            "instruction_page",
+            "sort_order",
+            "bag_number",
+            "step_number",
+            "is_visible",
+            "is_structural",
+            "color_match_mode",
+            "notes",
         ]
 
 
@@ -97,11 +102,13 @@ class SetPartWriteSerializer(serializers.ModelSerializer):
             "instruction_page",
             "sort_order",
             "bag_number",
+            "step_number",
             "is_visible",
             "is_structural",
             "color_match_mode",
             "notes",
         ]
+
 
 
 class SetMinifigWriteSerializer(serializers.ModelSerializer):
