@@ -3,6 +3,7 @@ import { uploadImageToR2 } from "../../../lib/r2Uploads";
 
 import type { CatalogItemMini } from "../../../types/catalog";
 import type { Theme, Minifig } from "../../../types/minifig";
+import type { PartColorRow } from "../../../types/partColor";
 import type {
   LegoSet,
   SetPayload,
@@ -12,13 +13,18 @@ import type {
 } from "../../../types/set";
 import type { LibraryPickerResult } from "../../../types/libraryPicker";
 
+import { DrawerShell } from "../components/DrawerShell";
 import { GlobalLibraryPicker } from "../components/GlobalLibraryPicker";
+import { PartColorDetailDrawer } from "../components/PartColorDetailDrawer";
+// Adjust this import if your part-color detail drawer lives in a different admin folder.
 
 type PartRow = SetPartPayload & {
   _rowId: string;
   _label?: string;
   _subtitle?: string;
   _unitCost?: number | null;
+  _imageUrl?: string | null;
+  _partColorDetail?: PartColorRow | null;
 };
 
 type MinifigRow = SetMinifigPayload & {
@@ -47,6 +53,12 @@ function validateFile(file: File) {
   return null;
 }
 
+function parsePrice(value: unknown) {
+  if (value == null || value === "") return 0;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
 function asMoney(value: number | null | undefined) {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -54,18 +66,31 @@ function asMoney(value: number | null | undefined) {
   }).format(Number(value || 0));
 }
 
-function parsePrice(value: unknown) {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : 0;
+function bagLabel(raw: string) {
+  const next = raw.trim();
+  return next || "Unbagged";
 }
 
-function bagLabel(raw: string) {
-  return raw.trim() || "Unbagged";
+function readLooseField(obj: unknown, key: string) {
+  if (!obj || typeof obj !== "object") return null;
+  return (obj as Record<string, unknown>)[key] ?? null;
+}
+
+function getPartImage(part: PartColorRow | null | undefined) {
+  return part?.image_url_1 || part?.image_url_2 || part?.part?.image_url || null;
+}
+
+function getPartUnitCost(part: PartColorRow | null | undefined) {
+  return parsePrice(
+    readLooseField(part?.catalog_item, "current_cost") ??
+      readLooseField(part?.catalog_item, "base_price_override")
+  );
 }
 
 export function SetForm({
   themes,
   catalogItems,
+  partColors,
   minifigs,
   initialValues,
   submitting,
@@ -73,6 +98,7 @@ export function SetForm({
 }: {
   themes: Theme[];
   catalogItems: CatalogItemMini[];
+  partColors: PartColorRow[];
   minifigs: Minifig[];
   initialValues?: Partial<LegoSet>;
   submitting?: boolean;
@@ -98,40 +124,51 @@ export function SetForm({
             sku: initialValues.catalog_item.sku,
             current_price: initialValues.catalog_item.base_price_override,
           },
-
         }
       : null
   );
 
-  const [parts, setParts] = useState<PartRow[]>(
-    (initialValues?.parts ?? []).map((row, i) => ({
-      _rowId: makeRowId(`part-${i}`),
-      part_color_id: row.part_color,
-      quantity: row.quantity,
-      instruction_page: row.instruction_page,
-      sort_order: row.sort_order ?? i,
-      bag_number: row.bag_number ?? "",
-      step_number: row.step_number ?? null,
-      is_visible: row.is_visible,
-      is_structural: row.is_structural,
-      color_match_mode: row.color_match_mode ?? "exact",
-      notes: row.notes ?? "",
-      _label:
-        row.part_color_detail?.part?.name ||
-        row.part_color_detail?.part_color_code ||
-        `Part ${row.part_color}`,
-      _subtitle: [
-        row.part_color_detail?.part?.part_id,
-        row.part_color_detail?.color?.name,
-        row.part_color_detail?.variant,
-      ]
-        .filter(Boolean)
-        .join(" • "),
-      _unitCost: parsePrice(row.part_color_detail?.catalog_item?.base_price_override),
-    }))
+  const [parts, setParts] = useState<PartRow[]>(() =>
+    (initialValues?.parts ?? []).map((row, i) => {
+      const fallbackDetail = (row.part_color_detail as PartColorRow | undefined) ?? null;
+      const detail = partColors.find((part) => part.id === row.part_color) ?? fallbackDetail;
+
+      return {
+        _rowId: makeRowId(`part-${i}`),
+        part_color_id: row.part_color,
+        quantity: row.quantity,
+        instruction_page: row.instruction_page,
+        sort_order: row.sort_order ?? i,
+        bag_number: row.bag_number ?? "",
+        step_number: row.step_number ?? null,
+        is_visible: row.is_visible,
+        is_structural: row.is_structural,
+        color_match_mode: row.color_match_mode ?? "exact",
+        notes: row.notes ?? "",
+        _label:
+          row.part_color_detail?.part?.name ||
+          row.part_color_detail?.part_color_code ||
+          `Part ${row.part_color}`,
+        _subtitle: [
+          row.part_color_detail?.part?.part_id,
+          row.part_color_detail?.color?.name,
+          row.part_color_detail?.variant,
+        ]
+          .filter(Boolean)
+          .join(" • "),
+        _unitCost:
+          getPartUnitCost(detail) ||
+          parsePrice(
+            readLooseField(row.part_color_detail?.catalog_item, "current_cost") ??
+              readLooseField(row.part_color_detail?.catalog_item, "base_price_override")
+          ),
+        _imageUrl: getPartImage(detail) || row.part_color_detail?.image_url_1 || row.part_color_detail?.image_url_2 || null,
+        _partColorDetail: detail,
+      };
+    })
   );
 
-  const [minifigsState, setMinifigs] = useState<MinifigRow[]>(
+  const [minifigsState, setMinifigs] = useState<MinifigRow[]>(() =>
     (initialValues?.minifigs ?? []).map((row, i) => ({
       _rowId: makeRowId(`minifig-${i}`),
       minifig_id: row.minifig,
@@ -149,6 +186,9 @@ export function SetForm({
   const [partPickerOpen, setPartPickerOpen] = useState(false);
   const [minifigPickerOpen, setMinifigPickerOpen] = useState(false);
 
+  const [partInspectorOpen, setPartInspectorOpen] = useState(false);
+  const [selectedPartDetail, setSelectedPartDetail] = useState<PartColorRow | null>(null);
+
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadImageErr, setUploadImageErr] = useState<string | null>(null);
   const imageFileRef = useRef<HTMLInputElement | null>(null);
@@ -156,6 +196,10 @@ export function SetForm({
   const canSave = useMemo(() => {
     return !!setNum.trim() && !!name.trim() && !submitting && !uploadingImage;
   }, [setNum, name, submitting, uploadingImage]);
+
+  const selectedCatalog = useMemo(() => {
+    return catalogItems.find((item) => item.id === catalogId) ?? null;
+  }, [catalogId, catalogItems]);
 
   const totalPartQty = useMemo(() => {
     return parts.reduce((sum, row) => sum + (Number(row.quantity) || 0), 0);
@@ -170,36 +214,44 @@ export function SetForm({
   }, [parts]);
 
   const sellPrice = useMemo(() => {
-    const selectedCatalog = catalogItems.find((item) => item.id === catalogId);
     return parsePrice(
       selectedCatalog?.base_price_override ??
         catalogPreview?.meta?.current_price ??
         initialValues?.catalog_item?.base_price_override
     );
-
-  }, [catalogId, catalogItems, catalogPreview, initialValues?.catalog_item?.base_price_override]);
+  }, [selectedCatalog, catalogPreview, initialValues?.catalog_item?.base_price_override]);
 
   const grossSpread = sellPrice - totalPartCost;
 
+  const unpricedPartRows = useMemo(() => {
+    return parts.filter((row) => parsePrice(row._unitCost) <= 0).length;
+  }, [parts]);
+
   const groupedParts = useMemo(() => {
     const sorted = [...parts].sort((a, b) => {
-      const bagA = (a.bag_number || "").localeCompare(b.bag_number || "", undefined, { numeric: true });
-      if (bagA !== 0) return bagA;
+      const bagCompare = (a.bag_number || "").localeCompare(b.bag_number || "", undefined, {
+        numeric: true,
+      });
+      if (bagCompare !== 0) return bagCompare;
 
       const stepA = a.step_number ?? Number.MAX_SAFE_INTEGER;
       const stepB = b.step_number ?? Number.MAX_SAFE_INTEGER;
       if (stepA !== stepB) return stepA - stepB;
 
+      const pageA = a.instruction_page ?? Number.MAX_SAFE_INTEGER;
+      const pageB = b.instruction_page ?? Number.MAX_SAFE_INTEGER;
+      if (pageA !== pageB) return pageA - pageB;
+
       return (a.sort_order ?? 0) - (b.sort_order ?? 0);
     });
 
     return sorted.reduce<Array<{ bag: string; rows: PartRow[] }>>((acc, row) => {
-      const bag = bagLabel(row.bag_number);
-      const existing = acc.find((group) => group.bag === bag);
+      const key = bagLabel(row.bag_number);
+      const existing = acc.find((group) => group.bag === key);
       if (existing) {
         existing.rows.push(row);
       } else {
-        acc.push({ bag, rows: [row] });
+        acc.push({ bag: key, rows: [row] });
       }
       return acc;
     }, []);
@@ -247,6 +299,13 @@ export function SetForm({
     setMinifigs((prev) => prev.filter((row) => row._rowId !== rowId));
   }
 
+  function openPartInspector(row: PartRow) {
+    const detail = row._partColorDetail ?? partColors.find((part) => part.id === row.part_color_id) ?? null;
+    if (!detail) return;
+    setSelectedPartDetail(detail);
+    setPartInspectorOpen(true);
+  }
+
   function handleCatalogPick(item: LibraryPickerResult) {
     if (item.type !== "catalog") return;
     setCatalogId(item.id);
@@ -256,6 +315,8 @@ export function SetForm({
 
   function handlePartPick(item: LibraryPickerResult) {
     if (item.type !== "part_color") return;
+
+    const detail = partColors.find((part) => part.id === item.id) ?? null;
 
     setParts((prev) => [
       ...prev,
@@ -273,8 +334,11 @@ export function SetForm({
         notes: "",
         _label: item.title,
         _subtitle: item.subtitle,
-        _unitCost: parsePrice(item.meta?.current_cost),
-
+        _imageUrl: item.image_url ?? getPartImage(detail),
+        _partColorDetail: detail,
+        _unitCost: parsePrice(
+          readLooseField(detail?.catalog_item, "current_cost") ?? item.meta?.current_cost
+        ),
       },
     ]);
 
@@ -308,12 +372,18 @@ export function SetForm({
     const orderedParts = [...parts]
       .filter((p) => p.part_color_id)
       .sort((a, b) => {
-        const bag = (a.bag_number || "").localeCompare(b.bag_number || "", undefined, { numeric: true });
-        if (bag !== 0) return bag;
+        const bagCompare = (a.bag_number || "").localeCompare(b.bag_number || "", undefined, {
+          numeric: true,
+        });
+        if (bagCompare !== 0) return bagCompare;
 
         const stepA = a.step_number ?? Number.MAX_SAFE_INTEGER;
         const stepB = b.step_number ?? Number.MAX_SAFE_INTEGER;
         if (stepA !== stepB) return stepA - stepB;
+
+        const pageA = a.instruction_page ?? Number.MAX_SAFE_INTEGER;
+        const pageB = b.instruction_page ?? Number.MAX_SAFE_INTEGER;
+        if (pageA !== pageB) return pageA - pageB;
 
         return (a.sort_order ?? 0) - (b.sort_order ?? 0);
       });
@@ -325,7 +395,7 @@ export function SetForm({
       official_piece_count: Number(pieceCount) || 0,
       theme_id: themeId || null,
       catalog_item_id: catalogId || null,
-      parts: orderedParts.map(({ _rowId, _label, _subtitle, _unitCost, ...p }, i) => ({
+      parts: orderedParts.map(({ _rowId, _label, _subtitle, _unitCost, _imageUrl, _partColorDetail, ...p }, i) => ({
         ...p,
         sort_order: i,
         instruction_page: p.instruction_page ?? null,
@@ -347,398 +417,537 @@ export function SetForm({
   }
 
   return (
-    <form onSubmit={submit} className="space-y-5">
-      <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white px-5 py-4">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+    <>
+      <form onSubmit={submit} className="space-y-5">
+        <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white px-5 py-4">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+              <div>
+                <h2 className="text-xl font-black tracking-tight text-slate-900">Set Details</h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Set identity, bag flow, internal part cost, and sell-side pricing.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
+                <SummaryPill label="Part Rows" value={parts.length} />
+                <SummaryPill label="Part Qty" value={totalPartQty} />
+                <SummaryPill label="Part Cost" value={asMoney(totalPartCost)} />
+                <SummaryPill label="Sell Price" value={asMoney(sellPrice)} />
+                <SummaryPill label="Spread" value={asMoney(grossSpread)} />
+                <SummaryPill label="Minifigs" value={totalMinifigQty} />
+              </div>
+            </div>
+          </div>
+
+          <div className="p-5">
+            <div className="grid gap-4 lg:grid-cols-12">
+              <Field label="Set Number" className="lg:col-span-2">
+                <TextInput value={setNum} onChange={(e) => setSetNum(e.target.value)} placeholder="75313" />
+              </Field>
+
+              <Field label="Set Name" className="lg:col-span-4">
+                <TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder="AT-AT" />
+              </Field>
+
+              <Field label="Piece Count" className="lg:col-span-2">
+                <TextInput
+                  type="number"
+                  value={pieceCount}
+                  onChange={(e) => setPieceCount(Number(e.target.value) || 0)}
+                  placeholder="6785"
+                />
+              </Field>
+
+              <Field label="Theme" className="lg:col-span-2">
+                <SelectInput
+                  value={themeId}
+                  onChange={(e) => setThemeId(e.target.value ? Number(e.target.value) : "")}
+                >
+                  <option value="">No theme</option>
+                  {themes.map((theme) => (
+                    <option key={theme.id} value={theme.id}>
+                      {theme.name}
+                    </option>
+                  ))}
+                </SelectInput>
+              </Field>
+
+              <Field label="Image URL" className="lg:col-span-2">
+                <TextInput
+                  value={imageUrl}
+                  onChange={(e) => setImageUrl(e.target.value)}
+                  placeholder="https://..."
+                  disabled={!!submitting || uploadingImage}
+                />
+              </Field>
+
+              <div className="lg:col-span-5">
+                <label className="mb-2 block text-sm font-semibold text-slate-700">Catalog Item</label>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                  {catalogPreview ? (
+                    <SelectedCard
+                      title={catalogPreview.title}
+                      subtitle={`${catalogPreview.subtitle || ""} • ${asMoney(
+                        parsePrice(catalogPreview.meta?.current_price)
+                      )}`}
+                      onClear={() => {
+                        setCatalogId("");
+                        setCatalogPreview(null);
+                      }}
+                    />
+                  ) : (
+                    <EmptyState text="No catalog item linked yet." />
+                  )}
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                      onClick={() => setCatalogPickerOpen((v) => !v)}
+                    >
+                      {catalogPickerOpen ? "Close Search" : catalogPreview ? "Change Catalog" : "Search Catalog"}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => imageFileRef.current?.click()}
+                      disabled={!!submitting || uploadingImage}
+                      className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {uploadingImage ? "Uploading..." : "Upload Image"}
+                    </button>
+
+                    {imageUrl ? (
+                      <button
+                        type="button"
+                        onClick={() => setImageUrl("")}
+                        disabled={!!submitting || uploadingImage}
+                        className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Clear Image
+                      </button>
+                    ) : null}
+                  </div>
+
+                  {catalogPickerOpen ? (
+                    <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-3">
+                      <GlobalLibraryPicker
+                        mode="catalog"
+                        allowedModes={["catalog"]}
+                        title="Select Catalog Item"
+                        placeholder="Search SKU, part, minifig, or pricing..."
+                        onPick={handleCatalogPick}
+                        autoFocus
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="lg:col-span-4">
+                <label className="mb-2 block text-sm font-semibold text-slate-700">Build Economics</label>
+                <div className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                  <MiniStat label="Internal Part Cost" value={asMoney(totalPartCost)} />
+                  <MiniStat label="Set Sell Price" value={asMoney(sellPrice)} />
+                  <MiniStat label="Gross Spread" value={asMoney(grossSpread)} />
+                  <MiniStat label="Unpriced Part Rows" value={String(unpricedPartRows)} tone={unpricedPartRows > 0 ? "warn" : "default"} />
+                </div>
+              </div>
+
+              <div className="lg:col-span-3">
+                <label className="mb-2 block text-sm font-semibold text-slate-700">Preview</label>
+                <div className="flex min-h-[180px] items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                  {imageUrl ? (
+                    <img
+                      src={imageUrl}
+                      alt={name || "Set preview"}
+                      className="max-h-44 rounded-xl object-contain"
+                    />
+                  ) : (
+                    <div className="text-sm text-slate-400">No image yet</div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <input
+              ref={imageFileRef}
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) uploadSetImage(f);
+              }}
+            />
+
+            {uploadImageErr ? (
+              <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                {uploadImageErr}
+              </div>
+            ) : null}
+          </div>
+        </section>
+
+        <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+          <div className="flex flex-col gap-4 border-b border-slate-200 bg-slate-50/70 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-xl font-black tracking-tight text-slate-900">Set Details</h2>
+              <h3 className="text-lg font-black text-slate-900">Parts</h3>
               <p className="mt-1 text-sm text-slate-500">
-                Set identity, pricing link, build order, and inventory totals.
+                Compact part rows grouped by bag and sorted by step number.
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-              <SummaryPill label="Part Rows" value={parts.length} />
-              <SummaryPill label="Part Cost" value={asMoney(totalPartCost)} />
-              <SummaryPill label="Sell Price" value={asMoney(sellPrice)} />
-              <SummaryPill label="Spread" value={asMoney(grossSpread)} />
-              <SummaryPill label="Minifigs" value={totalMinifigQty} />
-            </div>
-          </div>
-        </div>
-
-        <div className="p-5">
-          <div className="grid gap-4 lg:grid-cols-12">
-            <Field label="Set Number" className="lg:col-span-2">
-              <TextInput value={setNum} onChange={(e) => setSetNum(e.target.value)} placeholder="75313" />
-            </Field>
-
-            <Field label="Set Name" className="lg:col-span-4">
-              <TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder="AT-AT" />
-            </Field>
-
-            <Field label="Piece Count" className="lg:col-span-2">
-              <TextInput
-                type="number"
-                value={pieceCount}
-                onChange={(e) => setPieceCount(Number(e.target.value) || 0)}
-                placeholder="6785"
-              />
-            </Field>
-
-            <Field label="Theme" className="lg:col-span-2">
-              <SelectInput
-                value={themeId}
-                onChange={(e) => setThemeId(e.target.value ? Number(e.target.value) : "")}
-              >
-                <option value="">No theme</option>
-                {themes.map((theme) => (
-                  <option key={theme.id} value={theme.id}>
-                    {theme.name}
-                  </option>
-                ))}
-              </SelectInput>
-            </Field>
-
-            <Field label="Image URL" className="lg:col-span-2">
-              <TextInput
-                value={imageUrl}
-                onChange={(e) => setImageUrl(e.target.value)}
-                placeholder="https://..."
-                disabled={!!submitting || uploadingImage}
-              />
-            </Field>
-
-            <div className="lg:col-span-5">
-              <label className="mb-2 block text-sm font-semibold text-slate-700">Catalog Item</label>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                {catalogPreview ? (
-                  <SelectedCard
-                    title={catalogPreview.title}
-                    subtitle={catalogPreview.subtitle}
-                    onClear={() => {
-                      setCatalogId("");
-                      setCatalogPreview(null);
-                    }}
-                  />
-                ) : (
-                  <EmptyState text="No catalog item linked." />
-                )}
-
-                <div className="mt-3 flex gap-2">
-                  <button
-                    type="button"
-                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-                    onClick={() => setCatalogPickerOpen((v) => !v)}
-                  >
-                    {catalogPickerOpen ? "Close Search" : "Search Catalog"}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => imageFileRef.current?.click()}
-                    disabled={!!submitting || uploadingImage}
-                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50 disabled:opacity-60"
-                  >
-                    {uploadingImage ? "Uploading..." : "Upload Image"}
-                  </button>
-                </div>
-
-                {catalogPickerOpen ? (
-                  <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-3">
-                    <GlobalLibraryPicker
-                      mode="catalog"
-                      allowedModes={["catalog"]}
-                      title="Select Catalog Item"
-                      placeholder="Search SKU, part, minifig, or pricing..."
-                      onPick={handleCatalogPick}
-                      autoFocus
-                    />
-                  </div>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="lg:col-span-4">
-              <label className="mb-2 block text-sm font-semibold text-slate-700">Build Summary</label>
-              <div className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                <MiniStat label="Part quantity" value={String(totalPartQty)} />
-                <MiniStat label="Minifig quantity" value={String(totalMinifigQty)} />
-                <MiniStat label="Internal parts cost" value={asMoney(totalPartCost)} />
-                <MiniStat label="Set sell price" value={asMoney(sellPrice)} />
-              </div>
-            </div>
-
-            <div className="lg:col-span-3">
-              <label className="mb-2 block text-sm font-semibold text-slate-700">Preview</label>
-              <div className="flex h-full min-h-[180px] items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                {imageUrl ? (
-                  <img src={imageUrl} alt={name || "Set preview"} className="max-h-44 rounded-xl object-contain" />
-                ) : (
-                  <div className="text-sm text-slate-400">No image yet</div>
-                )}
-              </div>
-            </div>
+            <button
+              type="button"
+              onClick={() => setPartPickerOpen((v) => !v)}
+              className="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700"
+            >
+              {partPickerOpen ? "Close Part Search" : "+ Add Part"}
+            </button>
           </div>
 
-          <input
-            ref={imageFileRef}
-            type="file"
-            accept="image/*"
-            hidden
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) uploadSetImage(f);
-            }}
-          />
+          <div className="space-y-4 p-5">
+            {partPickerOpen ? (
+              <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+                <GlobalLibraryPicker
+                  mode="part_color"
+                  allowedModes={["part_color"]}
+                  title="Add Part Color"
+                  placeholder="Search part id, name, color, category, or variant..."
+                  onPick={handlePartPick}
+                  autoFocus
+                />
+              </div>
+            ) : null}
 
-          {uploadImageErr ? (
-            <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-              {uploadImageErr}
-            </div>
-          ) : null}
-        </div>
-      </section>
+            {unpricedPartRows > 0 ? (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                {unpricedPartRows} part row(s) do not have pricing yet, so internal cost may be understated.
+              </div>
+            ) : null}
 
-      <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex flex-col gap-4 border-b border-slate-200 bg-slate-50/70 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h3 className="text-lg font-black text-slate-900">Parts</h3>
-            <p className="mt-1 text-sm text-slate-500">
-              Grouped by bag, sorted by step, and edited inline for faster entry.
-            </p>
-          </div>
+            {groupedParts.length === 0 ? (
+              <EmptyState text="No parts added yet." />
+            ) : (
+              groupedParts.map((group) => {
+                const bagSubtotal = group.rows.reduce(
+                  (sum, row) => sum + parsePrice(row._unitCost) * (Number(row.quantity) || 0),
+                  0
+                );
 
-          <button
-            type="button"
-            onClick={() => setPartPickerOpen((v) => !v)}
-            className="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700"
-          >
-            {partPickerOpen ? "Close Part Search" : "+ Add Part"}
-          </button>
-        </div>
-
-        <div className="space-y-4 p-5">
-          {partPickerOpen ? (
-            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
-              <GlobalLibraryPicker
-                mode="part_color"
-                allowedModes={["part_color"]}
-                title="Add Part Color"
-                placeholder="Search part id, name, color, category, or variant..."
-                onPick={handlePartPick}
-                autoFocus
-              />
-            </div>
-          ) : null}
-
-          {groupedParts.length === 0 ? (
-            <EmptyState text="No parts added yet." />
-          ) : (
-            groupedParts.map((group) => (
-              <div key={group.bag} className="overflow-hidden rounded-3xl border border-slate-200">
-                <div className="flex items-center justify-between bg-slate-50 px-4 py-3">
-                  <div>
-                    <div className="text-sm font-black text-slate-900">Bag {group.bag}</div>
-                    <div className="text-xs text-slate-500">{group.rows.length} rows</div>
-                  </div>
-
-                  <div className="text-sm font-semibold text-slate-600">
-                    {asMoney(group.rows.reduce((sum, row) => sum + parsePrice(row._unitCost) * row.quantity, 0))}
-                  </div>
-                </div>
-
-                <div className="divide-y divide-slate-100">
-                  {group.rows.map((row) => (
-                    <div key={row._rowId} className="grid gap-3 px-4 py-3 lg:grid-cols-[minmax(220px,2fr)_70px_80px_90px_90px_120px_1fr_auto] lg:items-center">
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-bold text-slate-900">{row._label || "Unselected part"}</div>
-                        <div className="truncate text-xs text-slate-500">{row._subtitle || "Choose a part color"}</div>
-                        <div className="mt-1 text-xs font-medium text-slate-400">
-                          Unit {asMoney(row._unitCost)} • Line {asMoney(parsePrice(row._unitCost) * row.quantity)}
-                        </div>
+                return (
+                  <div key={group.bag} className="overflow-hidden rounded-3xl border border-slate-200">
+                    <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 px-4 py-3">
+                      <div>
+                        <div className="text-sm font-black text-slate-900">Bag {group.bag}</div>
+                        <div className="text-xs text-slate-500">{group.rows.length} rows</div>
                       </div>
 
+                      <div className="flex flex-wrap gap-2">
+                        <MiniPill label="Bag Cost" value={asMoney(bagSubtotal)} />
+                        <MiniPill
+                          label="Bag Qty"
+                          value={String(group.rows.reduce((sum, row) => sum + (Number(row.quantity) || 0), 0))}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="divide-y divide-slate-100">
+                      {group.rows.map((row) => {
+                        const lineCost = parsePrice(row._unitCost) * (Number(row.quantity) || 0);
+
+                        return (
+                          <div
+                            key={row._rowId}
+                            className="grid gap-3 px-4 py-3 xl:grid-cols-[minmax(280px,2.5fr)_72px_82px_82px_82px_116px_minmax(170px,1.3fr)_auto]"
+                          >
+                            <button
+                              type="button"
+                              onClick={() => openPartInspector(row)}
+                              className="group flex min-w-0 items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-left transition hover:border-slate-300 hover:bg-white"
+                            >
+                              <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                                {row._imageUrl ? (
+                                  <img
+                                    src={row._imageUrl}
+                                    alt={row._label || "Part"}
+                                    className="h-full w-full object-contain"
+                                  />
+                                ) : (
+                                  <div className="text-[10px] font-bold text-slate-400">No Image</div>
+                                )}
+                              </div>
+
+                              <div className="min-w-0">
+                                <div className="truncate text-sm font-bold text-slate-900 group-hover:text-slate-700">
+                                  {row._label || "Unselected part"}
+                                </div>
+                                <div className="truncate text-xs text-slate-500">
+                                  {row._subtitle || "Choose a part color"}
+                                </div>
+                                <div className="mt-1 text-xs font-medium text-slate-400">
+                                  Unit {asMoney(row._unitCost)} • Line {asMoney(lineCost)} • click for pricing and inventory
+                                </div>
+                              </div>
+                            </button>
+
+                            <FieldLite label="Qty">
+                              <TextInput
+                                type="number"
+                                min={1}
+                                value={row.quantity}
+                                onChange={(e) =>
+                                  updatePart(row._rowId, {
+                                    quantity: Math.max(1, Number(e.target.value) || 1),
+                                  })
+                                }
+                              />
+                            </FieldLite>
+
+                            <FieldLite label="Bag">
+                              <TextInput
+                                value={row.bag_number}
+                                onChange={(e) => updatePart(row._rowId, { bag_number: e.target.value })}
+                                placeholder="Bag"
+                              />
+                            </FieldLite>
+
+                            <FieldLite label="Step">
+                              <TextInput
+                                type="number"
+                                value={row.step_number ?? ""}
+                                onChange={(e) =>
+                                  updatePart(row._rowId, {
+                                    step_number: e.target.value ? Number(e.target.value) : null,
+                                  })
+                                }
+                                placeholder="Step"
+                              />
+                            </FieldLite>
+
+                            <FieldLite label="Page">
+                              <TextInput
+                                type="number"
+                                value={row.instruction_page ?? ""}
+                                onChange={(e) =>
+                                  updatePart(row._rowId, {
+                                    instruction_page: e.target.value ? Number(e.target.value) : null,
+                                  })
+                                }
+                                placeholder="Page"
+                              />
+                            </FieldLite>
+
+                            <FieldLite label="Match">
+                              <SelectInput
+                                value={row.color_match_mode}
+                                onChange={(e) =>
+                                  updatePart(row._rowId, {
+                                    color_match_mode: e.target.value as ColorMatchMode,
+                                  })
+                                }
+                              >
+                                <option value="exact">Exact</option>
+                                <option value="any_color">Any Color</option>
+                              </SelectInput>
+                            </FieldLite>
+
+                            <FieldLite label="Notes">
+                              <TextInput
+                                value={row.notes}
+                                onChange={(e) => updatePart(row._rowId, { notes: e.target.value })}
+                                placeholder="Optional notes"
+                              />
+                            </FieldLite>
+
+                            <div className="flex flex-wrap items-end gap-2 xl:justify-end">
+                              <ToggleChip
+                                label="Visible"
+                                checked={row.is_visible}
+                                onChange={(checked) => updatePart(row._rowId, { is_visible: checked })}
+                              />
+                              <ToggleChip
+                                label="Structural"
+                                checked={row.is_structural}
+                                onChange={(checked) => updatePart(row._rowId, { is_structural: checked })}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPartPickerOpen(true);
+                                  removePart(row._rowId);
+                                }}
+                                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+                              >
+                                Replace
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => removePart(row._rowId)}
+                                className="rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-50"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </section>
+
+        <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+          <div className="flex flex-col gap-4 border-b border-slate-200 bg-slate-50/70 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="text-lg font-black text-slate-900">Minifigs</h3>
+              <p className="mt-1 text-sm text-slate-500">
+                Search across {minifigs.length} minifigs and keep the add flow lightweight.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setMinifigPickerOpen((v) => !v)}
+              className="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700"
+            >
+              {minifigPickerOpen ? "Close Minifig Search" : "+ Add Minifig"}
+            </button>
+          </div>
+
+          <div className="space-y-4 p-5">
+            {minifigPickerOpen ? (
+              <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+                <GlobalLibraryPicker
+                  mode="minifig"
+                  allowedModes={["minifig"]}
+                  title="Add Minifig"
+                  placeholder="Search minifig name, BrickLink ID, or theme..."
+                  onPick={handleMinifigPick}
+                  autoFocus
+                />
+              </div>
+            ) : null}
+
+            {minifigsState.length === 0 ? (
+              <EmptyState text="No minifigs added yet." />
+            ) : (
+              <div className="space-y-3">
+                {minifigsState.map((row) => (
+                  <div
+                    key={row._rowId}
+                    className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 lg:grid-cols-[minmax(220px,2fr)_76px_90px_minmax(180px,1.2fr)_auto]"
+                  >
+                    <div className="min-w-0 rounded-2xl border border-slate-200 bg-white px-3 py-2">
+                      <div className="truncate text-sm font-bold text-slate-900">
+                        {row._label || "Unselected minifig"}
+                      </div>
+                      <div className="truncate text-xs text-slate-500">
+                        {row._subtitle || "Choose a minifig"}
+                      </div>
+                    </div>
+
+                    <FieldLite label="Qty">
                       <TextInput
                         type="number"
                         min={1}
                         value={row.quantity}
-                        onChange={(e) => updatePart(row._rowId, { quantity: Math.max(1, Number(e.target.value) || 1) })}
-                        placeholder="Qty"
-                      />
-
-                      <TextInput
-                        value={row.bag_number}
-                        onChange={(e) => updatePart(row._rowId, { bag_number: e.target.value })}
-                        placeholder="Bag"
-                      />
-
-                      <TextInput
-                        type="number"
-                        value={row.step_number ?? ""}
                         onChange={(e) =>
-                          updatePart(row._rowId, { step_number: e.target.value ? Number(e.target.value) : null })
-                        }
-                        placeholder="Step"
-                      />
-
-                      <TextInput
-                        type="number"
-                        value={row.instruction_page ?? ""}
-                        onChange={(e) =>
-                          updatePart(row._rowId, {
-                            instruction_page: e.target.value ? Number(e.target.value) : null,
+                          updateMinifig(row._rowId, {
+                            quantity: Math.max(1, Number(e.target.value) || 1),
                           })
                         }
-                        placeholder="Page"
                       />
+                    </FieldLite>
 
-                      <SelectInput
-                        value={row.color_match_mode}
-                        onChange={(e) =>
-                          updatePart(row._rowId, { color_match_mode: e.target.value as ColorMatchMode })
-                        }
-                      >
-                        <option value="exact">Exact</option>
-                        <option value="any_color">Any color</option>
-                      </SelectInput>
+                    <FieldLite label="Bag">
+                      <TextInput
+                        value={row.bag_number}
+                        onChange={(e) => updateMinifig(row._rowId, { bag_number: e.target.value })}
+                        placeholder="Bag"
+                      />
+                    </FieldLite>
 
+                    <FieldLite label="Notes">
                       <TextInput
                         value={row.notes}
-                        onChange={(e) => updatePart(row._rowId, { notes: e.target.value })}
-                        placeholder="Notes"
+                        onChange={(e) => updateMinifig(row._rowId, { notes: e.target.value })}
+                        placeholder="Optional notes"
                       />
+                    </FieldLite>
 
-                      <div className="flex items-center gap-2">
-                        <ToggleBox
-                          label="V"
-                          checked={row.is_visible}
-                          onChange={(checked) => updatePart(row._rowId, { is_visible: checked })}
-                        />
-                        <ToggleBox
-                          label="S"
-                          checked={row.is_structural}
-                          onChange={(checked) => updatePart(row._rowId, { is_structural: checked })}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => removePart(row._rowId)}
-                          className="rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50"
-                        >
-                          Remove
-                        </button>
-                      </div>
+                    <div className="flex flex-wrap items-end gap-2 lg:justify-end">
+                      <ToggleChip
+                        label="Required"
+                        checked={row.is_required}
+                        onChange={(checked) => updateMinifig(row._rowId, { is_required: checked })}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMinifigPickerOpen(true);
+                          removeMinifig(row._rowId);
+                        }}
+                        className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+                      >
+                        Replace
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeMinifig(row._rowId)}
+                        className="rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-50"
+                      >
+                        Remove
+                      </button>
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ))}
               </div>
-            ))
-          )}
-        </div>
-      </section>
-
-      <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex flex-col gap-4 border-b border-slate-200 bg-slate-50/70 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h3 className="text-lg font-black text-slate-900">Minifigs</h3>
-            <p className="mt-1 text-sm text-slate-500">
-              Keep this simple and lightweight beside the part workflow.
-            </p>
+            )}
           </div>
+        </section>
 
-          <button
-            type="button"
-            onClick={() => setMinifigPickerOpen((v) => !v)}
-            className="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700"
-          >
-            {minifigPickerOpen ? "Close Minifig Search" : "+ Add Minifig"}
-          </button>
-        </div>
-
-        <div className="space-y-4 p-5">
-          {minifigPickerOpen ? (
-            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
-              <GlobalLibraryPicker
-                mode="minifig"
-                allowedModes={["minifig"]}
-                title="Add Minifig"
-                placeholder="Search minifig name, BrickLink ID, or theme..."
-                onPick={handleMinifigPick}
-                autoFocus
-              />
+        <div className="sticky bottom-0 z-20 rounded-3xl border border-slate-200 bg-white/95 p-4 shadow-lg backdrop-blur">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="text-sm text-slate-500">
+              <span className="font-semibold text-slate-900">{parts.length}</span> part rows •{" "}
+              <span className="font-semibold text-slate-900">{totalPartQty}</span> total parts •{" "}
+              <span className="font-semibold text-slate-900">{asMoney(totalPartCost)}</span> internal cost
             </div>
-          ) : null}
 
-          {minifigsState.length === 0 ? (
-            <EmptyState text="No minifigs added yet." />
-          ) : (
-            <div className="space-y-3">
-              {minifigsState.map((row) => (
-                <div key={row._rowId} className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 lg:grid-cols-[minmax(220px,2fr)_80px_90px_1fr_auto] lg:items-center">
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-bold text-slate-900">{row._label || "Unselected minifig"}</div>
-                    <div className="truncate text-xs text-slate-500">{row._subtitle || "Choose a minifig"}</div>
-                  </div>
-
-                  <TextInput
-                    type="number"
-                    min={1}
-                    value={row.quantity}
-                    onChange={(e) => updateMinifig(row._rowId, { quantity: Math.max(1, Number(e.target.value) || 1) })}
-                  />
-
-                  <TextInput
-                    value={row.bag_number}
-                    onChange={(e) => updateMinifig(row._rowId, { bag_number: e.target.value })}
-                    placeholder="Bag"
-                  />
-
-                  <TextInput
-                    value={row.notes}
-                    onChange={(e) => updateMinifig(row._rowId, { notes: e.target.value })}
-                    placeholder="Notes"
-                  />
-
-                  <div className="flex items-center gap-2">
-                    <ToggleBox
-                      label="Req"
-                      checked={row.is_required}
-                      onChange={(checked) => updateMinifig(row._rowId, { is_required: checked })}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeMinifig(row._rowId)}
-                      className="rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </section>
-
-      <div className="sticky bottom-0 z-20 rounded-3xl border border-slate-200 bg-white/95 p-4 shadow-lg backdrop-blur">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="text-sm text-slate-500">
-            <span className="font-semibold text-slate-900">{parts.length}</span> part rows •{" "}
-            <span className="font-semibold text-slate-900">{totalPartQty}</span> parts •{" "}
-            <span className="font-semibold text-slate-900">{asMoney(totalPartCost)}</span> internal cost
+            <button
+              type="submit"
+              disabled={!canSave}
+              className="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-6 py-3 text-sm font-bold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {submitting || uploadingImage ? "Saving..." : "Save Set"}
+            </button>
           </div>
-
-          <button
-            type="submit"
-            disabled={!canSave}
-            className="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-6 py-3 text-sm font-bold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {submitting || uploadingImage ? "Saving..." : "Save Set"}
-          </button>
         </div>
-      </div>
-    </form>
+      </form>
+
+      <DrawerShell
+        open={partInspectorOpen}
+        title={selectedPartDetail?.part?.name || "Part detail"}
+        onClose={() => {
+          setPartInspectorOpen(false);
+          setSelectedPartDetail(null);
+        }}
+        width={1280}
+      >
+        <PartColorDetailDrawer
+          row={selectedPartDetail}
+          allRows={partColors}
+          onSelectRow={(next: React.SetStateAction<PartColorRow | null>) => setSelectedPartDetail(next)}
+          onUpdated={() => {}}
+        />
+      </DrawerShell>
+    </>
   );
 }
 
@@ -754,6 +963,23 @@ function Field({
   return (
     <div className={className}>
       <label className="mb-1.5 block text-sm font-semibold text-slate-700">{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function FieldLite({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+        {label}
+      </div>
       {children}
     </div>
   );
@@ -800,11 +1026,38 @@ function SummaryPill({
   );
 }
 
-function MiniStat({ label, value }: { label: string; value: string }) {
+function MiniStat({
+  label,
+  value,
+  tone = "default",
+}: {
+  label: string;
+  value: string;
+  tone?: "default" | "warn";
+}) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+    <div
+      className={[
+        "rounded-xl border px-3 py-2",
+        tone === "warn" ? "border-amber-200 bg-amber-50" : "border-slate-200 bg-white",
+      ].join(" ")}
+    >
       <div className="text-[11px] font-bold uppercase tracking-wide text-slate-500">{label}</div>
       <div className="mt-1 text-sm font-bold text-slate-900">{value}</div>
+    </div>
+  );
+}
+
+function MiniPill({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700">
+      {label}: {value}
     </div>
   );
 }
@@ -817,7 +1070,7 @@ function EmptyState({ text }: { text: string }) {
   );
 }
 
-function ToggleBox({
+function ToggleChip({
   label,
   checked,
   onChange,
@@ -827,7 +1080,7 @@ function ToggleBox({
   onChange: (checked: boolean) => void;
 }) {
   return (
-    <label className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-2.5 py-2 text-xs font-medium text-slate-700">
+    <label className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700">
       <input
         type="checkbox"
         checked={checked}

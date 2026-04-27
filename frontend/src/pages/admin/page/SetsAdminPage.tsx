@@ -297,6 +297,7 @@ export default function SetsAdminPage() {
         <SetForm
           themes={themes}
           catalogItems={catalogItems}
+          partColors={partColors}
           minifigs={minifigs}
           submitting={saving}
           onSubmit={create}
