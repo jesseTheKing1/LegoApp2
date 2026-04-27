@@ -173,9 +173,10 @@ export function SetForm({
     const selectedCatalog = catalogItems.find((item) => item.id === catalogId);
     return parsePrice(
       selectedCatalog?.base_price_override ??
-        catalogPreview?.meta?.base_price_override ??
+        catalogPreview?.meta?.current_price ??
         initialValues?.catalog_item?.base_price_override
     );
+
   }, [catalogId, catalogItems, catalogPreview, initialValues?.catalog_item?.base_price_override]);
 
   const grossSpread = sellPrice - totalPartCost;
@@ -272,7 +273,8 @@ export function SetForm({
         notes: "",
         _label: item.title,
         _subtitle: item.subtitle,
-        _unitCost: parsePrice(item.meta?.base_price_override),
+        _unitCost: parsePrice(item.meta?.current_cost),
+
       },
     ]);
 
