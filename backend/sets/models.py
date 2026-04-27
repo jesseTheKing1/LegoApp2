@@ -57,6 +57,7 @@ class SetPart(models.Model):
     sort_order = models.PositiveIntegerField(default=0)
     bag_number = models.CharField(max_length=20, blank=True)
 
+    step_number = models.PositiveIntegerField(null=True, blank=True)
     is_visible = models.BooleanField(default=True)
     is_structural = models.BooleanField(default=False)
 
@@ -69,7 +70,7 @@ class SetPart(models.Model):
     notes = models.CharField(max_length=200, blank=True)
 
     class Meta:
-        ordering = ["instruction_page", "sort_order", "id"]
+        ordering = ["bag_number", "step_number", "instruction_page", "sort_order", "id"]
 
     def __str__(self):
         return f"{self.set.name} → {self.part_color} x{self.quantity}"

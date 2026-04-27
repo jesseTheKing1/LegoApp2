@@ -13,12 +13,12 @@ import type {
 import type { LibraryPickerResult } from "../../../types/libraryPicker";
 
 import { GlobalLibraryPicker } from "../components/GlobalLibraryPicker";
-import { cx } from "../utils/ui";
 
 type PartRow = SetPartPayload & {
   _rowId: string;
   _label?: string;
   _subtitle?: string;
+  _unitCost?: number | null;
 };
 
 type MinifigRow = SetMinifigPayload & {
@@ -45,6 +45,22 @@ function validateFile(file: File) {
   const maxBytes = 10 * 1024 * 1024;
   if (file.size > maxBytes) return "Image is too large (max 10 MB).";
   return null;
+}
+
+function asMoney(value: number | null | undefined) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+  }).format(Number(value || 0));
+}
+
+function parsePrice(value: unknown) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function bagLabel(raw: string) {
+  return raw.trim() || "Unbagged";
 }
 
 export function SetForm({
@@ -78,7 +94,11 @@ export function SetForm({
           subtitle: initialValues.catalog_item.sku,
           image_url: null,
           search_text: initialValues.catalog_item.sku,
-          meta: { sku: initialValues.catalog_item.sku },
+          meta: {
+            sku: initialValues.catalog_item.sku,
+            current_price: initialValues.catalog_item.base_price_override,
+          },
+
         }
       : null
   );
@@ -91,6 +111,7 @@ export function SetForm({
       instruction_page: row.instruction_page,
       sort_order: row.sort_order ?? i,
       bag_number: row.bag_number ?? "",
+      step_number: row.step_number ?? null,
       is_visible: row.is_visible,
       is_structural: row.is_structural,
       color_match_mode: row.color_match_mode ?? "exact",
@@ -106,6 +127,7 @@ export function SetForm({
       ]
         .filter(Boolean)
         .join(" • "),
+      _unitCost: parsePrice(row.part_color_detail?.catalog_item?.base_price_override),
     }))
   );
 
@@ -142,6 +164,45 @@ export function SetForm({
   const totalMinifigQty = useMemo(() => {
     return minifigsState.reduce((sum, row) => sum + (Number(row.quantity) || 0), 0);
   }, [minifigsState]);
+
+  const totalPartCost = useMemo(() => {
+    return parts.reduce((sum, row) => sum + parsePrice(row._unitCost) * (Number(row.quantity) || 0), 0);
+  }, [parts]);
+
+  const sellPrice = useMemo(() => {
+    const selectedCatalog = catalogItems.find((item) => item.id === catalogId);
+    return parsePrice(
+      selectedCatalog?.base_price_override ??
+        catalogPreview?.meta?.base_price_override ??
+        initialValues?.catalog_item?.base_price_override
+    );
+  }, [catalogId, catalogItems, catalogPreview, initialValues?.catalog_item?.base_price_override]);
+
+  const grossSpread = sellPrice - totalPartCost;
+
+  const groupedParts = useMemo(() => {
+    const sorted = [...parts].sort((a, b) => {
+      const bagA = (a.bag_number || "").localeCompare(b.bag_number || "", undefined, { numeric: true });
+      if (bagA !== 0) return bagA;
+
+      const stepA = a.step_number ?? Number.MAX_SAFE_INTEGER;
+      const stepB = b.step_number ?? Number.MAX_SAFE_INTEGER;
+      if (stepA !== stepB) return stepA - stepB;
+
+      return (a.sort_order ?? 0) - (b.sort_order ?? 0);
+    });
+
+    return sorted.reduce<Array<{ bag: string; rows: PartRow[] }>>((acc, row) => {
+      const bag = bagLabel(row.bag_number);
+      const existing = acc.find((group) => group.bag === bag);
+      if (existing) {
+        existing.rows.push(row);
+      } else {
+        acc.push({ bag, rows: [row] });
+      }
+      return acc;
+    }, []);
+  }, [parts]);
 
   function resetImageFileInput() {
     if (imageFileRef.current) imageFileRef.current.value = "";
@@ -186,75 +247,74 @@ export function SetForm({
   }
 
   function handleCatalogPick(item: LibraryPickerResult) {
-  console.log("catalog pick", item);
-
-  if (item.type !== "catalog") {
-    console.warn("Expected catalog result but got:", item.type);
-    return;
+    if (item.type !== "catalog") return;
+    setCatalogId(item.id);
+    setCatalogPreview(item);
+    setCatalogPickerOpen(false);
   }
 
-  setCatalogId(item.id);
-  setCatalogPreview(item);
-  setCatalogPickerOpen(false);
-}
+  function handlePartPick(item: LibraryPickerResult) {
+    if (item.type !== "part_color") return;
 
-function handlePartPick(item: LibraryPickerResult) {
-  console.log("part pick", item);
+    setParts((prev) => [
+      ...prev,
+      {
+        _rowId: makeRowId("part"),
+        part_color_id: item.id,
+        quantity: 1,
+        instruction_page: null,
+        sort_order: prev.length,
+        bag_number: "",
+        step_number: null,
+        is_visible: true,
+        is_structural: false,
+        color_match_mode: "exact",
+        notes: "",
+        _label: item.title,
+        _subtitle: item.subtitle,
+        _unitCost: parsePrice(item.meta?.base_price_override),
+      },
+    ]);
 
-  if (item.type !== "part_color") {
-    console.warn("Expected part_color result but got:", item.type);
-    return;
+    setPartPickerOpen(false);
   }
 
-  setParts((prev) => [
-    ...prev,
-    {
-      _rowId: makeRowId("part"),
-      part_color_id: item.id,
-      quantity: 1,
-      instruction_page: null,
-      sort_order: prev.length,
-      bag_number: "",
-      is_visible: true,
-      is_structural: false,
-      color_match_mode: "exact",
-      notes: "",
-      _label: item.title,
-      _subtitle: item.subtitle,
-    },
-  ]);
+  function handleMinifigPick(item: LibraryPickerResult) {
+    if (item.type !== "minifig") return;
 
-  setPartPickerOpen(false);
-}
+    setMinifigs((prev) => [
+      ...prev,
+      {
+        _rowId: makeRowId("minifig"),
+        minifig_id: item.id,
+        quantity: 1,
+        sort_order: prev.length,
+        bag_number: "",
+        is_required: true,
+        notes: "",
+        _label: item.title,
+        _subtitle: item.subtitle,
+      },
+    ]);
 
-function handleMinifigPick(item: LibraryPickerResult) {
-  console.log("minifig pick", item);
-
-  if (item.type !== "minifig") {
-    console.warn("Expected minifig result but got:", item.type);
-    return;
+    setMinifigPickerOpen(false);
   }
-
-  setMinifigs((prev) => [
-    ...prev,
-    {
-      _rowId: makeRowId("minifig"),
-      minifig_id: item.id,
-      quantity: 1,
-      sort_order: prev.length,
-      bag_number: "",
-      is_required: true,
-      notes: "",
-      _label: item.title,
-      _subtitle: item.subtitle,
-    },
-  ]);
-
-  setMinifigPickerOpen(false);
-}
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+
+    const orderedParts = [...parts]
+      .filter((p) => p.part_color_id)
+      .sort((a, b) => {
+        const bag = (a.bag_number || "").localeCompare(b.bag_number || "", undefined, { numeric: true });
+        if (bag !== 0) return bag;
+
+        const stepA = a.step_number ?? Number.MAX_SAFE_INTEGER;
+        const stepB = b.step_number ?? Number.MAX_SAFE_INTEGER;
+        if (stepA !== stepB) return stepA - stepB;
+
+        return (a.sort_order ?? 0) - (b.sort_order ?? 0);
+      });
 
     const payload: SetPayload = {
       set_num: setNum.trim(),
@@ -263,15 +323,14 @@ function handleMinifigPick(item: LibraryPickerResult) {
       official_piece_count: Number(pieceCount) || 0,
       theme_id: themeId || null,
       catalog_item_id: catalogId || null,
-      parts: parts
-        .filter((p) => p.part_color_id)
-        .map(({ _rowId, _label, _subtitle, ...p }, i) => ({
-          ...p,
-          sort_order: i,
-          instruction_page: p.instruction_page ?? null,
-          bag_number: p.bag_number ?? "",
-          notes: p.notes ?? "",
-        })),
+      parts: orderedParts.map(({ _rowId, _label, _subtitle, _unitCost, ...p }, i) => ({
+        ...p,
+        sort_order: i,
+        instruction_page: p.instruction_page ?? null,
+        step_number: p.step_number ?? null,
+        bag_number: p.bag_number ?? "",
+        notes: p.notes ?? "",
+      })),
       minifigs: minifigsState
         .filter((m) => m.minifig_id)
         .map(({ _rowId, _label, _subtitle, ...m }, i) => ({
@@ -286,37 +345,38 @@ function handleMinifigPick(item: LibraryPickerResult) {
   }
 
   return (
-    <form onSubmit={submit} className="space-y-6">
+    <form onSubmit={submit} className="space-y-5">
       <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white px-6 py-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white px-5 py-4">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div>
               <h2 className="text-xl font-black tracking-tight text-slate-900">Set Details</h2>
               <p className="mt-1 text-sm text-slate-500">
-                Manage set info, linked catalog pricing, included parts, and minifigs.
+                Set identity, pricing link, build order, and inventory totals.
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
               <SummaryPill label="Part Rows" value={parts.length} />
-              <SummaryPill label="Part Qty" value={totalPartQty} />
-              <SummaryPill label="Minifig Rows" value={minifigsState.length} />
-              <SummaryPill label="Piece Count" value={pieceCount || 0} />
+              <SummaryPill label="Part Cost" value={asMoney(totalPartCost)} />
+              <SummaryPill label="Sell Price" value={asMoney(sellPrice)} />
+              <SummaryPill label="Spread" value={asMoney(grossSpread)} />
+              <SummaryPill label="Minifigs" value={totalMinifigQty} />
             </div>
           </div>
         </div>
 
-        <div className="p-6">
-          <div className="grid gap-5 lg:grid-cols-12">
-            <Field label="Set Number" className="lg:col-span-3">
+        <div className="p-5">
+          <div className="grid gap-4 lg:grid-cols-12">
+            <Field label="Set Number" className="lg:col-span-2">
               <TextInput value={setNum} onChange={(e) => setSetNum(e.target.value)} placeholder="75313" />
             </Field>
 
-            <Field label="Set Name" className="lg:col-span-5">
+            <Field label="Set Name" className="lg:col-span-4">
               <TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder="AT-AT" />
             </Field>
 
-            <Field label="Official Piece Count" className="lg:col-span-2">
+            <Field label="Piece Count" className="lg:col-span-2">
               <TextInput
                 type="number"
                 value={pieceCount}
@@ -339,9 +399,18 @@ function handleMinifigPick(item: LibraryPickerResult) {
               </SelectInput>
             </Field>
 
-            <div className="lg:col-span-4">
+            <Field label="Image URL" className="lg:col-span-2">
+              <TextInput
+                value={imageUrl}
+                onChange={(e) => setImageUrl(e.target.value)}
+                placeholder="https://..."
+                disabled={!!submitting || uploadingImage}
+              />
+            </Field>
+
+            <div className="lg:col-span-5">
               <label className="mb-2 block text-sm font-semibold text-slate-700">Catalog Item</label>
-              <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
                 {catalogPreview ? (
                   <SelectedCard
                     title={catalogPreview.title}
@@ -352,9 +421,7 @@ function handleMinifigPick(item: LibraryPickerResult) {
                     }}
                   />
                 ) : (
-                  <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">
-                    No catalog item linked.
-                  </div>
+                  <EmptyState text="No catalog item linked." />
                 )}
 
                 <div className="mt-3 flex gap-2">
@@ -363,12 +430,21 @@ function handleMinifigPick(item: LibraryPickerResult) {
                     className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
                     onClick={() => setCatalogPickerOpen((v) => !v)}
                   >
-                    {catalogPickerOpen ? "Close Search" : catalogPreview ? "Change Catalog Item" : "Search Catalog"}
+                    {catalogPickerOpen ? "Close Search" : "Search Catalog"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => imageFileRef.current?.click()}
+                    disabled={!!submitting || uploadingImage}
+                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50 disabled:opacity-60"
+                  >
+                    {uploadingImage ? "Uploading..." : "Upload Image"}
                   </button>
                 </div>
 
                 {catalogPickerOpen ? (
-                  <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-3">
                     <GlobalLibraryPicker
                       mode="catalog"
                       allowedModes={["catalog"]}
@@ -382,88 +458,53 @@ function handleMinifigPick(item: LibraryPickerResult) {
               </div>
             </div>
 
-            <div className="lg:col-span-8">
-              <label className="mb-2 block text-sm font-semibold text-slate-700">Image</label>
-
-              <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <TextInput
-                    value={imageUrl}
-                    onChange={(e) => setImageUrl(e.target.value)}
-                    placeholder="https://..."
-                    disabled={!!submitting || uploadingImage}
-                  />
-
-                  <button
-                    type="button"
-                    onClick={() => imageFileRef.current?.click()}
-                    disabled={!!submitting || uploadingImage}
-                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {uploadingImage ? "Uploading…" : "Upload"}
-                  </button>
-
-                  {imageUrl ? (
-                    <button
-                      type="button"
-                      onClick={() => setImageUrl("")}
-                      disabled={!!submitting || uploadingImage}
-                      className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      Clear
-                    </button>
-                  ) : null}
-                </div>
-
-                <input
-                  ref={imageFileRef}
-                  type="file"
-                  accept="image/*"
-                  hidden
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) uploadSetImage(f);
-                  }}
-                />
-
-                {uploadImageErr ? (
-                  <div className="mt-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-                    {uploadImageErr}
-                  </div>
-                ) : null}
-
-                <div className="mt-3 text-[11px] font-semibold text-slate-500">
-                  Upload an image to R2 or paste an image URL manually.
-                </div>
+            <div className="lg:col-span-4">
+              <label className="mb-2 block text-sm font-semibold text-slate-700">Build Summary</label>
+              <div className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                <MiniStat label="Part quantity" value={String(totalPartQty)} />
+                <MiniStat label="Minifig quantity" value={String(totalMinifigQty)} />
+                <MiniStat label="Internal parts cost" value={asMoney(totalPartCost)} />
+                <MiniStat label="Set sell price" value={asMoney(sellPrice)} />
               </div>
             </div>
 
-            {imageUrl ? (
-              <div className="lg:col-span-12">
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Image Preview
-                  </div>
-                  <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-3">
-                    <img
-                      src={imageUrl}
-                      alt={name || "Set preview"}
-                      className="max-h-64 rounded-xl object-contain"
-                    />
-                  </div>
-                </div>
+            <div className="lg:col-span-3">
+              <label className="mb-2 block text-sm font-semibold text-slate-700">Preview</label>
+              <div className="flex h-full min-h-[180px] items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                {imageUrl ? (
+                  <img src={imageUrl} alt={name || "Set preview"} className="max-h-44 rounded-xl object-contain" />
+                ) : (
+                  <div className="text-sm text-slate-400">No image yet</div>
+                )}
               </div>
-            ) : null}
+            </div>
           </div>
+
+          <input
+            ref={imageFileRef}
+            type="file"
+            accept="image/*"
+            hidden
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) uploadSetImage(f);
+            }}
+          />
+
+          {uploadImageErr ? (
+            <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+              {uploadImageErr}
+            </div>
+          ) : null}
         </div>
       </section>
 
       <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex flex-col gap-4 border-b border-slate-200 bg-slate-50/70 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-4 border-b border-slate-200 bg-slate-50/70 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h3 className="text-lg font-black text-slate-900">Parts</h3>
             <p className="mt-1 text-sm text-slate-500">
-              Search exact part-color combinations, then fill in bag, page, and visibility details.
+              Grouped by bag, sorted by step, and edited inline for faster entry.
             </p>
           </div>
 
@@ -476,7 +517,7 @@ function handleMinifigPick(item: LibraryPickerResult) {
           </button>
         </div>
 
-        <div className="p-6 space-y-5">
+        <div className="space-y-4 p-5">
           {partPickerOpen ? (
             <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
               <GlobalLibraryPicker
@@ -490,56 +531,56 @@ function handleMinifigPick(item: LibraryPickerResult) {
             </div>
           ) : null}
 
-          {parts.length === 0 ? (
+          {groupedParts.length === 0 ? (
             <EmptyState text="No parts added yet." />
           ) : (
-            <div className="space-y-4">
-              {parts.map((row, index) => (
-                <div
-                  key={row._rowId}
-                  className="rounded-3xl border border-slate-200 bg-slate-50 p-4 shadow-sm"
-                >
-                  <div className="mb-4 flex items-start justify-between gap-4">
-                    <div>
-                      <div className="text-sm font-black text-slate-800">Part Row {index + 1}</div>
-                      <div className="mt-1 text-sm font-semibold text-slate-900">
-                        {row._label || "Unselected part"}
-                      </div>
-                      <div className="text-sm text-slate-500">{row._subtitle || "Choose a part color"}</div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => removePart(row._rowId)}
-                      className="rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50"
-                    >
-                      Remove
-                    </button>
+            groupedParts.map((group) => (
+              <div key={group.bag} className="overflow-hidden rounded-3xl border border-slate-200">
+                <div className="flex items-center justify-between bg-slate-50 px-4 py-3">
+                  <div>
+                    <div className="text-sm font-black text-slate-900">Bag {group.bag}</div>
+                    <div className="text-xs text-slate-500">{group.rows.length} rows</div>
                   </div>
 
-                  <div className="grid gap-4 xl:grid-cols-12">
-                    <Field label="Quantity" className="xl:col-span-2">
+                  <div className="text-sm font-semibold text-slate-600">
+                    {asMoney(group.rows.reduce((sum, row) => sum + parsePrice(row._unitCost) * row.quantity, 0))}
+                  </div>
+                </div>
+
+                <div className="divide-y divide-slate-100">
+                  {group.rows.map((row) => (
+                    <div key={row._rowId} className="grid gap-3 px-4 py-3 lg:grid-cols-[minmax(220px,2fr)_70px_80px_90px_90px_120px_1fr_auto] lg:items-center">
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-bold text-slate-900">{row._label || "Unselected part"}</div>
+                        <div className="truncate text-xs text-slate-500">{row._subtitle || "Choose a part color"}</div>
+                        <div className="mt-1 text-xs font-medium text-slate-400">
+                          Unit {asMoney(row._unitCost)} • Line {asMoney(parsePrice(row._unitCost) * row.quantity)}
+                        </div>
+                      </div>
+
                       <TextInput
                         type="number"
                         min={1}
                         value={row.quantity}
-                        onChange={(e) =>
-                          updatePart(row._rowId, {
-                            quantity: Math.max(1, Number(e.target.value) || 1),
-                          })
-                        }
+                        onChange={(e) => updatePart(row._rowId, { quantity: Math.max(1, Number(e.target.value) || 1) })}
+                        placeholder="Qty"
                       />
-                    </Field>
 
-                    <Field label="Bag Number" className="xl:col-span-2">
                       <TextInput
                         value={row.bag_number}
                         onChange={(e) => updatePart(row._rowId, { bag_number: e.target.value })}
-                        placeholder="1"
+                        placeholder="Bag"
                       />
-                    </Field>
 
-                    <Field label="Instruction Page" className="xl:col-span-2">
+                      <TextInput
+                        type="number"
+                        value={row.step_number ?? ""}
+                        onChange={(e) =>
+                          updatePart(row._rowId, { step_number: e.target.value ? Number(e.target.value) : null })
+                        }
+                        placeholder="Step"
+                      />
+
                       <TextInput
                         type="number"
                         value={row.instruction_page ?? ""}
@@ -548,76 +589,59 @@ function handleMinifigPick(item: LibraryPickerResult) {
                             instruction_page: e.target.value ? Number(e.target.value) : null,
                           })
                         }
-                        placeholder="Optional"
+                        placeholder="Page"
                       />
-                    </Field>
 
-                    <Field label="Color Match" className="xl:col-span-3">
                       <SelectInput
                         value={row.color_match_mode}
                         onChange={(e) =>
-                          updatePart(row._rowId, {
-                            color_match_mode: e.target.value as ColorMatchMode,
-                          })
+                          updatePart(row._rowId, { color_match_mode: e.target.value as ColorMatchMode })
                         }
                       >
-                        <option value="exact">Exact Color</option>
-                        <option value="any_color">Any Color</option>
+                        <option value="exact">Exact</option>
+                        <option value="any_color">Any color</option>
                       </SelectInput>
-                    </Field>
 
-                    <Field label="Replace Part Selection" className="xl:col-span-3">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setPartPickerOpen(true);
-                          removePart(row._rowId);
-                        }}
-                        className="w-full rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-900 transition hover:bg-slate-50"
-                      >
-                        Search Another Part
-                      </button>
-                    </Field>
-
-                    <Field label="Notes" className="xl:col-span-8">
                       <TextInput
                         value={row.notes}
                         onChange={(e) => updatePart(row._rowId, { notes: e.target.value })}
-                        placeholder="Optional notes about this piece"
+                        placeholder="Notes"
                       />
-                    </Field>
 
-                    <div className="xl:col-span-4">
-                      <label className="mb-2 block text-sm font-semibold text-slate-700">
-                        Options
-                      </label>
-                      <div className="flex flex-wrap gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                      <div className="flex items-center gap-2">
                         <ToggleBox
-                          label="Visible"
+                          label="V"
                           checked={row.is_visible}
                           onChange={(checked) => updatePart(row._rowId, { is_visible: checked })}
                         />
                         <ToggleBox
-                          label="Structural"
+                          label="S"
                           checked={row.is_structural}
                           onChange={(checked) => updatePart(row._rowId, { is_structural: checked })}
                         />
+                        <button
+                          type="button"
+                          onClick={() => removePart(row._rowId)}
+                          className="rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50"
+                        >
+                          Remove
+                        </button>
                       </div>
                     </div>
-                  </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </div>
+            ))
           )}
         </div>
       </section>
 
       <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex flex-col gap-4 border-b border-slate-200 bg-slate-50/70 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-4 border-b border-slate-200 bg-slate-50/70 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h3 className="text-lg font-black text-slate-900">Minifigs</h3>
             <p className="mt-1 text-sm text-slate-500">
-              Search and add minifigs cleanly instead of digging through a huge dropdown.
+              Keep this simple and lightweight beside the part workflow.
             </p>
           </div>
 
@@ -630,7 +654,7 @@ function handleMinifigPick(item: LibraryPickerResult) {
           </button>
         </div>
 
-        <div className="p-6 space-y-5">
+        <div className="space-y-4 p-5">
           {minifigPickerOpen ? (
             <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
               <GlobalLibraryPicker
@@ -647,85 +671,46 @@ function handleMinifigPick(item: LibraryPickerResult) {
           {minifigsState.length === 0 ? (
             <EmptyState text="No minifigs added yet." />
           ) : (
-            <div className="space-y-4">
-              {minifigsState.map((row, index) => (
-                <div
-                  key={row._rowId}
-                  className="rounded-3xl border border-slate-200 bg-slate-50 p-4 shadow-sm"
-                >
-                  <div className="mb-4 flex items-start justify-between gap-4">
-                    <div>
-                      <div className="text-sm font-black text-slate-800">Minifig Row {index + 1}</div>
-                      <div className="mt-1 text-sm font-semibold text-slate-900">
-                        {row._label || "Unselected minifig"}
-                      </div>
-                      <div className="text-sm text-slate-500">{row._subtitle || "Choose a minifig"}</div>
-                    </div>
+            <div className="space-y-3">
+              {minifigsState.map((row) => (
+                <div key={row._rowId} className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 lg:grid-cols-[minmax(220px,2fr)_80px_90px_1fr_auto] lg:items-center">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-bold text-slate-900">{row._label || "Unselected minifig"}</div>
+                    <div className="truncate text-xs text-slate-500">{row._subtitle || "Choose a minifig"}</div>
+                  </div>
 
+                  <TextInput
+                    type="number"
+                    min={1}
+                    value={row.quantity}
+                    onChange={(e) => updateMinifig(row._rowId, { quantity: Math.max(1, Number(e.target.value) || 1) })}
+                  />
+
+                  <TextInput
+                    value={row.bag_number}
+                    onChange={(e) => updateMinifig(row._rowId, { bag_number: e.target.value })}
+                    placeholder="Bag"
+                  />
+
+                  <TextInput
+                    value={row.notes}
+                    onChange={(e) => updateMinifig(row._rowId, { notes: e.target.value })}
+                    placeholder="Notes"
+                  />
+
+                  <div className="flex items-center gap-2">
+                    <ToggleBox
+                      label="Req"
+                      checked={row.is_required}
+                      onChange={(checked) => updateMinifig(row._rowId, { is_required: checked })}
+                    />
                     <button
                       type="button"
                       onClick={() => removeMinifig(row._rowId)}
-                      className="rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50"
+                      className="rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50"
                     >
                       Remove
                     </button>
-                  </div>
-
-                  <div className="grid gap-4 xl:grid-cols-12">
-                    <Field label="Quantity" className="xl:col-span-2">
-                      <TextInput
-                        type="number"
-                        min={1}
-                        value={row.quantity}
-                        onChange={(e) =>
-                          updateMinifig(row._rowId, {
-                            quantity: Math.max(1, Number(e.target.value) || 1),
-                          })
-                        }
-                      />
-                    </Field>
-
-                    <Field label="Bag Number" className="xl:col-span-3">
-                      <TextInput
-                        value={row.bag_number}
-                        onChange={(e) => updateMinifig(row._rowId, { bag_number: e.target.value })}
-                        placeholder="1"
-                      />
-                    </Field>
-
-                    <div className="xl:col-span-3">
-                      <label className="mb-2 block text-sm font-semibold text-slate-700">
-                        Required
-                      </label>
-                      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                        <ToggleBox
-                          label="Required"
-                          checked={row.is_required}
-                          onChange={(checked) => updateMinifig(row._rowId, { is_required: checked })}
-                        />
-                      </div>
-                    </div>
-
-                    <Field label="Replace Minifig" className="xl:col-span-4">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setMinifigPickerOpen(true);
-                          removeMinifig(row._rowId);
-                        }}
-                        className="w-full rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-900 transition hover:bg-slate-50"
-                      >
-                        Search Another Minifig
-                      </button>
-                    </Field>
-
-                    <Field label="Notes" className="xl:col-span-12">
-                      <TextInput
-                        value={row.notes}
-                        onChange={(e) => updateMinifig(row._rowId, { notes: e.target.value })}
-                        placeholder="Optional notes about this minifig"
-                      />
-                    </Field>
                   </div>
                 </div>
               ))}
@@ -735,10 +720,11 @@ function handleMinifigPick(item: LibraryPickerResult) {
       </section>
 
       <div className="sticky bottom-0 z-20 rounded-3xl border border-slate-200 bg-white/95 p-4 shadow-lg backdrop-blur">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-sm text-slate-500">
-            <span className="font-semibold text-slate-800">{parts.length}</span> part rows •{" "}
-            <span className="font-semibold text-slate-800">{minifigsState.length}</span> minifig rows
+            <span className="font-semibold text-slate-900">{parts.length}</span> part rows •{" "}
+            <span className="font-semibold text-slate-900">{totalPartQty}</span> parts •{" "}
+            <span className="font-semibold text-slate-900">{asMoney(totalPartCost)}</span> internal cost
           </div>
 
           <button
@@ -765,7 +751,7 @@ function Field({
 }) {
   return (
     <div className={className}>
-      <label className="mb-2 block text-sm font-semibold text-slate-700">{label}</label>
+      <label className="mb-1.5 block text-sm font-semibold text-slate-700">{label}</label>
       {children}
     </div>
   );
@@ -776,7 +762,7 @@ function TextInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
     <input
       {...props}
       className={[
-        "w-full rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none transition",
+        "w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition",
         "placeholder:text-slate-400 focus:border-slate-400 focus:ring-4 focus:ring-slate-200/70",
         props.className || "",
       ].join(" ")}
@@ -789,7 +775,7 @@ function SelectInput(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
     <select
       {...props}
       className={[
-        "w-full rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none transition",
+        "w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition",
         "focus:border-slate-400 focus:ring-4 focus:ring-slate-200/70",
         props.className || "",
       ].join(" ")}
@@ -812,9 +798,18 @@ function SummaryPill({
   );
 }
 
+function MiniStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+      <div className="text-[11px] font-bold uppercase tracking-wide text-slate-500">{label}</div>
+      <div className="mt-1 text-sm font-bold text-slate-900">{value}</div>
+    </div>
+  );
+}
+
 function EmptyState({ text }: { text: string }) {
   return (
-    <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-sm font-medium text-slate-500">
+    <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center text-sm font-medium text-slate-500">
       {text}
     </div>
   );
@@ -830,7 +825,7 @@ function ToggleBox({
   onChange: (checked: boolean) => void;
 }) {
   return (
-    <label className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700">
+    <label className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-2.5 py-2 text-xs font-medium text-slate-700">
       <input
         type="checkbox"
         checked={checked}
@@ -852,11 +847,11 @@ function SelectedCard({
   onClear: () => void;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="truncate text-sm font-black text-slate-900">{title}</div>
-          <div className="mt-1 text-sm text-slate-500">{subtitle || "—"}</div>
+          <div className="mt-1 text-sm text-slate-500">{subtitle || "-"}</div>
         </div>
 
         <button

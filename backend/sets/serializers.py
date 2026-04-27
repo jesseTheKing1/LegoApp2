@@ -32,10 +32,12 @@ class SetPartReadSerializer(serializers.ModelSerializer):
             "instruction_page",
             "sort_order",
             "bag_number",
+            "step_number",
             "is_visible",
             "is_structural",
             "color_match_mode",
             "notes",
+            
         ]
 
 

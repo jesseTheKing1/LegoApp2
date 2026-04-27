@@ -12,6 +12,7 @@ export type SetPart = {
   instruction_page: number | null;
   sort_order: number;
   bag_number: string;
+  step_number: number | null;
   is_visible: boolean;
   is_structural: boolean;
   color_match_mode: ColorMatchMode;
@@ -47,6 +48,7 @@ export type SetPartPayload = {
   instruction_page: number | null;
   sort_order: number;
   bag_number: string;
+  step_number?: number | null;
   is_visible: boolean;
   is_structural: boolean;
   color_match_mode: ColorMatchMode;
