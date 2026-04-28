@@ -23,6 +23,7 @@ type PartRow = SetPartPayload & {
   _label?: string;
   _subtitle?: string;
   _unitCost?: number | null;
+  _unitSellPrice?: number | null;
   _imageUrl?: string | null;
   _partColorDetail?: PartColorRow | null;
 };
@@ -59,6 +60,12 @@ function parsePrice(value: unknown) {
   return Number.isFinite(n) ? n : 0;
 }
 
+function parseNullablePrice(value: unknown) {
+  if (value == null || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
 function asMoney(value: number | null | undefined) {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -80,10 +87,43 @@ function getPartImage(part: PartColorRow | null | undefined) {
   return part?.image_url_1 || part?.image_url_2 || part?.part?.image_url || null;
 }
 
+function getFirstPrice(...values: unknown[]) {
+  for (const value of values) {
+    const parsed = parseNullablePrice(value);
+    if (parsed != null) return parsed;
+  }
+  return null;
+}
+
+function getLowestPrice(...values: unknown[]) {
+  const parsed = values
+    .map((value) => parseNullablePrice(value))
+    .filter((value): value is number => value != null && value > 0);
+
+  if (parsed.length === 0) return null;
+  return Math.min(...parsed);
+}
+
 function getPartUnitCost(part: PartColorRow | null | undefined) {
-  return parsePrice(
-    readLooseField(part?.catalog_item, "current_cost") ??
+  return (
+    getLowestPrice(
+      readLooseField(part?.catalog_item, "lego_reference_price"),
+      readLooseField(part?.catalog_item, "bricklink_reference_price")
+    ) ??
+    getFirstPrice(
+      readLooseField(part?.catalog_item, "current_cost"),
       readLooseField(part?.catalog_item, "base_price_override")
+    ) ??
+    0
+  );
+}
+
+function getPartUnitSellPrice(part: PartColorRow | null | undefined) {
+  return (
+    getFirstPrice(
+      readLooseField(part?.catalog_item, "current_price"),
+      readLooseField(part?.catalog_item, "base_price_override")
+    ) ?? 0
   );
 }
 
@@ -158,10 +198,22 @@ export function SetForm({
           .join(" • "),
         _unitCost:
           getPartUnitCost(detail) ||
-          parsePrice(
-            readLooseField(row.part_color_detail?.catalog_item, "current_cost") ??
+          (getLowestPrice(
+            readLooseField(row.part_color_detail?.catalog_item, "lego_reference_price"),
+            readLooseField(row.part_color_detail?.catalog_item, "bricklink_reference_price")
+          ) ??
+            getFirstPrice(
+              readLooseField(row.part_color_detail?.catalog_item, "current_cost"),
               readLooseField(row.part_color_detail?.catalog_item, "base_price_override")
-          ),
+            ) ??
+            0),
+        _unitSellPrice:
+          getPartUnitSellPrice(detail) ||
+          (getFirstPrice(
+            readLooseField(row.part_color_detail?.catalog_item, "current_price"),
+            readLooseField(row.part_color_detail?.catalog_item, "base_price_override")
+          ) ??
+            0),
         _imageUrl: getPartImage(detail) || row.part_color_detail?.image_url_1 || row.part_color_detail?.image_url_2 || null,
         _partColorDetail: detail,
       };
@@ -213,7 +265,14 @@ export function SetForm({
     return parts.reduce((sum, row) => sum + parsePrice(row._unitCost) * (Number(row.quantity) || 0), 0);
   }, [parts]);
 
-  const sellPrice = useMemo(() => {
+  const totalPartSaleValue = useMemo(() => {
+    return parts.reduce(
+      (sum, row) => sum + parsePrice(row._unitSellPrice) * (Number(row.quantity) || 0),
+      0
+    );
+  }, [parts]);
+
+  const linkedSetPrice = useMemo(() => {
     return parsePrice(
       selectedCatalog?.base_price_override ??
         catalogPreview?.meta?.current_price ??
@@ -221,10 +280,14 @@ export function SetForm({
     );
   }, [selectedCatalog, catalogPreview, initialValues?.catalog_item?.base_price_override]);
 
-  const grossSpread = sellPrice - totalPartCost;
+  const grossSpread = totalPartSaleValue - totalPartCost;
 
-  const unpricedPartRows = useMemo(() => {
+  const uncostedPartRows = useMemo(() => {
     return parts.filter((row) => parsePrice(row._unitCost) <= 0).length;
+  }, [parts]);
+
+  const unsoldPartRows = useMemo(() => {
+    return parts.filter((row) => parsePrice(row._unitSellPrice) <= 0).length;
   }, [parts]);
 
   const groupedParts = useMemo(() => {
@@ -336,9 +399,12 @@ export function SetForm({
         _subtitle: item.subtitle,
         _imageUrl: item.image_url ?? getPartImage(detail),
         _partColorDetail: detail,
-        _unitCost: parsePrice(
-          readLooseField(detail?.catalog_item, "current_cost") ?? item.meta?.current_cost
-        ),
+        _unitCost:
+          getPartUnitCost(detail) ||
+          (getLowestPrice(item.meta?.current_cost) ?? getFirstPrice(item.meta?.current_cost) ?? 0),
+        _unitSellPrice:
+          getPartUnitSellPrice(detail) ||
+          (getFirstPrice(item.meta?.current_price) ?? 0),
       },
     ]);
 
@@ -395,7 +461,7 @@ export function SetForm({
       official_piece_count: Number(pieceCount) || 0,
       theme_id: themeId || null,
       catalog_item_id: catalogId || null,
-      parts: orderedParts.map(({ _rowId, _label, _subtitle, _unitCost, _imageUrl, _partColorDetail, ...p }, i) => ({
+      parts: orderedParts.map(({ _rowId, _label, _subtitle, _unitCost, _unitSellPrice, _imageUrl, _partColorDetail, ...p }, i) => ({
         ...p,
         sort_order: i,
         instruction_page: p.instruction_page ?? null,
@@ -425,16 +491,17 @@ export function SetForm({
               <div>
                 <h2 className="text-xl font-black tracking-tight text-slate-900">Set Details</h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  Set identity, bag flow, internal part cost, and sell-side pricing.
+                  Set identity, bag flow, lowest-source cost basis, and per-piece sale value.
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-7">
                 <SummaryPill label="Part Rows" value={parts.length} />
                 <SummaryPill label="Part Qty" value={totalPartQty} />
-                <SummaryPill label="Part Cost" value={asMoney(totalPartCost)} />
-                <SummaryPill label="Sell Price" value={asMoney(sellPrice)} />
+                <SummaryPill label="Cost Basis" value={asMoney(totalPartCost)} />
+                <SummaryPill label="Piece Sale" value={asMoney(totalPartSaleValue)} />
                 <SummaryPill label="Spread" value={asMoney(grossSpread)} />
+                <SummaryPill label="Linked Set Price" value={asMoney(linkedSetPrice)} />
                 <SummaryPill label="Minifigs" value={totalMinifigQty} />
               </div>
             </div>
@@ -488,7 +555,7 @@ export function SetForm({
                   {catalogPreview ? (
                     <SelectedCard
                       title={catalogPreview.title}
-                      subtitle={`${catalogPreview.subtitle || ""} • ${asMoney(
+                      subtitle={`${catalogPreview.subtitle || ""} • linked set price ${asMoney(
                         parsePrice(catalogPreview.meta?.current_price)
                       )}`}
                       onClear={() => {
@@ -548,10 +615,12 @@ export function SetForm({
               <div className="lg:col-span-4">
                 <label className="mb-2 block text-sm font-semibold text-slate-700">Build Economics</label>
                 <div className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                  <MiniStat label="Internal Part Cost" value={asMoney(totalPartCost)} />
-                  <MiniStat label="Set Sell Price" value={asMoney(sellPrice)} />
+                  <MiniStat label="Lowest-Source Cost Basis" value={asMoney(totalPartCost)} />
+                  <MiniStat label="Piece Sale Value" value={asMoney(totalPartSaleValue)} />
                   <MiniStat label="Gross Spread" value={asMoney(grossSpread)} />
-                  <MiniStat label="Unpriced Part Rows" value={String(unpricedPartRows)} tone={unpricedPartRows > 0 ? "warn" : "default"} />
+                  <MiniStat label="Linked Set Price" value={asMoney(linkedSetPrice)} />
+                  <MiniStat label="Missing Cost Rows" value={String(uncostedPartRows)} tone={uncostedPartRows > 0 ? "warn" : "default"} />
+                  <MiniStat label="Missing Sale Rows" value={String(unsoldPartRows)} tone={unsoldPartRows > 0 ? "warn" : "default"} />
                 </div>
               </div>
 
@@ -622,9 +691,14 @@ export function SetForm({
               </div>
             ) : null}
 
-            {unpricedPartRows > 0 ? (
+            {uncostedPartRows > 0 || unsoldPartRows > 0 ? (
               <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                {unpricedPartRows} part row(s) do not have pricing yet, so internal cost may be understated.
+                {uncostedPartRows > 0
+                  ? `${uncostedPartRows} part row(s) are missing cost basis. `
+                  : ""}
+                {unsoldPartRows > 0
+                  ? `${unsoldPartRows} part row(s) are missing sell pricing.`
+                  : ""}
               </div>
             ) : null}
 
@@ -632,8 +706,12 @@ export function SetForm({
               <EmptyState text="No parts added yet." />
             ) : (
               groupedParts.map((group) => {
-                const bagSubtotal = group.rows.reduce(
+                const bagCostTotal = group.rows.reduce(
                   (sum, row) => sum + parsePrice(row._unitCost) * (Number(row.quantity) || 0),
+                  0
+                );
+                const bagSaleTotal = group.rows.reduce(
+                  (sum, row) => sum + parsePrice(row._unitSellPrice) * (Number(row.quantity) || 0),
                   0
                 );
 
@@ -646,7 +724,8 @@ export function SetForm({
                       </div>
 
                       <div className="flex flex-wrap gap-2">
-                        <MiniPill label="Bag Cost" value={asMoney(bagSubtotal)} />
+                        <MiniPill label="Bag Cost" value={asMoney(bagCostTotal)} />
+                        <MiniPill label="Bag Sale" value={asMoney(bagSaleTotal)} />
                         <MiniPill
                           label="Bag Qty"
                           value={String(group.rows.reduce((sum, row) => sum + (Number(row.quantity) || 0), 0))}
@@ -657,6 +736,8 @@ export function SetForm({
                     <div className="divide-y divide-slate-100">
                       {group.rows.map((row) => {
                         const lineCost = parsePrice(row._unitCost) * (Number(row.quantity) || 0);
+                        const lineSale = parsePrice(row._unitSellPrice) * (Number(row.quantity) || 0);
+                        const lineSpread = lineSale - lineCost;
 
                         return (
                           <div
@@ -688,7 +769,10 @@ export function SetForm({
                                   {row._subtitle || "Choose a part color"}
                                 </div>
                                 <div className="mt-1 text-xs font-medium text-slate-400">
-                                  Unit {asMoney(row._unitCost)} • Line {asMoney(lineCost)} • click for pricing and inventory
+                                  Cost {asMoney(row._unitCost)} • Sell {asMoney(row._unitSellPrice)} • Spread {asMoney(lineSpread)}
+                                </div>
+                                <div className="mt-1 text-xs font-medium text-slate-400">
+                                  Line cost {asMoney(lineCost)} • Line sale {asMoney(lineSale)} • click for pricing and inventory
                                 </div>
                               </div>
                             </button>
@@ -917,7 +1001,8 @@ export function SetForm({
             <div className="text-sm text-slate-500">
               <span className="font-semibold text-slate-900">{parts.length}</span> part rows •{" "}
               <span className="font-semibold text-slate-900">{totalPartQty}</span> total parts •{" "}
-              <span className="font-semibold text-slate-900">{asMoney(totalPartCost)}</span> internal cost
+              <span className="font-semibold text-slate-900">{asMoney(totalPartCost)}</span> cost basis •{" "}
+              <span className="font-semibold text-slate-900">{asMoney(totalPartSaleValue)}</span> piece sale value
             </div>
 
             <button
@@ -943,7 +1028,7 @@ export function SetForm({
         <PartColorDetailDrawer
           row={selectedPartDetail}
           allRows={partColors}
-          onSelectRow={(next: React.SetStateAction<PartColorRow | null>) => setSelectedPartDetail(next)}
+          onSelectRow={(next) => setSelectedPartDetail(next)}
           onUpdated={() => {}}
         />
       </DrawerShell>
