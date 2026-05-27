@@ -242,9 +242,25 @@ export default function SetsAdminPage() {
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 2xl:grid-cols-3">
               {filtered.map((item) => {
-                const salesPrice = item.catalog_item?.current_price ?? item.catalog_item?.base_price_override;
                 const partCount = item.parts?.length ?? 0;
                 const minifigCount = item.minifigs?.length ?? 0;
+
+                const partsTotal = (item.parts ?? []).reduce((sum, p) => {
+                  const qty = Number(p.quantity) || 0;
+                  const unit = Number(p.part_color_detail?.catalog_item?.current_price ?? p.part_color_detail?.catalog_item?.base_price_override ?? 0) || 0;
+                  return sum + qty * unit;
+                }, 0);
+
+                const minifigsTotal = (item.minifigs ?? []).reduce((sum, m) => {
+                  const qty = Number(m.quantity) || 0;
+                  const id = m.minifig_detail?.id ?? m.minifig;
+                  const full = minifigs.find((x) => x.id === id) ?? null;
+                  const unit = Number(full?.catalog_item?.current_price ?? full?.catalog_item?.base_price_override ?? 0) || 0;
+                  return sum + qty * unit;
+                }, 0);
+
+                const totalPrice = partsTotal + minifigsTotal;
+                const formattedTotal = totalPrice > 0 ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(totalPrice) : null;
 
                 return (
                   <button
@@ -258,6 +274,7 @@ export default function SetsAdminPage() {
                         <img
                           src={item.image_url}
                           alt=""
+                          loading="lazy"
                           className="h-full w-full object-contain drop-shadow-[0_14px_30px_rgba(15,23,42,0.16)] transition group-hover:scale-[1.02]"
                         />
                       ) : (
@@ -266,9 +283,9 @@ export default function SetsAdminPage() {
                         </div>
                       )}
 
-                      {salesPrice && (
+                      {formattedTotal && (
                         <div className="pointer-events-none absolute bottom-4 left-4 rounded-full border border-slate-200 bg-white/90 px-3 py-1.5 text-xs font-black uppercase tracking-[0.16em] text-slate-900 shadow-sm">
-                          ${salesPrice}
+                          {formattedTotal}
                         </div>
                       )}
                     </div>

@@ -320,6 +320,8 @@ export function SetForm({
     }, []);
   }, [parts]);
 
+  const [openBags, setOpenBags] = useState<Record<string, boolean>>({});
+
   function resetImageFileInput() {
     if (imageFileRef.current) imageFileRef.current.value = "";
   }
@@ -715,6 +717,8 @@ export function SetForm({
                   0
                 );
 
+                const isOpen = !!openBags[group.bag];
+
                 return (
                   <div key={group.bag} className="overflow-hidden rounded-3xl border border-slate-200">
                     <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 px-4 py-3">
@@ -723,18 +727,26 @@ export function SetForm({
                         <div className="text-xs text-slate-500">{group.rows.length} rows</div>
                       </div>
 
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex items-center gap-2">
                         <MiniPill label="Bag Cost" value={asMoney(bagCostTotal)} />
                         <MiniPill label="Bag Sale" value={asMoney(bagSaleTotal)} />
                         <MiniPill
                           label="Bag Qty"
                           value={String(group.rows.reduce((sum, row) => sum + (Number(row.quantity) || 0), 0))}
                         />
+                        <button
+                          type="button"
+                          onClick={() => setOpenBags((prev) => ({ ...prev, [group.bag]: !isOpen }))}
+                          className="ml-2 rounded-2xl border border-slate-200 bg-white px-3 py-1 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                        >
+                          {isOpen ? "Collapse" : "Expand"}
+                        </button>
                       </div>
                     </div>
 
-                    <div className="divide-y divide-slate-100">
-                      {group.rows.map((row) => {
+                    {isOpen ? (
+                      <div className="divide-y divide-slate-100">
+                        {group.rows.map((row) => {
                         const lineCost = parsePrice(row._unitCost) * (Number(row.quantity) || 0);
                         const lineSale = parsePrice(row._unitSellPrice) * (Number(row.quantity) || 0);
                         const lineSpread = lineSale - lineCost;
@@ -878,7 +890,8 @@ export function SetForm({
                           </div>
                         );
                       })}
-                    </div>
+                      </div>
+                    ) : null}
                   </div>
                 );
               })
