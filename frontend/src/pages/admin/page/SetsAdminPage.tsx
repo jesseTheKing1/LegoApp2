@@ -31,6 +31,9 @@ export default function SetsAdminPage() {
   const [partColors, setPartColors] = useState<PartColorRow[]>([]);
   const [minifigs, setMinifigs] = useState<Minifig[]>([]);
 
+  const [loadingSets, setLoadingSets] = useState(true);
+  const [loadingLookups, setLoadingLookups] = useState(true);
+
   const [q, setQ] = useState("");
   const [themeFilter, setThemeFilter] = useState<string>("");
 
@@ -41,26 +44,42 @@ export default function SetsAdminPage() {
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  async function loadAll() {
+  async function loadSets() {
     setErr(null);
+    setLoadingSets(true);
 
-    const [setRes, themeRes, catRes, partColorRes, minifigRes] = await Promise.all([
-      api.get(ENDPOINTS.sets),
-      api.get(ENDPOINTS.themes),
-      api.get(ENDPOINTS.catalog),
-      api.get(ENDPOINTS.partColors),
-      api.get(ENDPOINTS.minifigs),
-    ]);
+    try {
+      const setRes = await api.get(ENDPOINTS.sets);
+      setItems(getListData<LegoSet>(setRes.data));
+    } finally {
+      setLoadingSets(false);
+    }
+  }
 
-    setItems(getListData<LegoSet>(setRes.data));
-    setThemes(getListData<Theme>(themeRes.data));
-    setCatalogItems(getListData<CatalogItemMini>(catRes.data));
-    setPartColors(getListData<PartColorRow>(partColorRes.data));
-    setMinifigs(getListData<Minifig>(minifigRes.data));
+  async function loadLookups() {
+    setErr(null);
+    setLoadingLookups(true);
+
+    try {
+      const [themeRes, catRes, partColorRes, minifigRes] = await Promise.all([
+        api.get(ENDPOINTS.themes),
+        api.get(ENDPOINTS.catalog),
+        api.get(ENDPOINTS.partColors),
+        api.get(ENDPOINTS.minifigs),
+      ]);
+
+      setThemes(getListData<Theme>(themeRes.data));
+      setCatalogItems(getListData<CatalogItemMini>(catRes.data));
+      setPartColors(getListData<PartColorRow>(partColorRes.data));
+      setMinifigs(getListData<Minifig>(minifigRes.data));
+    } finally {
+      setLoadingLookups(false);
+    }
   }
 
   useEffect(() => {
-    loadAll().catch((e) => setErr(formatApiError(e)));
+    loadSets().catch((e) => setErr(formatApiError(e)));
+    loadLookups().catch((e) => setErr(formatApiError(e)));
   }, []);
 
   const filtered = useMemo(() => {
@@ -112,7 +131,7 @@ export default function SetsAdminPage() {
     try {
       await api.post(ENDPOINTS.sets, payload);
       setCreateOpen(false);
-      await loadAll();
+      await loadSets();
     } catch (e) {
       setErr(formatApiError(e));
     } finally {
@@ -190,7 +209,10 @@ export default function SetsAdminPage() {
               <button
                 type="button"
                 className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-900 shadow-sm hover:bg-slate-50"
-                onClick={() => loadAll().catch(() => {})}
+                onClick={() => {
+                  loadSets().catch(() => {});
+                  loadLookups().catch(() => {});
+                }}
               >
                 Refresh
               </button>
@@ -203,7 +225,14 @@ export default function SetsAdminPage() {
             </div>
           ) : null}
 
-          {filtered.length === 0 ? (
+          {loadingSets && items.length === 0 ? (
+            <div className="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-5 py-12 text-center">
+              <div className="text-sm font-semibold text-slate-700">Loading sets…</div>
+              <div className="mt-1 text-sm text-slate-500">
+                The set list should appear shortly.
+              </div>
+            </div>
+          ) : filtered.length === 0 ? (
             <div className="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-5 py-12 text-center">
               <div className="text-sm font-semibold text-slate-700">No results</div>
               <div className="mt-1 text-sm text-slate-500">
@@ -213,11 +242,7 @@ export default function SetsAdminPage() {
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 2xl:grid-cols-3">
               {filtered.map((item) => {
-                const price =
-                  item.catalog_item?.base_price_override != null
-                    ? `$${item.catalog_item.base_price_override}`
-                    : null;
-
+                const salesPrice = item.catalog_item?.current_price ?? item.catalog_item?.base_price_override;
                 const partCount = item.parts?.length ?? 0;
                 const minifigCount = item.minifigs?.length ?? 0;
 
@@ -228,7 +253,7 @@ export default function SetsAdminPage() {
                     onClick={() => openDetail(item)}
                     className="group overflow-hidden rounded-[28px] border border-slate-200 bg-white text-left shadow-[0_10px_30px_rgba(15,23,42,0.06)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_40px_rgba(15,23,42,0.10)]"
                   >
-                    <div className="aspect-square bg-[radial-gradient(circle_at_top,#f8fafc,white_62%)] p-4">
+                    <div className="relative aspect-square bg-[radial-gradient(circle_at_top,#f8fafc,white_62%)] p-4">
                       {item.image_url ? (
                         <img
                           src={item.image_url}
@@ -238,6 +263,12 @@ export default function SetsAdminPage() {
                       ) : (
                         <div className="grid h-full place-items-center rounded-[22px] border border-dashed border-slate-200 bg-slate-50 text-sm font-semibold text-slate-400">
                           No image
+                        </div>
+                      )}
+
+                      {salesPrice && (
+                        <div className="pointer-events-none absolute bottom-4 left-4 rounded-full border border-slate-200 bg-white/90 px-3 py-1.5 text-xs font-black uppercase tracking-[0.16em] text-slate-900 shadow-sm">
+                          ${salesPrice}
                         </div>
                       )}
                     </div>
@@ -253,11 +284,6 @@ export default function SetsAdminPage() {
                           </div>
                         </div>
 
-                        {price ? (
-                          <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] font-black text-slate-800">
-                            {price}
-                          </div>
-                        ) : null}
                       </div>
 
                       <div className="mt-4 flex flex-wrap gap-2">
@@ -335,7 +361,7 @@ export default function SetsAdminPage() {
         onDeleted={() => {
           setDetailOpen(false);
           setSelected(null);
-          loadAll().catch(() => {});
+          loadSets().catch(() => {});
         }}
       />
     </div>
