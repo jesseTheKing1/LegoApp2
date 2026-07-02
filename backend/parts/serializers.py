@@ -1,7 +1,27 @@
 from rest_framework import serializers
 from .models import Color, Part, PartColor
 from catalog.models import CatalogItem
-from catalog.serializers import CatalogItemMiniSerializer
+
+
+class PartColorCatalogItemSerializer(serializers.ModelSerializer):
+    """Small pricing payload for list-heavy part-color screens."""
+    current_price = serializers.DecimalField(
+        max_digits=10, decimal_places=4, read_only=True, allow_null=True
+    )
+
+    class Meta:
+        model = CatalogItem
+        fields = [
+            "id",
+            "sku",
+            "is_active",
+            "base_price_override",
+            "force_override",
+            "lego_reference_price",
+            "bricklink_reference_price",
+            "current_price",
+            "notes",
+        ]
 
 
 class ColorSerializer(serializers.ModelSerializer):
@@ -46,7 +66,7 @@ class PartColorSerializer(serializers.ModelSerializer):
         write_only=True,
     )
 
-    catalog_item = CatalogItemMiniSerializer(read_only=True)
+    catalog_item = PartColorCatalogItemSerializer(read_only=True)
 
     catalog_item_id = serializers.PrimaryKeyRelatedField(
         queryset=CatalogItem.objects.all(),

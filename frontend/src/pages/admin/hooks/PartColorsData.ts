@@ -22,7 +22,7 @@ export function usePartColorsData() {
       api.get(ENDPOINTS.partColors),
       api.get(ENDPOINTS.parts),
       api.get(ENDPOINTS.colors),
-      api.get(ENDPOINTS.catalog),
+      api.get(ENDPOINTS.catalog, { params: { compact: 1 } }),
     ]);
 
     setItems(getListData<PartColorRow>(pcRes.data));
@@ -40,7 +40,7 @@ export function usePartColorsData() {
   }, []);
 
   const refreshCatalog = useCallback(async () => {
-    const catRes = await api.get(ENDPOINTS.catalog);
+    const catRes = await api.get(ENDPOINTS.catalog, { params: { compact: 1 } });
     setCatalogItems(getListData<CatalogItemMini>(catRes.data));
   }, []);
 

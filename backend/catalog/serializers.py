@@ -185,3 +185,24 @@ class CatalogItemMiniSerializer(serializers.ModelSerializer):
             "margin_percent",
             "notes",
         ]
+
+
+class CatalogItemPickerSerializer(serializers.ModelSerializer):
+    """Lean catalog representation for selects and attachment pickers."""
+    current_price = serializers.DecimalField(
+        max_digits=10, decimal_places=4, read_only=True, allow_null=True
+    )
+
+    class Meta:
+        model = CatalogItem
+        fields = [
+            "id",
+            "sku",
+            "is_active",
+            "base_price_override",
+            "force_override",
+            "lego_reference_price",
+            "bricklink_reference_price",
+            "current_price",
+            "notes",
+        ]

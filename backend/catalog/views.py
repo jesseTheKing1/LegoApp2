@@ -5,7 +5,7 @@ from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnl
 from rest_framework.response import Response
 
 from .models import CatalogItem, CatalogCostEntry
-from .serializers import CatalogItemSerializer, CatalogCostEntrySerializer
+from .serializers import CatalogItemSerializer, CatalogCostEntrySerializer, CatalogItemPickerSerializer
 
 
 class CatalogItemViewSet(viewsets.ModelViewSet):
@@ -19,6 +19,11 @@ class CatalogItemViewSet(viewsets.ModelViewSet):
     )
     serializer_class = CatalogItemSerializer
     permission_classes = [IsAuthenticatedOrReadOnly]
+
+    def get_serializer_class(self):
+        if self.action == "list" and self.request.query_params.get("compact") == "1":
+            return CatalogItemPickerSerializer
+        return CatalogItemSerializer
 
     @action(detail=False, methods=["get"], url_path="lookup")
     def lookup(self, request):

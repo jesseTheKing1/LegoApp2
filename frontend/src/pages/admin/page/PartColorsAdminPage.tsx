@@ -203,14 +203,27 @@ export default function PartColorsPage() {
   async function loadAll() {
     setErr(null);
 
-    const [pcRes, pRes, cRes, catRes] = await Promise.all([
-      api.get(ENDPOINTS.partColors),
+    // Render the expensive main list as soon as it arrives. The three lookup
+    // collections are only needed by edit/create controls and can follow.
+    const pcRes = await api.get(ENDPOINTS.partColors);
+    const nextItems = getListData<PartColorRow>(pcRes.data);
+    setItems(nextItems);
+
+    const nestedParts = Array.from(
+      new Map(nextItems.filter((row) => row.part).map((row) => [row.part.id, row.part])).values()
+    );
+    const nestedColors = Array.from(
+      new Map(nextItems.filter((row) => row.color).map((row) => [row.color.id, row.color])).values()
+    );
+    setParts(nestedParts);
+    setColors(nestedColors);
+
+    const [pRes, cRes, catRes] = await Promise.all([
       api.get(ENDPOINTS.parts),
       api.get(ENDPOINTS.colors),
-      api.get(ENDPOINTS.catalog),
+      api.get(ENDPOINTS.catalog, { params: { compact: 1 } }),
     ]);
 
-    const nextItems = getListData<PartColorRow>(pcRes.data);
     const nextParts = getListData<Part>(pRes.data);
     const nextColors = getListData<Color>(cRes.data);
     const nextCatalogItems = getListData<CatalogItemMini>(catRes.data);
@@ -412,7 +425,7 @@ function closeEdit() {
   }
 
   async function refreshCatalogItems() {
-    const catRes = await api.get(ENDPOINTS.catalog);
+    const catRes = await api.get(ENDPOINTS.catalog, { params: { compact: 1 } });
     setCatalogItems(getListData<CatalogItemMini>(catRes.data));
   }
 
