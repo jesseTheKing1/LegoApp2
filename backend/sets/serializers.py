@@ -12,6 +12,19 @@ from catalog.models import CatalogItem
 from inventory.models import InventoryRecord
 
 
+def catalog_storefront_price(item):
+    """Resolve the best customer-facing price available on a catalog item."""
+    if not item:
+        return None
+    return (
+        item.current_price
+        if item.current_price is not None
+        else item.bricklink_reference_price
+        if item.bricklink_reference_price is not None
+        else item.lego_reference_price
+    )
+
+
 class CatalogItemMiniSerializer(serializers.ModelSerializer):
     current_price = serializers.DecimalField(max_digits=10, decimal_places=4, read_only=True)
 
@@ -34,7 +47,7 @@ class SetPartReadSerializer(serializers.ModelSerializer):
 
     def get_unit_price(self, obj):
         item = getattr(obj.part_color, "catalog_item", None)
-        return item.current_price if item else None
+        return catalog_storefront_price(item)
 
     def get_line_total(self, obj):
         price = self.get_unit_price(obj)
@@ -127,8 +140,9 @@ class SetReadSerializer(serializers.ModelSerializer):
         total = Decimal("0")
         for part in obj.parts.all():
             item = getattr(part.part_color, "catalog_item", None)
-            if item and item.current_price is not None:
-                total += item.current_price * part.quantity
+            price = catalog_storefront_price(item)
+            if price is not None:
+                total += price * part.quantity
         return total
 
     def get_missing_parts_price(self, obj):
@@ -146,8 +160,7 @@ class SetReadSerializer(serializers.ModelSerializer):
     def get_priced_part_quantity(self, obj):
         return sum(
             part.quantity for part in obj.parts.all()
-            if getattr(part.part_color, "catalog_item", None)
-            and part.part_color.catalog_item.current_price is not None
+            if catalog_storefront_price(getattr(part.part_color, "catalog_item", None)) is not None
         )
 
     class Meta:

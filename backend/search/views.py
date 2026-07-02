@@ -11,6 +11,18 @@ from catalog.models import CatalogItem
 from inventory.models import InventoryRecord
 
 
+def catalog_storefront_price(item):
+    if not item:
+        return None
+    return (
+        item.current_price
+        if item.current_price is not None
+        else item.bricklink_reference_price
+        if item.bricklink_reference_price is not None
+        else item.lego_reference_price
+    )
+
+
 def rank_result(item, q_lower: str):
     title = (item.get("title") or "").lower()
     subtitle = (item.get("subtitle") or "").lower()
@@ -230,14 +242,15 @@ class LibraryPickerLookupView(APIView):
                 priced_quantity = 0
                 for set_part in row.parts.all():
                     item = getattr(set_part.part_color, "catalog_item", None)
-                    if item and item.current_price is not None:
-                        parts_total += item.current_price * set_part.quantity
+                    price = catalog_storefront_price(item)
+                    if price is not None:
+                        parts_total += price * set_part.quantity
                         owned = min(owned_quantities.get(item.id, 0), set_part.quantity)
-                        missing_total += item.current_price * (set_part.quantity - owned)
+                        missing_total += price * (set_part.quantity - owned)
                         priced_quantity += set_part.quantity
                 set_price = (
-                    row.catalog_item.current_price
-                    if row.catalog_item and row.catalog_item.current_price is not None
+                    catalog_storefront_price(row.catalog_item)
+                    if catalog_storefront_price(row.catalog_item) is not None
                     else parts_total
                 )
 
