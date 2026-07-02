@@ -214,7 +214,7 @@ export function Header() {
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
         <Link to="/" className="flex items-center gap-2 font-black">
           <img src={LOGO_URL} className="h-9 w-9 rounded-xl" alt="Logo" />
-          <span className="hidden sm:block">LEGO Inventory</span>
+          <span className="hidden sm:block">Brickwise</span>
         </Link>
 
         <nav className="hidden items-center gap-2 sm:flex">
@@ -225,7 +225,7 @@ export function Header() {
               </Link>
 
               <Link to="/browse" className="px-3 py-2 font-semibold">
-                Browse
+                Shop
               </Link>
 
               {isAdmin && <AdminMenu />}
