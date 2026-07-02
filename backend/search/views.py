@@ -1,4 +1,5 @@
-from django.db.models import Q
+from django.db.models import Q, Sum, F
+from decimal import Decimal
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
@@ -7,6 +8,7 @@ from parts.models import PartColor
 from minifigs.models import Minifig
 from sets.models import Set
 from catalog.models import CatalogItem
+from inventory.models import InventoryRecord
 
 
 def rank_result(item, q_lower: str):
@@ -85,6 +87,17 @@ class LibraryPickerLookupView(APIView):
         include_minifigs = type_param in {"all", "minifig"}
         include_sets = type_param in {"all", "set"}
         include_catalog = type_param in {"all", "catalog"}
+        owned_quantities = {}
+        if request.user.is_authenticated:
+            owned_rows = (
+                InventoryRecord.objects.filter(is_active=True)
+                .values("catalog_item_id")
+                .annotate(quantity=Sum(F("quantity_on_hand") - F("quantity_reserved")))
+            )
+            owned_quantities = {
+                item["catalog_item_id"]: max(item["quantity"] or 0, 0)
+                for item in owned_rows
+            }
 
         if include_part_colors:
             pc_qs = (
@@ -196,7 +209,8 @@ class LibraryPickerLookupView(APIView):
         if include_sets:
             set_qs = (
                 Set.objects
-                .select_related("theme")
+                .select_related("theme", "catalog_item")
+                .prefetch_related("parts__part_color__catalog_item")
                 .all()
                 .order_by("set_num", "name")
             )
@@ -211,6 +225,21 @@ class LibraryPickerLookupView(APIView):
             for row in set_qs[:limit]:
                 theme = getattr(row, "theme", None)
                 piece_count = getattr(row, "official_piece_count", 0) or 0
+                parts_total = Decimal("0")
+                missing_total = Decimal("0")
+                priced_quantity = 0
+                for set_part in row.parts.all():
+                    item = getattr(set_part.part_color, "catalog_item", None)
+                    if item and item.current_price is not None:
+                        parts_total += item.current_price * set_part.quantity
+                        owned = min(owned_quantities.get(item.id, 0), set_part.quantity)
+                        missing_total += item.current_price * (set_part.quantity - owned)
+                        priced_quantity += set_part.quantity
+                set_price = (
+                    row.catalog_item.current_price
+                    if row.catalog_item and row.catalog_item.current_price is not None
+                    else parts_total
+                )
 
                 subtitle_parts = [
                     row.set_num or "",
@@ -234,6 +263,12 @@ class LibraryPickerLookupView(APIView):
                         "set_num": row.set_num or "",
                         "theme_name": getattr(theme, "name", "") if theme else "",
                         "official_piece_count": piece_count,
+                        "current_price": str(set_price),
+                        "parts_total_price": str(parts_total),
+                        "priced_part_quantity": priced_quantity,
+                        "missing_parts_price": str(missing_total),
+                        "inventory_savings": str(parts_total - missing_total),
+                        "has_inventory_match": request.user.is_authenticated,
                     },
                 })
 

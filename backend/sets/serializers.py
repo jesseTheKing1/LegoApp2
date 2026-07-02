@@ -1,4 +1,6 @@
 from django.db import transaction
+from django.db.models import Sum, F
+from decimal import Decimal
 from rest_framework import serializers
 
 from .models import Set, SetPart, SetMinifig
@@ -7,12 +9,15 @@ from parts.serializers import PartColorSerializer
 from minifigs.models import Minifig, Theme
 from minifigs.serializers import MinifigSerializer, ThemeSerializer
 from catalog.models import CatalogItem
+from inventory.models import InventoryRecord
 
 
 class CatalogItemMiniSerializer(serializers.ModelSerializer):
+    current_price = serializers.DecimalField(max_digits=10, decimal_places=4, read_only=True)
+
     class Meta:
         model = CatalogItem
-        fields = ["id", "sku", "base_price_override", "force_override", "notes"]
+        fields = ["id", "sku", "base_price_override", "force_override", "current_price", "notes"]
 
 
 # -----------------------------
@@ -21,6 +26,48 @@ class CatalogItemMiniSerializer(serializers.ModelSerializer):
 
 class SetPartReadSerializer(serializers.ModelSerializer):
     part_color_detail = PartColorSerializer(source="part_color", read_only=True)
+    unit_price = serializers.SerializerMethodField()
+    line_total = serializers.SerializerMethodField()
+    owned_quantity = serializers.SerializerMethodField()
+    missing_quantity = serializers.SerializerMethodField()
+    missing_line_total = serializers.SerializerMethodField()
+
+    def get_unit_price(self, obj):
+        item = getattr(obj.part_color, "catalog_item", None)
+        return item.current_price if item else None
+
+    def get_line_total(self, obj):
+        price = self.get_unit_price(obj)
+        return price * obj.quantity if price is not None else None
+
+    def _owned_map(self):
+        root = self.root
+        if hasattr(root, "_owned_catalog_quantities"):
+            return root._owned_catalog_quantities
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            root._owned_catalog_quantities = {}
+            return root._owned_catalog_quantities
+        rows = (
+            InventoryRecord.objects.filter(is_active=True)
+            .values("catalog_item_id")
+            .annotate(on_hand=Sum(F("quantity_on_hand") - F("quantity_reserved")))
+        )
+        root._owned_catalog_quantities = {
+            row["catalog_item_id"]: max(row["on_hand"] or 0, 0) for row in rows
+        }
+        return root._owned_catalog_quantities
+
+    def get_owned_quantity(self, obj):
+        item_id = getattr(obj.part_color, "catalog_item_id", None)
+        return min(self._owned_map().get(item_id, 0), obj.quantity) if item_id else 0
+
+    def get_missing_quantity(self, obj):
+        return max(obj.quantity - self.get_owned_quantity(obj), 0)
+
+    def get_missing_line_total(self, obj):
+        price = self.get_unit_price(obj)
+        return price * self.get_missing_quantity(obj) if price is not None else None
 
     class Meta:
         model = SetPart
@@ -37,6 +84,11 @@ class SetPartReadSerializer(serializers.ModelSerializer):
             "is_structural",
             "color_match_mode",
             "notes",
+            "unit_price",
+            "line_total",
+            "owned_quantity",
+            "missing_quantity",
+            "missing_line_total",
         ]
 
 
@@ -62,6 +114,41 @@ class SetReadSerializer(serializers.ModelSerializer):
     minifigs = SetMinifigReadSerializer(many=True, read_only=True)
     theme = ThemeSerializer(read_only=True)
     catalog_item = CatalogItemMiniSerializer(read_only=True)
+    parts_total_price = serializers.SerializerMethodField()
+    missing_parts_price = serializers.SerializerMethodField()
+    inventory_savings = serializers.SerializerMethodField()
+    priced_part_quantity = serializers.SerializerMethodField()
+
+    def _part_rows(self, obj):
+        serializer = SetPartReadSerializer(obj.parts.all(), many=True, context=self.context)
+        return serializer
+
+    def get_parts_total_price(self, obj):
+        total = Decimal("0")
+        for part in obj.parts.all():
+            item = getattr(part.part_color, "catalog_item", None)
+            if item and item.current_price is not None:
+                total += item.current_price * part.quantity
+        return total
+
+    def get_missing_parts_price(self, obj):
+        serializer = self._part_rows(obj)
+        total = Decimal("0")
+        for part in obj.parts.all():
+            amount = serializer.child.get_missing_line_total(part)
+            if amount is not None:
+                total += amount
+        return total
+
+    def get_inventory_savings(self, obj):
+        return self.get_parts_total_price(obj) - self.get_missing_parts_price(obj)
+
+    def get_priced_part_quantity(self, obj):
+        return sum(
+            part.quantity for part in obj.parts.all()
+            if getattr(part.part_color, "catalog_item", None)
+            and part.part_color.catalog_item.current_price is not None
+        )
 
     class Meta:
         model = Set
@@ -75,6 +162,10 @@ class SetReadSerializer(serializers.ModelSerializer):
             "catalog_item",
             "parts",
             "minifigs",
+            "parts_total_price",
+            "missing_parts_price",
+            "inventory_savings",
+            "priced_part_quantity",
         ]
 
 

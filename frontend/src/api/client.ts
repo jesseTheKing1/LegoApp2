@@ -16,9 +16,13 @@ function getRefreshToken() {
 function setAccessToken(token: string) {
   localStorage.setItem("access_token", token);
 }
+function setRefreshToken(token: string) {
+  localStorage.setItem("refresh_token", token);
+}
 function clearTokens() {
   localStorage.removeItem("access_token");
   localStorage.removeItem("refresh_token");
+  localStorage.removeItem("auth_user");
 }
 
 // 1) Attach access token to every request
@@ -49,6 +53,10 @@ async function refreshAccessToken(): Promise<string> {
   if (!newAccess) throw new Error("No access token returned from refresh");
 
   setAccessToken(newAccess);
+  // SimpleJWT returns a replacement refresh token when rotation is enabled.
+  // Saving it is essential because the token we just used is blacklisted.
+  const newRefresh = (res.data as any)?.refresh;
+  if (newRefresh) setRefreshToken(newRefresh);
   return newAccess;
 }
 
@@ -99,8 +107,13 @@ api.interceptors.response.use(
       return api(original);
     } catch (e) {
       notifyWaiters(null);
-      clearTokens();
-      window.dispatchEvent(new Event("auth:logout"));
+      // A temporary offline/server failure should not destroy a valid login.
+      // Only an explicit token rejection means the session has truly expired.
+      const refreshStatus = (e as AxiosError)?.response?.status;
+      if (refreshStatus === 400 || refreshStatus === 401) {
+        clearTokens();
+        window.dispatchEvent(new Event("auth:logout"));
+      }
       return Promise.reject(e);
     } finally {
       isRefreshing = false;

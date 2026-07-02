@@ -36,6 +36,7 @@ const FALLBACKS = [
 
 export function ProductCard({ item, index }: { item: LibraryPickerResult; index: number }) {
   const isSet = item.type === "set";
+  const price = Number(item.meta?.current_price);
   return (
     <article className="shop-product">
       <div className="shop-product-image" style={{ background: FALLBACKS[index % FALLBACKS.length] }}>
@@ -53,9 +54,16 @@ export function ProductCard({ item, index }: { item: LibraryPickerResult; index:
         <p className="shop-product-theme">{item.meta?.theme_name || (isSet ? "LEGO set" : "Collectible minifigure")}</p>
         <h3>{item.title}</h3>
         <p className="shop-product-meta">{item.subtitle}</p>
+        {isSet && item.meta?.has_inventory_match ? (
+          <div className="shop-inventory-price">
+            <small>YOUR PRICE WITH OWNED PARTS</small>
+            <strong>${Number(item.meta.missing_parts_price || 0).toFixed(2)}</strong>
+            <span>Save ${Number(item.meta.inventory_savings || 0).toFixed(2)}</span>
+          </div>
+        ) : null}
         <div className="shop-product-action">
-          <span>{isSet ? `${item.meta?.official_piece_count || "—"} pieces` : item.meta?.bricklink_id}</span>
-          <Link to={`/browse?q=${encodeURIComponent(item.title)}`} aria-label={`View ${item.title}`}>
+          <span>{Number.isFinite(price) && price > 0 ? `$${price.toFixed(2)}` : isSet ? "Pricing in progress" : item.meta?.bricklink_id}</span>
+          <Link to={isSet ? `/sets/${item.meta?.set_num}` : `/browse?q=${encodeURIComponent(item.title)}`} aria-label={`View ${item.title}`}>
             <ArrowIcon />
           </Link>
         </div>

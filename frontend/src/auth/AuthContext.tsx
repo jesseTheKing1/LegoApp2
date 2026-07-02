@@ -32,14 +32,28 @@ async function fetchMe(): Promise<Me | null> {
 
   try {
     const res = await api.get(ENDPOINTS.me);
-    return res.data as Me;
+    const user = res.data as Me;
+    localStorage.setItem("auth_user", JSON.stringify(user));
+    return user;
   } catch {
-    return null;
+    // Keep the last verified identity during a temporary network outage.
+    // Invalid/expired credentials are cleared by the API interceptor.
+    try {
+      return JSON.parse(localStorage.getItem("auth_user") || "null") as Me | null;
+    } catch {
+      return null;
+    }
   }
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [me, setMe] = useState<Me | null>(null);
+  const [me, setMe] = useState<Me | null>(() => {
+    try {
+      return JSON.parse(localStorage.getItem("auth_user") || "null") as Me | null;
+    } catch {
+      return null;
+    }
+  });
   const [loading, setLoading] = useState(true);
 
   async function refreshMe() {

@@ -17,6 +17,11 @@ export type SetPart = {
   is_structural: boolean;
   color_match_mode: ColorMatchMode;
   notes: string;
+  unit_price?: string | null;
+  line_total?: string | null;
+  owned_quantity?: number;
+  missing_quantity?: number;
+  missing_line_total?: string | null;
 };
 
 export type SetMinifig = {
@@ -40,6 +45,10 @@ export type LegoSet = {
   catalog_item?: CatalogItemMini | null;
   parts: SetPart[];
   minifigs: SetMinifig[];
+  parts_total_price?: string;
+  missing_parts_price?: string;
+  inventory_savings?: string;
+  priced_part_quantity?: number;
 };
 
 export type SetPartPayload = {

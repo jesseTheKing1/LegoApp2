@@ -20,6 +20,7 @@ class SetViewSet(viewsets.ModelViewSet):
             "parts__part_color",
             "parts__part_color__part",
             "parts__part_color__color",
+            "parts__part_color__catalog_item",
             "minifigs",
             "minifigs__minifig",
         )

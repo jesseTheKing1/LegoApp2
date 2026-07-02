@@ -15,4 +15,5 @@ export function setTokens(access: string, refresh?: string) {
 export function clearTokens() {
   localStorage.removeItem("access_token");
   localStorage.removeItem("refresh_token");
+  localStorage.removeItem("auth_user");
 }

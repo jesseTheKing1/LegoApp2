@@ -11,6 +11,7 @@ import { RequireAdmin, RequireAuth } from "./guards";
 import { HomePage } from "../pages/HomePage";
 import { AccountPage } from "../pages/AccountPage";
 import { BrowsePage } from "../pages/BrowsePage";
+import { SetDetailPage } from "../pages/SetDetailPage";
 import { Header } from "../components/Header";
 
 export function AppRoutes() {
@@ -58,6 +59,7 @@ export function AppRoutes() {
         />
 
         <Route path="/browse" element={<BrowsePage />} />
+        <Route path="/sets/:setNum" element={<SetDetailPage />} />
 
         <Route
           path="/admin/*"
