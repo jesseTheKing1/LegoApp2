@@ -22,6 +22,15 @@ export type SetPart = {
   owned_quantity?: number;
   missing_quantity?: number;
   missing_line_total?: string | null;
+  collection_sources?: Array<{
+    type: "set" | "loose";
+    id: number;
+    set_num?: string;
+    name: string;
+    image_url?: string;
+    available: number;
+    quantity: number;
+  }>;
 };
 
 export type SetMinifig = {
@@ -50,6 +59,16 @@ export type LegoSet = {
   missing_parts_price?: string;
   inventory_savings?: string;
   priced_part_quantity?: number;
+  collection_sources?: Array<{
+    type: "set" | "loose";
+    id: number;
+    set_num?: string;
+    name: string;
+    image_url?: string;
+    piece_count: number;
+  }>;
+  is_in_collection?: boolean;
+  collection_set_locked?: boolean;
 };
 
 export type SetPartPayload = {

@@ -30,6 +30,8 @@ export interface LibraryPickerMeta {
   owned_part_quantity?: number;
   missing_part_quantity?: number;
   ownership_percent?: number;
+  is_in_collection?: boolean;
+  collection_set_locked?: boolean;
 
   current_price?: string | number | null;
   current_cost?: string | number | null;

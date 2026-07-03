@@ -130,6 +130,10 @@ class CollectionSet(models.Model):
     user = models.ForeignKey("accounts.User", on_delete=models.CASCADE, related_name="collection_sets")
     lego_set = models.ForeignKey("sets.Set", on_delete=models.CASCADE, related_name="collected_by")
     quantity = models.PositiveIntegerField(default=1)
+    is_locked = models.BooleanField(
+        default=False,
+        help_text="Keep this set assembled and do not use its pieces for build matching.",
+    )
     added_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

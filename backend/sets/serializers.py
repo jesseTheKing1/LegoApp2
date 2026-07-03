@@ -9,7 +9,8 @@ from parts.serializers import PartColorSerializer
 from minifigs.models import Minifig, Theme
 from minifigs.serializers import MinifigSerializer, ThemeSerializer
 from catalog.models import CatalogItem
-from inventory.collection import owned_part_color_quantities
+from inventory.collection import owned_part_color_quantities, part_source_inventory
+from inventory.models import CollectionSet
 
 
 def catalog_storefront_price(item):
@@ -44,6 +45,7 @@ class SetPartReadSerializer(serializers.ModelSerializer):
     owned_quantity = serializers.SerializerMethodField()
     missing_quantity = serializers.SerializerMethodField()
     missing_line_total = serializers.SerializerMethodField()
+    collection_sources = serializers.SerializerMethodField()
 
     def get_unit_price(self, obj):
         item = getattr(obj.part_color, "catalog_item", None)
@@ -74,6 +76,29 @@ class SetPartReadSerializer(serializers.ModelSerializer):
         price = self.get_unit_price(obj)
         return price * self.get_missing_quantity(obj) if price is not None else None
 
+    def _source_map(self):
+        root = self.root
+        if hasattr(root, "_collection_source_inventory"):
+            return root._collection_source_inventory
+        request = self.context.get("request")
+        root._collection_source_inventory = (
+            part_source_inventory(request.user)
+            if request and request.user.is_authenticated else {}
+        )
+        return root._collection_source_inventory
+
+    def get_collection_sources(self, obj):
+        needed = obj.quantity
+        allocated = []
+        for source in self._source_map().get(obj.part_color_id, []):
+            quantity = min(source["available"], needed)
+            if quantity:
+                allocated.append({**source, "quantity": quantity})
+                needed -= quantity
+            if needed <= 0:
+                break
+        return allocated
+
     class Meta:
         model = SetPart
         fields = [
@@ -94,6 +119,7 @@ class SetPartReadSerializer(serializers.ModelSerializer):
             "owned_quantity",
             "missing_quantity",
             "missing_line_total",
+            "collection_sources",
         ]
 
 
@@ -123,6 +149,9 @@ class SetReadSerializer(serializers.ModelSerializer):
     missing_parts_price = serializers.SerializerMethodField()
     inventory_savings = serializers.SerializerMethodField()
     priced_part_quantity = serializers.SerializerMethodField()
+    collection_sources = serializers.SerializerMethodField()
+    is_in_collection = serializers.SerializerMethodField()
+    collection_set_locked = serializers.SerializerMethodField()
 
     def _part_rows(self, obj):
         serializer = SetPartReadSerializer(obj.parts.all(), many=True, context=self.context)
@@ -155,6 +184,35 @@ class SetReadSerializer(serializers.ModelSerializer):
             if catalog_storefront_price(getattr(part.part_color, "catalog_item", None)) is not None
         )
 
+    def _direct_collection_set(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return None
+        return CollectionSet.objects.filter(user=request.user, lego_set=obj).first()
+
+    def get_is_in_collection(self, obj):
+        return self._direct_collection_set(obj) is not None
+
+    def get_collection_set_locked(self, obj):
+        owned = self._direct_collection_set(obj)
+        return owned.is_locked if owned else False
+
+    def get_collection_sources(self, obj):
+        part_serializer = self._part_rows(obj)
+        grouped = {}
+        for part in obj.parts.all():
+            for source in part_serializer.child.get_collection_sources(part):
+                key = f"{source['type']}-{source['id']}"
+                if key not in grouped:
+                    grouped[key] = {
+                        "type": source["type"], "id": source["id"],
+                        "set_num": source.get("set_num", ""),
+                        "name": source["name"], "image_url": source.get("image_url", ""),
+                        "piece_count": 0,
+                    }
+                grouped[key]["piece_count"] += source["quantity"]
+        return sorted(grouped.values(), key=lambda row: row["piece_count"], reverse=True)
+
     class Meta:
         model = Set
         fields = [
@@ -172,6 +230,9 @@ class SetReadSerializer(serializers.ModelSerializer):
             "missing_parts_price",
             "inventory_savings",
             "priced_part_quantity",
+            "collection_sources",
+            "is_in_collection",
+            "collection_set_locked",
         ]
 
 

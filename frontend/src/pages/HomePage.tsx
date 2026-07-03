@@ -57,7 +57,15 @@ export function ProductCard({ item, index }: { item: LibraryPickerResult; index:
         <p className="shop-product-theme">{item.meta?.theme_name || (isSet ? "LEGO set" : "Collectible minifigure")}</p>
         <h3>{item.title}</h3>
         <p className="shop-product-meta">{item.subtitle}</p>
-        {isSet && item.meta?.has_inventory_match ? (
+        {isSet && item.meta?.has_inventory_match && ownership >= 100 ? (
+          <div className="shop-complete-match">
+            <span>✓</span>
+            <div>
+              <strong>{item.meta?.is_in_collection ? "You own this set" : "Ready to build"}</strong>
+              <small>{item.meta?.is_in_collection ? "Already registered in your collection" : "You have every required piece"}</small>
+            </div>
+          </div>
+        ) : isSet && item.meta?.has_inventory_match ? (
           <div className="shop-inventory-price">
             <div className="shop-price-compare">
               <p><small>FULL PRICE</small><b>{Number.isFinite(fullBuildPrice) && fullBuildPrice > 0 ? `$${fullBuildPrice.toFixed(2)}` : "Pricing in progress"}</b></p>

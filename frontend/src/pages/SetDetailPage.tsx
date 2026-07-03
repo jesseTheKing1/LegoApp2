@@ -10,9 +10,9 @@ function money(value: string | number | null | undefined) {
   return Number.isFinite(amount) ? `$${amount.toFixed(2)}` : "Not priced";
 }
 
-function PartRow({ row }: { row: SetPart }) {
+function PartRow({ row, ownedComplete = false }: { row: SetPart; ownedComplete?: boolean }) {
   const image = row.part_color_detail.image_url_1 || row.part_color_detail.image_url_2 || row.part_color_detail.part.image_url;
-  const missing = row.missing_quantity ?? row.quantity;
+  const missing = ownedComplete ? 0 : (row.missing_quantity ?? row.quantity);
   return (
     <tr className={missing === 0 ? "set-part-owned" : ""}>
       <td>
@@ -47,8 +47,9 @@ export function SetDetailPage() {
 
   const priced = set?.priced_part_quantity || 0;
   const totalRequired = useMemo(() => set?.parts.reduce((sum, row) => sum + row.quantity, 0) || 0, [set]);
-  const missingRequired = useMemo(() => set?.parts.reduce((sum, row) => sum + (row.missing_quantity ?? row.quantity), 0) || 0, [set]);
-  const coverage = totalRequired ? Math.round(((totalRequired - missingRequired) / totalRequired) * 100) : 0;
+  const calculatedMissing = useMemo(() => set?.parts.reduce((sum, row) => sum + (row.missing_quantity ?? row.quantity), 0) || 0, [set]);
+  const missingRequired = set?.is_in_collection ? 0 : calculatedMissing;
+  const coverage = set?.is_in_collection ? 100 : totalRequired ? Math.round(((totalRequired - missingRequired) / totalRequired) * 100) : 0;
   const fullPrice = set?.catalog_item?.current_price || set?.parts_total_price;
 
   if (loading) return <main className="set-detail-loading">Calculating this build…</main>;
@@ -69,15 +70,15 @@ export function SetDetailPage() {
                 <div><small>FULL BUILD PRICE</small><strong>{money(fullPrice)}</strong><p>{priced} of {totalRequired} required pieces currently priced</p></div>
                 <div className="set-personal-price">
                   <small>{me ? "YOUR PRICE USING YOUR INVENTORY" : "UNLOCK YOUR INVENTORY PRICE"}</small>
-                  <strong>{me ? money(set.missing_parts_price) : "Sign in to calculate"}</strong>
-                  {me ? <p className="set-savings">You save {money(set.inventory_savings)} with pieces you own</p> : <Link to="/register">Create a free collection →</Link>}
+                  <strong>{me ? set.is_in_collection ? "✓ Already owned" : money(set.missing_parts_price) : "Sign in to calculate"}</strong>
+                  {me ? <p className="set-savings">{set.is_in_collection ? set.collection_set_locked ? "Kept assembled and protected from parts matching" : "Registered in your collection" : `You save ${money(set.inventory_savings)} with pieces you own`}</p> : <Link to="/register">Create a free collection →</Link>}
                 </div>
               </div>
               {me ? (
                 <div className="set-match">
                   <div><span>YOUR BUILD MATCH</span><strong>{coverage}%</strong></div>
                   <div className="set-match-track"><i style={{ width: `${coverage}%` }} /></div>
-                  <p>You own {totalRequired - missingRequired} of {totalRequired} listed pieces. Only {missingRequired} left to complete this build.</p>
+                  <p>{set.is_in_collection ? "This complete set is already registered in your collection." : `You own ${totalRequired - missingRequired} of ${totalRequired} listed pieces. Only ${missingRequired} left to complete this build.`}</p>
                 </div>
               ) : null}
               <a href="#parts" className="set-primary-action">See every required part ↓</a>
@@ -85,6 +86,21 @@ export function SetDetailPage() {
           </div>
         </div>
       </section>
+
+      {me && (set.collection_sources?.length || set.is_in_collection) ? (
+        <section className="set-sources">
+          <div className="shop-wrap">
+            <div className="set-sources-head"><p className="shop-kicker">WHERE YOUR PIECES COME FROM</p><h2>{set.is_in_collection ? "This build is already yours." : "Your collection supplies this build."}</h2><p>{set.collection_set_locked ? "This set is locked, so it stays assembled and its pieces will not be offered to other builds." : "Only unlocked sets contribute pieces. Lock any favorite build from your account to keep it assembled."}</p></div>
+            {!set.collection_set_locked && set.collection_sources?.length ? <div className="set-source-grid">{set.collection_sources.map(source=><article key={`${source.type}-${source.id}`}>
+              <div>{source.image_url?<img src={source.image_url} alt={source.name}/>:"◇"}</div>
+              <p>{source.type==="set"?"REGISTERED SET":"LOOSE INVENTORY"}</p>
+              <h3>{source.name}</h3>
+              {source.set_num&&<small>{source.set_num}</small>}
+              <strong>{source.piece_count} <span>pieces supplied</span></strong>
+            </article>)}</div> : null}
+          </div>
+        </section>
+      ) : null}
 
       <section id="parts" className="shop-wrap set-parts-section">
         <div className="set-parts-heading">
@@ -94,7 +110,7 @@ export function SetDetailPage() {
         <div className="set-parts-table-wrap">
           <table className="set-parts-table">
             <thead><tr><th>Part</th><th>Qty</th><th>Each</th><th>Full price</th><th>Your inventory</th><th>Your price</th></tr></thead>
-            <tbody>{set.parts.map((part) => <PartRow key={part.id} row={part} />)}</tbody>
+            <tbody>{set.parts.map((part) => <PartRow key={part.id} row={part} ownedComplete={!!set.is_in_collection} />)}</tbody>
           </table>
         </div>
         {priced < totalRequired ? (

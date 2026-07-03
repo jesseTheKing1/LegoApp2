@@ -133,7 +133,7 @@ class CollectionSetSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CollectionSet
-        fields = ["id", "set_id", "set", "quantity", "contributed_piece_count", "added_at"]
+        fields = ["id", "set_id", "set", "quantity", "is_locked", "contributed_piece_count", "added_at"]
         validators = []
 
     def get_set(self, obj):
@@ -147,7 +147,7 @@ class CollectionSetSerializer(serializers.ModelSerializer):
         }
 
     def get_contributed_piece_count(self, obj):
-        return sum(row.quantity for row in obj.lego_set.parts.all()) * obj.quantity
+        return 0 if obj.is_locked else sum(row.quantity for row in obj.lego_set.parts.all()) * obj.quantity
 
     def create(self, validated_data):
         obj, created = CollectionSet.objects.get_or_create(

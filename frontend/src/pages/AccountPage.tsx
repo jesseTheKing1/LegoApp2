@@ -6,7 +6,7 @@ import type { LibraryPickerResult, LibraryPickerMode } from "../types/libraryPic
 
 type Tab = "overview" | "sets" | "parts" | "minifigs";
 type Summary = { set_count:number; unique_sets:number; piece_count:number; loose_piece_count:number; minifig_count:number; minifig_value:string; set_value:string; loose_parts_value:string; total_value:string };
-type OwnedSet = { id:number; quantity:number; contributed_piece_count:number; set:{ id:number; set_num:string; name:string; image_url?:string; official_piece_count:number; theme_name:string; year_released?:number|null; bricklink_value?:string|null } };
+type OwnedSet = { id:number; quantity:number; is_locked:boolean; contributed_piece_count:number; set:{ id:number; set_num:string; name:string; image_url?:string; official_piece_count:number; theme_name:string; year_released?:number|null; bricklink_value?:string|null } };
 type OwnedPart = { id:number; quantity:number; part_color:{ id:number; part_color_code:string; name:string; part_id:string; color_name:string; image_url?:string } };
 type OwnedFig = { id:number; quantity:number; minifig:{ id:number; bricklink_id:string; name:string; image_url?:string; theme_name:string; market_value:string|null; rarity:string } };
 
@@ -81,6 +81,10 @@ export function AccountPage({ me }: { me: Me }) {
   useEffect(()=>{load();},[]);
 
   async function remove(endpoint:string,id:number) { await api.delete(`${endpoint}${id}/`); await load(); }
+  async function toggleSetLock(row:OwnedSet) {
+    await api.patch(`${ENDPOINTS.collectionSets}${row.id}/`,{is_locked:!row.is_locked,quantity:row.quantity});
+    await load();
+  }
   const rareFigs = useMemo(()=>figs.filter(x=>["rare","epic","legendary"].includes(x.minifig.rarity)).length,[figs]);
   const recent = [...sets.map(x=>({kind:"Set",name:x.set.name,image:x.set.image_url})),...figs.map(x=>({kind:"Minifigure",name:x.minifig.name,image:x.minifig.image_url}))].slice(0,6);
 
@@ -108,7 +112,7 @@ export function AccountPage({ me }: { me: Me }) {
         <div className="collection-recent"><div><p className="collection-eyebrow">RECENTLY COLLECTED</p><h2>Your latest finds</h2></div>{recent.length?<div className="recent-grid">{recent.map((r,i)=><article key={i}><div>{r.image?<img src={r.image} alt=""/>:"◇"}</div><small>{r.kind}</small><strong>{r.name}</strong></article>)}</div>:<p className="empty-copy">Your display shelf is waiting. Add a set or minifigure to get started.</p>}</div>
       </div>}
 
-      {tab==="sets" && <><AddPanel tab="sets" onAdded={load}/><div className="collection-section-head"><div><p>COMPLETE SETS</p><h2>My build library</h2></div><span>{money(summary?.set_value||0)} estimated value</span></div><div className="owned-set-grid">{sets.map(row=><article key={row.id}><div>{row.set.image_url?<img src={row.set.image_url} alt={row.set.name}/>:"◇"}<b>×{row.quantity}</b></div><small>{row.set.theme_name} · {row.set.year_released||"Year unknown"} · {row.set.set_num}</small><h3>{row.set.name}</h3><p><strong>{row.contributed_piece_count.toLocaleString()}</strong> pieces · Estimated value <strong>{money(row.set.bricklink_value)}</strong></p><button onClick={()=>remove(ENDPOINTS.collectionSets,row.id)}>Remove</button></article>)}</div>{!sets.length&&<p className="empty-copy">No sets yet. Browse by theme or year above to find your first build.</p>}</>}
+      {tab==="sets" && <><AddPanel tab="sets" onAdded={load}/><div className="collection-section-head"><div><p>COMPLETE SETS</p><h2>My build library</h2></div><span>{money(summary?.set_value||0)} estimated value</span></div><div className="owned-set-grid">{sets.map(row=><article className={row.is_locked?"locked-set":""} key={row.id}><div>{row.set.image_url?<img src={row.set.image_url} alt={row.set.name}/>:"◇"}<b>×{row.quantity}</b>{row.is_locked&&<span className="set-lock-badge">🔒 Kept assembled</span>}</div><small>{row.set.theme_name} · {row.set.year_released||"Year unknown"} · {row.set.set_num}</small><h3>{row.set.name}</h3><p>{row.is_locked?"Pieces protected from build matching":<><strong>{row.contributed_piece_count.toLocaleString()}</strong> pieces available</>} · Estimated value <strong>{money(row.set.bricklink_value)}</strong></p><div className="owned-set-actions"><button className="lock-action" onClick={()=>toggleSetLock(row)}>{row.is_locked?"Unlock pieces":"🔒 Lock set"}</button><button onClick={()=>remove(ENDPOINTS.collectionSets,row.id)}>Remove</button></div></article>)}</div>{!sets.length&&<p className="empty-copy">No sets yet. Browse by theme or year above to find your first build.</p>}</>}
 
       {tab==="parts" && <><AddPanel tab="parts" onAdded={load}/><div className="collection-section-head"><div><p>LOOSE PIECES</p><h2>Individual inventory</h2></div><span>{summary?.loose_piece_count||0} pieces · {money(summary?.loose_parts_value||0)} estimated value</span></div><div className="owned-parts-list">{parts.map(row=><article key={row.id}><div>{row.part_color.image_url?<img src={row.part_color.image_url} alt=""/>:"◇"}</div><p><strong>{row.part_color.name}</strong><small>{row.part_color.part_id} · {row.part_color.color_name}</small></p><b>×{row.quantity}</b><button onClick={()=>remove(ENDPOINTS.collectionParts,row.id)}>Remove</button></article>)}</div>{!parts.length&&<p className="empty-copy">No loose pieces yet. Add individual finds with the search above.</p>}</>}
 

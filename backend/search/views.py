@@ -9,6 +9,7 @@ from minifigs.models import Minifig
 from sets.models import Set
 from catalog.models import CatalogItem
 from inventory.collection import owned_part_color_quantities
+from inventory.models import CollectionSet
 
 
 def catalog_storefront_price(item):
@@ -102,6 +103,12 @@ class LibraryPickerLookupView(APIView):
         include_sets = type_param in {"all", "set"}
         include_catalog = type_param in {"all", "catalog"}
         owned_quantities = owned_part_color_quantities(request.user)
+        directly_owned_sets = {}
+        if request.user.is_authenticated:
+            directly_owned_sets = {
+                row.lego_set_id: row
+                for row in CollectionSet.objects.filter(user=request.user)
+            }
 
         if include_part_colors:
             pc_qs = (
@@ -255,6 +262,10 @@ class LibraryPickerLookupView(APIView):
                     if catalog_storefront_price(row.catalog_item) is not None
                     else parts_total
                 )
+                direct_owned = directly_owned_sets.get(row.id)
+                if direct_owned:
+                    owned_quantity = required_quantity
+                    missing_total = Decimal("0")
 
                 subtitle_parts = [
                     row.set_num or "",
@@ -290,7 +301,9 @@ class LibraryPickerLookupView(APIView):
                         "missing_part_quantity": max(required_quantity - owned_quantity, 0),
                         "ownership_percent": round(
                             owned_quantity / required_quantity * 100
-                        ) if required_quantity else 0,
+                        ) if required_quantity else (100 if direct_owned else 0),
+                        "is_in_collection": bool(direct_owned),
+                        "collection_set_locked": direct_owned.is_locked if direct_owned else False,
                     },
                 })
 
