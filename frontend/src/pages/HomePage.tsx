@@ -37,6 +37,9 @@ const FALLBACKS = [
 export function ProductCard({ item, index }: { item: LibraryPickerResult; index: number }) {
   const isSet = item.type === "set";
   const price = Number(item.meta?.current_price);
+  const partsPrice = Number(item.meta?.parts_total_price);
+  const fullBuildPrice = Number.isFinite(partsPrice) && partsPrice > 0 ? partsPrice : price;
+  const ownership = Math.max(0, Math.min(100, Number(item.meta?.ownership_percent || 0)));
   return (
     <article className="shop-product">
       <div className="shop-product-image" style={{ background: FALLBACKS[index % FALLBACKS.length] }}>
@@ -56,9 +59,13 @@ export function ProductCard({ item, index }: { item: LibraryPickerResult; index:
         <p className="shop-product-meta">{item.subtitle}</p>
         {isSet && item.meta?.has_inventory_match ? (
           <div className="shop-inventory-price">
-            <small>YOUR PRICE WITH OWNED PARTS</small>
-            <strong>${Number(item.meta.missing_parts_price || 0).toFixed(2)}</strong>
-            <span>Save ${Number(item.meta.inventory_savings || 0).toFixed(2)}</span>
+            <div className="shop-price-compare">
+              <p><small>FULL PRICE</small><b>{Number.isFinite(fullBuildPrice) && fullBuildPrice > 0 ? `$${fullBuildPrice.toFixed(2)}` : "Pricing in progress"}</b></p>
+              <p><small>YOUR PRICE</small><strong>${Number(item.meta.missing_parts_price || 0).toFixed(2)}</strong></p>
+            </div>
+            <div className="shop-card-match-label"><span>YOU OWN {ownership}%</span><b>{item.meta.missing_part_quantity || 0} pieces left</b></div>
+            <div className="shop-card-match-track"><i style={{width:`${ownership}%`}} /></div>
+            <em>Save ${Number(item.meta.inventory_savings || 0).toFixed(2)} using your collection</em>
           </div>
         ) : null}
         <div className="shop-product-action">

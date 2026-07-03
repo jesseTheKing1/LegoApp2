@@ -26,6 +26,10 @@ export interface LibraryPickerMeta {
   missing_parts_price?: string | number | null;
   inventory_savings?: string | number | null;
   has_inventory_match?: boolean;
+  required_part_quantity?: number;
+  owned_part_quantity?: number;
+  missing_part_quantity?: number;
+  ownership_percent?: number;
 
   current_price?: string | number | null;
   current_cost?: string | number | null;

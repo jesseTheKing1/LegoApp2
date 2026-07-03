@@ -236,13 +236,20 @@ class LibraryPickerLookupView(APIView):
                 parts_total = Decimal("0")
                 missing_total = Decimal("0")
                 priced_quantity = 0
+                required_quantity = 0
+                owned_quantity = 0
                 for set_part in row.parts.all():
+                    required_quantity += set_part.quantity
+                    owned_for_part = min(
+                        owned_quantities.get(set_part.part_color_id, 0),
+                        set_part.quantity,
+                    )
+                    owned_quantity += owned_for_part
                     item = getattr(set_part.part_color, "catalog_item", None)
                     price = catalog_storefront_price(item)
                     if price is not None:
                         parts_total += price * set_part.quantity
-                        owned = min(owned_quantities.get(set_part.part_color_id, 0), set_part.quantity)
-                        missing_total += price * (set_part.quantity - owned)
+                        missing_total += price * (set_part.quantity - owned_for_part)
                         priced_quantity += set_part.quantity
                 set_price = (
                     catalog_storefront_price(row.catalog_item)
@@ -279,6 +286,12 @@ class LibraryPickerLookupView(APIView):
                         "missing_parts_price": str(missing_total),
                         "inventory_savings": str(parts_total - missing_total),
                         "has_inventory_match": request.user.is_authenticated,
+                        "required_part_quantity": required_quantity,
+                        "owned_part_quantity": owned_quantity,
+                        "missing_part_quantity": max(required_quantity - owned_quantity, 0),
+                        "ownership_percent": round(
+                            owned_quantity / required_quantity * 100
+                        ) if required_quantity else 0,
                     },
                 })
 
