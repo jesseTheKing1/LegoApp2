@@ -27,6 +27,7 @@ function AddPanel({ tab, onAdded }:{ tab:Exclude<Tab,"overview">; onAdded:()=>vo
   const [themes,setThemes] = useState<{id:number;name:string}[]>([]);
   const [theme,setTheme] = useState("");
   const [year,setYear] = useState("");
+  const [hasSearched,setHasSearched] = useState(false);
   const mode:LibraryPickerMode = tab === "sets" ? "set" : tab === "parts" ? "part_color" : "minifig";
   useEffect(()=>{
     if(tab!=="sets") return;
@@ -35,6 +36,7 @@ function AddPanel({ tab, onAdded }:{ tab:Exclude<Tab,"overview">; onAdded:()=>vo
   },[tab]);
   async function search() {
     setSearching(true);
+    setHasSearched(true);
     try {
       const res = await api.get<LibraryPickerResult[]>(ENDPOINTS.libraryPickerLookup,{params:{q,type:mode,theme:theme||undefined,year:year||undefined,limit:24}});
       setResults(res.data);
@@ -54,6 +56,7 @@ function AddPanel({ tab, onAdded }:{ tab:Exclude<Tab,"overview">; onAdded:()=>vo
     {results.length>0 && <div className="collection-search-results">{results.map(item=><button key={`${item.type}-${item.id}`} onClick={()=>add(item)}>
       <span>{item.image_url?<img src={item.image_url} alt=""/>:"◇"}</span><div><strong>{item.title}</strong><small>{item.subtitle}{item.meta?.year_released?` · ${item.meta.year_released}`:""}</small></div><b>+ Add</b>
     </button>)}</div>}
+    {hasSearched&&!searching&&results.length===0&&<div className="collection-no-results"><strong>{tab==="sets"?"No sets match those filters.":"No matching items found."}</strong><span>{tab==="sets"?"Try another year, choose “Any year,” or browse a different theme.":"Try a broader name, ID, theme, or color."}</span></div>}
   </div>;
 }
 

@@ -123,11 +123,6 @@ class LibraryPickerLookupView(APIView):
                     | Q(part__actual_category__icontains=q)
                     | Q(color__name__icontains=q)
                 )
-            if theme_param:
-                set_qs = set_qs.filter(theme_id=theme_param)
-            if year_param.isdigit():
-                set_qs = set_qs.filter(year_released=int(year_param))
-
             for row in pc_qs[:limit]:
                 part = getattr(row, "part", None)
                 color = getattr(row, "color", None)
@@ -229,6 +224,10 @@ class LibraryPickerLookupView(APIView):
                     | Q(set_num__icontains=q)
                     | Q(theme__name__icontains=q)
                 )
+            if theme_param:
+                set_qs = set_qs.filter(theme_id=theme_param)
+            if year_param.isdigit():
+                set_qs = set_qs.filter(year_released=int(year_param))
 
             for row in set_qs[:limit]:
                 theme = getattr(row, "theme", None)
