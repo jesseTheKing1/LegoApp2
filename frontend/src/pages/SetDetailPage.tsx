@@ -87,11 +87,11 @@ export function SetDetailPage() {
         </div>
       </section>
 
-      {me && (set.collection_sources?.length || set.is_in_collection) ? (
+      {me && !set.is_in_collection && set.collection_sources?.length ? (
         <section className="set-sources">
           <div className="shop-wrap">
-            <div className="set-sources-head"><p className="shop-kicker">WHERE YOUR PIECES COME FROM</p><h2>{set.is_in_collection ? "This build is already yours." : "Your collection supplies this build."}</h2><p>{set.collection_set_locked ? "This set is locked, so it stays assembled and its pieces will not be offered to other builds." : "Only unlocked sets contribute pieces. Lock any favorite build from your account to keep it assembled."}</p></div>
-            {!set.collection_set_locked && set.collection_sources?.length ? <div className="set-source-grid">{set.collection_sources.map(source=><article key={`${source.type}-${source.id}`}>
+            <div className="set-sources-head"><p className="shop-kicker">WHERE YOUR PIECES COME FROM</p><h2>Your collection supplies this build.</h2><p>Only unlocked sets contribute pieces. Lock any favorite build from your account to keep it assembled.</p></div>
+            <div className="set-source-grid">{set.collection_sources.map(source=><article key={`${source.type}-${source.id}`}>
               <div className="source-set-image">{source.image_url?<img src={source.image_url} alt={source.name}/>:"◇"}</div>
               <p>{source.type==="set"?"REGISTERED SET":"LOOSE INVENTORY"}</p>
               <h3>{source.name}</h3>
@@ -106,7 +106,7 @@ export function SetDetailPage() {
                   <strong>×{part.quantity}</strong>
                 </div>)}</div>
               </details>
-            </article>)}</div> : null}
+            </article>)}</div>
           </div>
         </section>
       ) : null}

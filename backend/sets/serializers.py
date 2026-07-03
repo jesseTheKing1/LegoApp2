@@ -201,6 +201,10 @@ class SetReadSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         if not request or not request.user.is_authenticated:
             return []
+        # Owning the exact complete set is the answer; it is not a donor set
+        # that needs to be broken down as a source for itself.
+        if CollectionSet.objects.filter(user=request.user, lego_set=obj).exists():
+            return []
         inventory = part_source_inventory(request.user)
         grouped = {}
         remaining = {}

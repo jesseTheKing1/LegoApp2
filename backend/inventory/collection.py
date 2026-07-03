@@ -53,4 +53,17 @@ def part_source_inventory(user):
                 "image_url": owned_set.lego_set.image_url,
                 "available": set_part.quantity * owned_set.quantity,
             })
-    return dict(sources)
+
+    # A set can list the same part color on multiple bags/steps. Combine those
+    # rows so one registered set contributes its complete quantity exactly once.
+    consolidated = {}
+    for part_color_id, rows in sources.items():
+        by_source = {}
+        for row in rows:
+            key = (row["type"], row["id"])
+            if key not in by_source:
+                by_source[key] = row.copy()
+            else:
+                by_source[key]["available"] += row["available"]
+        consolidated[part_color_id] = list(by_source.values())
+    return consolidated
