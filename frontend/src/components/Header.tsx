@@ -171,9 +171,19 @@ export function Header() {
               <div className="mt-4 grid gap-2">
                 {me ? (
                   <>
-                    <div className="rounded-2xl border px-4 py-3 text-sm font-semibold">
-                      {userLabel}
-                    </div>
+                    <Link
+                      to="/account"
+                      onClick={() => setMobileOpen(false)}
+                      className="flex items-center gap-3 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3"
+                    >
+                      <span className="grid h-9 w-9 place-items-center rounded-full bg-blue-600 text-sm font-black text-white">
+                        {me.username.slice(0, 1).toUpperCase()}
+                      </span>
+                      <span>
+                        <span className="block text-sm font-black text-slate-900">My Collection</span>
+                        <span className="block text-xs font-semibold text-slate-500">{userLabel}</span>
+                      </span>
+                    </Link>
 
                     <button
                       onClick={logout}
@@ -243,9 +253,19 @@ export function Header() {
           <div className="ml-2 flex items-center gap-2">
             {me ? (
               <>
-                <span className="px-3 py-1 text-xs font-semibold">
-                  {userLabel}
-                </span>
+                <Link
+                  to="/account"
+                  className="group flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-2 py-1.5 transition hover:border-blue-300 hover:bg-blue-50"
+                  aria-label="Open my collection profile"
+                >
+                  <span className="grid h-8 w-8 place-items-center rounded-full bg-blue-600 text-xs font-black text-white">
+                    {me.username.slice(0, 1).toUpperCase()}
+                  </span>
+                  <span className="hidden text-left lg:block">
+                    <span className="block text-xs font-black leading-tight text-slate-900">My Collection</span>
+                    <span className="block max-w-28 truncate text-[10px] font-semibold text-slate-500">{userLabel}</span>
+                  </span>
+                </Link>
 
                 <Button variant="ghost" onClick={logout}>
                   Log out

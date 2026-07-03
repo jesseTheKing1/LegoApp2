@@ -92,11 +92,20 @@ export function SetDetailPage() {
           <div className="shop-wrap">
             <div className="set-sources-head"><p className="shop-kicker">WHERE YOUR PIECES COME FROM</p><h2>{set.is_in_collection ? "This build is already yours." : "Your collection supplies this build."}</h2><p>{set.collection_set_locked ? "This set is locked, so it stays assembled and its pieces will not be offered to other builds." : "Only unlocked sets contribute pieces. Lock any favorite build from your account to keep it assembled."}</p></div>
             {!set.collection_set_locked && set.collection_sources?.length ? <div className="set-source-grid">{set.collection_sources.map(source=><article key={`${source.type}-${source.id}`}>
-              <div>{source.image_url?<img src={source.image_url} alt={source.name}/>:"◇"}</div>
+              <div className="source-set-image">{source.image_url?<img src={source.image_url} alt={source.name}/>:"◇"}</div>
               <p>{source.type==="set"?"REGISTERED SET":"LOOSE INVENTORY"}</p>
               <h3>{source.name}</h3>
               {source.set_num&&<small>{source.set_num}</small>}
-              <strong>{source.piece_count} <span>pieces supplied</span></strong>
+              <strong>{source.percentage}% <span>of this build</span></strong>
+              <div className="source-piece-count">{source.piece_count} pieces supplied</div>
+              <details className="source-parts">
+                <summary>See all {source.parts.length} piece types</summary>
+                <div className="source-parts-list">{source.parts.map(part=><div key={part.part_color_id}>
+                  <span>{part.image_url?<img src={part.image_url} alt=""/>:"◇"}</span>
+                  <p><b>{part.name}</b><small>{part.part_id} · {part.color_name}</small></p>
+                  <strong>×{part.quantity}</strong>
+                </div>)}</div>
+              </details>
             </article>)}</div> : null}
           </div>
         </section>

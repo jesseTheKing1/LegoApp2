@@ -198,10 +198,26 @@ class SetReadSerializer(serializers.ModelSerializer):
         return owned.is_locked if owned else False
 
     def get_collection_sources(self, obj):
-        part_serializer = self._part_rows(obj)
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return []
+        inventory = part_source_inventory(request.user)
         grouped = {}
+        remaining = {}
+        total_required = sum(part.quantity for part in obj.parts.all())
+
         for part in obj.parts.all():
-            for source in part_serializer.child.get_collection_sources(part):
+            needed = part.quantity
+            for source in inventory.get(part.part_color_id, []):
+                source_key = f"{source['type']}-{source['id']}"
+                remaining_key = f"{part.part_color_id}-{source_key}"
+                available = remaining.setdefault(remaining_key, source["available"])
+                quantity = min(available, needed)
+                if quantity <= 0:
+                    continue
+                remaining[remaining_key] -= quantity
+                needed -= quantity
+
                 key = f"{source['type']}-{source['id']}"
                 if key not in grouped:
                     grouped[key] = {
@@ -209,9 +225,32 @@ class SetReadSerializer(serializers.ModelSerializer):
                         "set_num": source.get("set_num", ""),
                         "name": source["name"], "image_url": source.get("image_url", ""),
                         "piece_count": 0,
+                        "parts": [],
                     }
-                grouped[key]["piece_count"] += source["quantity"]
-        return sorted(grouped.values(), key=lambda row: row["piece_count"], reverse=True)
+                grouped[key]["piece_count"] += quantity
+                pc = part.part_color
+                grouped[key]["parts"].append({
+                    "part_color_id": pc.id,
+                    "part_id": pc.part.part_id,
+                    "name": pc.part.name,
+                    "color_name": pc.color.name,
+                    "image_url": pc.image_url_1 or pc.image_url_2 or pc.part.image_url,
+                    "quantity": quantity,
+                })
+                if needed <= 0:
+                    break
+
+        rows = sorted(grouped.values(), key=lambda row: row["piece_count"], reverse=True)
+        for row in rows:
+            row["percentage"] = round(row["piece_count"] / total_required * 100) if total_required else 0
+            consolidated = {}
+            for part in row["parts"]:
+                if part["part_color_id"] not in consolidated:
+                    consolidated[part["part_color_id"]] = part
+                else:
+                    consolidated[part["part_color_id"]]["quantity"] += part["quantity"]
+            row["parts"] = sorted(consolidated.values(), key=lambda part: (part["name"], part["color_name"]))
+        return rows
 
     class Meta:
         model = Set

@@ -66,6 +66,15 @@ export type LegoSet = {
     name: string;
     image_url?: string;
     piece_count: number;
+    percentage: number;
+    parts: Array<{
+      part_color_id: number;
+      part_id: string;
+      name: string;
+      color_name: string;
+      image_url?: string;
+      quantity: number;
+    }>;
   }>;
   is_in_collection?: boolean;
   collection_set_locked?: boolean;
