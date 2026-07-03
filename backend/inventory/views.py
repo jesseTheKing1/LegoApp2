@@ -6,8 +6,11 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Location, InventoryRecord
-from .serializers import LocationSerializer, InventoryRecordSerializer
+from .models import Location, InventoryRecord, CollectionSet, CollectionPart, CollectionMinifig
+from .serializers import (
+    LocationSerializer, InventoryRecordSerializer, CollectionSetSerializer,
+    CollectionPartSerializer, CollectionMinifigSerializer,
+)
 
 
 class LocationViewSet(viewsets.ModelViewSet):
@@ -132,4 +135,56 @@ class InventoryDashboardView(APIView):
             "by_condition": by_condition,
             "by_location": by_location,
             "product_type_counts": product_type_counts,
+        })
+
+
+class OwnedCollectionMixin:
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return super().get_queryset().filter(user=self.request.user)
+
+
+class CollectionSetViewSet(OwnedCollectionMixin, viewsets.ModelViewSet):
+    queryset = CollectionSet.objects.select_related("lego_set", "lego_set__theme").prefetch_related("lego_set__parts")
+    serializer_class = CollectionSetSerializer
+
+
+class CollectionPartViewSet(OwnedCollectionMixin, viewsets.ModelViewSet):
+    queryset = CollectionPart.objects.select_related("part_color", "part_color__part", "part_color__color")
+    serializer_class = CollectionPartSerializer
+
+
+class CollectionMinifigViewSet(OwnedCollectionMixin, viewsets.ModelViewSet):
+    queryset = CollectionMinifig.objects.select_related("minifig", "minifig__theme", "minifig__catalog_item")
+    serializer_class = CollectionMinifigSerializer
+
+
+class CollectionSummaryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        sets = CollectionSet.objects.filter(user=request.user).select_related("lego_set").prefetch_related("lego_set__parts")
+        loose_parts = CollectionPart.objects.filter(user=request.user)
+        minifigs = CollectionMinifig.objects.filter(user=request.user).select_related("minifig__catalog_item")
+        set_pieces = sum(sum(p.quantity for p in row.lego_set.parts.all()) * row.quantity for row in sets)
+        loose_piece_count = sum(row.quantity for row in loose_parts)
+        minifig_value = Decimal("0")
+        for row in minifigs:
+            item = row.minifig.catalog_item
+            if not item:
+                continue
+            price = (
+                item.current_price if item.current_price is not None
+                else item.bricklink_reference_price if item.bricklink_reference_price is not None
+                else item.lego_reference_price
+            )
+            minifig_value += (price or Decimal("0")) * row.quantity
+        return Response({
+            "set_count": sum(row.quantity for row in sets),
+            "unique_sets": sets.count(),
+            "piece_count": set_pieces + loose_piece_count,
+            "loose_piece_count": loose_piece_count,
+            "minifig_count": sum(row.quantity for row in minifigs),
+            "minifig_value": minifig_value,
         })

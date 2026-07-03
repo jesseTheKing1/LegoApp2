@@ -1,5 +1,8 @@
 from rest_framework import serializers
-from .models import Location, InventoryRecord
+from .models import Location, InventoryRecord, CollectionSet, CollectionPart, CollectionMinifig
+from sets.models import Set
+from parts.models import PartColor
+from minifigs.models import Minifig
 from catalog.models import CatalogItem
 
 
@@ -121,3 +124,103 @@ class InventoryRecordSerializer(serializers.ModelSerializer):
             )
 
         return attrs
+
+
+class CollectionSetSerializer(serializers.ModelSerializer):
+    set_id = serializers.PrimaryKeyRelatedField(source="lego_set", queryset=Set.objects.all(), write_only=True)
+    set = serializers.SerializerMethodField()
+    contributed_piece_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CollectionSet
+        fields = ["id", "set_id", "set", "quantity", "contributed_piece_count", "added_at"]
+        validators = []
+
+    def get_set(self, obj):
+        row = obj.lego_set
+        return {
+            "id": row.id, "set_num": row.set_num, "name": row.name,
+            "image_url": row.image_url, "official_piece_count": row.official_piece_count,
+            "theme_name": row.theme.name if row.theme else "",
+        }
+
+    def get_contributed_piece_count(self, obj):
+        return sum(row.quantity for row in obj.lego_set.parts.all()) * obj.quantity
+
+    def create(self, validated_data):
+        obj, created = CollectionSet.objects.get_or_create(
+            user=self.context["request"].user,
+            lego_set=validated_data["lego_set"],
+            defaults={"quantity": validated_data.get("quantity", 1)},
+        )
+        if not created:
+            obj.quantity += validated_data.get("quantity", 1)
+            obj.save(update_fields=["quantity"])
+        return obj
+
+
+class CollectionPartSerializer(serializers.ModelSerializer):
+    part_color_id = serializers.PrimaryKeyRelatedField(source="part_color", queryset=PartColor.objects.all(), write_only=True)
+    part_color = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CollectionPart
+        fields = ["id", "part_color_id", "part_color", "quantity", "added_at"]
+        validators = []
+
+    def get_part_color(self, obj):
+        pc = obj.part_color
+        return {
+            "id": pc.id, "part_color_code": pc.part_color_code,
+            "name": pc.part.name, "part_id": pc.part.part_id,
+            "color_name": pc.color.name,
+            "image_url": pc.image_url_1 or pc.image_url_2 or pc.part.image_url,
+        }
+
+    def create(self, validated_data):
+        obj, created = CollectionPart.objects.get_or_create(
+            user=self.context["request"].user,
+            part_color=validated_data["part_color"],
+            defaults={"quantity": validated_data.get("quantity", 1)},
+        )
+        if not created:
+            obj.quantity += validated_data.get("quantity", 1)
+            obj.save(update_fields=["quantity"])
+        return obj
+
+
+class CollectionMinifigSerializer(serializers.ModelSerializer):
+    minifig_id = serializers.PrimaryKeyRelatedField(source="minifig", queryset=Minifig.objects.all(), write_only=True)
+    minifig = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CollectionMinifig
+        fields = ["id", "minifig_id", "minifig", "quantity", "added_at"]
+        validators = []
+
+    def get_minifig(self, obj):
+        fig = obj.minifig
+        item = fig.catalog_item
+        price = (
+            item.current_price if item and item.current_price is not None
+            else item.bricklink_reference_price if item and item.bricklink_reference_price is not None
+            else item.lego_reference_price if item else None
+        )
+        value = float(price) if price is not None else 0
+        rarity = "legendary" if value >= 75 else "epic" if value >= 35 else "rare" if value >= 15 else "uncommon" if value >= 5 else "common"
+        return {
+            "id": fig.id, "bricklink_id": fig.bricklink_id, "name": fig.name,
+            "image_url": fig.image_url, "theme_name": fig.theme.name if fig.theme else "",
+            "market_value": str(price) if price is not None else None, "rarity": rarity,
+        }
+
+    def create(self, validated_data):
+        obj, created = CollectionMinifig.objects.get_or_create(
+            user=self.context["request"].user,
+            minifig=validated_data["minifig"],
+            defaults={"quantity": validated_data.get("quantity", 1)},
+        )
+        if not created:
+            obj.quantity += validated_data.get("quantity", 1)
+            obj.save(update_fields=["quantity"])
+        return obj

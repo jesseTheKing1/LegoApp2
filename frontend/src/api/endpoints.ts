@@ -20,6 +20,10 @@ export const ENDPOINTS = {
   inventoryDashboard: "/api/inventory/dashboard/",
   inventoryLocations: "/api/inventory/locations/",
   inventoryRecords: "/api/inventory/records/",
+  collectionSummary: "/api/inventory/collection/summary/",
+  collectionSets: "/api/inventory/collection/sets/",
+  collectionParts: "/api/inventory/collection/parts/",
+  collectionMinifigs: "/api/inventory/collection/minifigs/",
 
   presignUpload: "/api/upload/presign/",
  libraryPickerLookup: "/api/search/library-picker/lookup/",

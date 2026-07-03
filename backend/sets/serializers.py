@@ -9,7 +9,7 @@ from parts.serializers import PartColorSerializer
 from minifigs.models import Minifig, Theme
 from minifigs.serializers import MinifigSerializer, ThemeSerializer
 from catalog.models import CatalogItem
-from inventory.models import InventoryRecord
+from inventory.collection import owned_part_color_quantities
 
 
 def catalog_storefront_price(item):
@@ -61,19 +61,11 @@ class SetPartReadSerializer(serializers.ModelSerializer):
         if not request or not request.user.is_authenticated:
             root._owned_catalog_quantities = {}
             return root._owned_catalog_quantities
-        rows = (
-            InventoryRecord.objects.filter(is_active=True)
-            .values("catalog_item_id")
-            .annotate(on_hand=Sum(F("quantity_on_hand") - F("quantity_reserved")))
-        )
-        root._owned_catalog_quantities = {
-            row["catalog_item_id"]: max(row["on_hand"] or 0, 0) for row in rows
-        }
+        root._owned_catalog_quantities = owned_part_color_quantities(request.user)
         return root._owned_catalog_quantities
 
     def get_owned_quantity(self, obj):
-        item_id = getattr(obj.part_color, "catalog_item_id", None)
-        return min(self._owned_map().get(item_id, 0), obj.quantity) if item_id else 0
+        return min(self._owned_map().get(obj.part_color_id, 0), obj.quantity)
 
     def get_missing_quantity(self, obj):
         return max(obj.quantity - self.get_owned_quantity(obj), 0)

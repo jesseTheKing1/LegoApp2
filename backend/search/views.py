@@ -8,7 +8,7 @@ from parts.models import PartColor
 from minifigs.models import Minifig
 from sets.models import Set
 from catalog.models import CatalogItem
-from inventory.models import InventoryRecord
+from inventory.collection import owned_part_color_quantities
 
 
 def catalog_storefront_price(item):
@@ -99,17 +99,7 @@ class LibraryPickerLookupView(APIView):
         include_minifigs = type_param in {"all", "minifig"}
         include_sets = type_param in {"all", "set"}
         include_catalog = type_param in {"all", "catalog"}
-        owned_quantities = {}
-        if request.user.is_authenticated:
-            owned_rows = (
-                InventoryRecord.objects.filter(is_active=True)
-                .values("catalog_item_id")
-                .annotate(quantity=Sum(F("quantity_on_hand") - F("quantity_reserved")))
-            )
-            owned_quantities = {
-                item["catalog_item_id"]: max(item["quantity"] or 0, 0)
-                for item in owned_rows
-            }
+        owned_quantities = owned_part_color_quantities(request.user)
 
         if include_part_colors:
             pc_qs = (
@@ -245,7 +235,7 @@ class LibraryPickerLookupView(APIView):
                     price = catalog_storefront_price(item)
                     if price is not None:
                         parts_total += price * set_part.quantity
-                        owned = min(owned_quantities.get(item.id, 0), set_part.quantity)
+                        owned = min(owned_quantities.get(set_part.part_color_id, 0), set_part.quantity)
                         missing_total += price * (set_part.quantity - owned)
                         priced_quantity += set_part.quantity
                 set_price = (

@@ -124,3 +124,42 @@ class InventoryRecord(models.Model):
 
     def __str__(self):
         return f"{self.catalog_item.sku} @ {self.location.code} ({self.quantity_on_hand})"
+
+
+class CollectionSet(models.Model):
+    user = models.ForeignKey("accounts.User", on_delete=models.CASCADE, related_name="collection_sets")
+    lego_set = models.ForeignKey("sets.Set", on_delete=models.CASCADE, related_name="collected_by")
+    quantity = models.PositiveIntegerField(default=1)
+    added_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["user", "lego_set"], name="unique_user_collection_set")
+        ]
+        ordering = ["-added_at"]
+
+
+class CollectionPart(models.Model):
+    user = models.ForeignKey("accounts.User", on_delete=models.CASCADE, related_name="collection_parts")
+    part_color = models.ForeignKey("parts.PartColor", on_delete=models.CASCADE, related_name="collected_by")
+    quantity = models.PositiveIntegerField(default=1)
+    added_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["user", "part_color"], name="unique_user_collection_part")
+        ]
+        ordering = ["-added_at"]
+
+
+class CollectionMinifig(models.Model):
+    user = models.ForeignKey("accounts.User", on_delete=models.CASCADE, related_name="collection_minifigs")
+    minifig = models.ForeignKey("minifigs.Minifig", on_delete=models.CASCADE, related_name="collected_by")
+    quantity = models.PositiveIntegerField(default=1)
+    added_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["user", "minifig"], name="unique_user_collection_minifig")
+        ]
+        ordering = ["-added_at"]
