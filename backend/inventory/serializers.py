@@ -141,7 +141,9 @@ class CollectionSetSerializer(serializers.ModelSerializer):
         return {
             "id": row.id, "set_num": row.set_num, "name": row.name,
             "image_url": row.image_url, "official_piece_count": row.official_piece_count,
-            "theme_name": row.theme.name if row.theme else "",
+            "theme_name": row.theme.name if row.theme else "", "year_released": row.year_released,
+            "bricklink_value": str(row.catalog_item.bricklink_reference_price)
+            if row.catalog_item and row.catalog_item.bricklink_reference_price is not None else None,
         }
 
     def get_contributed_piece_count(self, obj):
@@ -201,11 +203,7 @@ class CollectionMinifigSerializer(serializers.ModelSerializer):
     def get_minifig(self, obj):
         fig = obj.minifig
         item = fig.catalog_item
-        price = (
-            item.current_price if item and item.current_price is not None
-            else item.bricklink_reference_price if item and item.bricklink_reference_price is not None
-            else item.lego_reference_price if item else None
-        )
+        price = item.bricklink_reference_price if item else None
         value = float(price) if price is not None else 0
         rarity = "legendary" if value >= 75 else "epic" if value >= 35 else "rare" if value >= 15 else "uncommon" if value >= 5 else "common"
         return {

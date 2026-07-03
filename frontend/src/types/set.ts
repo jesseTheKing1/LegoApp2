@@ -41,6 +41,7 @@ export type LegoSet = {
   name: string;
   image_url?: string;
   official_piece_count: number;
+  year_released?: number | null;
   theme?: Theme | null;
   catalog_item?: CatalogItemMini | null;
   parts: SetPart[];
@@ -78,6 +79,7 @@ export type SetPayload = {
   name: string;
   image_url?: string;
   official_piece_count: number;
+  year_released?: number | null;
   theme_id?: number | null;
   catalog_item_id?: number | null;
   parts: SetPartPayload[];

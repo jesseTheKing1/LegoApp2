@@ -15,6 +15,7 @@ class Set(models.Model):
     )
 
     official_piece_count = models.PositiveIntegerField(default=0)
+    year_released = models.PositiveSmallIntegerField(null=True, blank=True)
 
     catalog_item = models.OneToOneField(
         "catalog.CatalogItem",

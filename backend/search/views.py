@@ -83,6 +83,8 @@ class LibraryPickerLookupView(APIView):
     def get(self, request):
         q = (request.query_params.get("q") or "").strip()
         type_param = (request.query_params.get("type") or "all").strip().lower()
+        theme_param = (request.query_params.get("theme") or "").strip()
+        year_param = (request.query_params.get("year") or "").strip()
 
         try:
             limit = min(int(request.query_params.get("limit", 30)), 100)
@@ -121,6 +123,10 @@ class LibraryPickerLookupView(APIView):
                     | Q(part__actual_category__icontains=q)
                     | Q(color__name__icontains=q)
                 )
+            if theme_param:
+                set_qs = set_qs.filter(theme_id=theme_param)
+            if year_param.isdigit():
+                set_qs = set_qs.filter(year_released=int(year_param))
 
             for row in pc_qs[:limit]:
                 part = getattr(row, "part", None)
@@ -266,6 +272,7 @@ class LibraryPickerLookupView(APIView):
                         "set_num": row.set_num or "",
                         "theme_name": getattr(theme, "name", "") if theme else "",
                         "official_piece_count": piece_count,
+                        "year_released": row.year_released,
                         "current_price": str(set_price),
                         "parts_total_price": str(parts_total),
                         "priced_part_quantity": priced_quantity,

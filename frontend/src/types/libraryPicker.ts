@@ -20,6 +20,7 @@ export interface LibraryPickerMeta {
 
   set_num?: string;
   official_piece_count?: number;
+  year_released?: number | null;
   parts_total_price?: string | number | null;
   priced_part_quantity?: number;
   missing_parts_price?: string | number | null;

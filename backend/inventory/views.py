@@ -146,7 +146,7 @@ class OwnedCollectionMixin:
 
 
 class CollectionSetViewSet(OwnedCollectionMixin, viewsets.ModelViewSet):
-    queryset = CollectionSet.objects.select_related("lego_set", "lego_set__theme").prefetch_related("lego_set__parts")
+    queryset = CollectionSet.objects.select_related("lego_set", "lego_set__theme", "lego_set__catalog_item").prefetch_related("lego_set__parts")
     serializer_class = CollectionSetSerializer
 
 
@@ -164,21 +164,25 @@ class CollectionSummaryView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        sets = CollectionSet.objects.filter(user=request.user).select_related("lego_set").prefetch_related("lego_set__parts")
-        loose_parts = CollectionPart.objects.filter(user=request.user)
+        sets = CollectionSet.objects.filter(user=request.user).select_related("lego_set__catalog_item").prefetch_related("lego_set__parts")
+        loose_parts = CollectionPart.objects.filter(user=request.user).select_related("part_color__catalog_item")
         minifigs = CollectionMinifig.objects.filter(user=request.user).select_related("minifig__catalog_item")
         set_pieces = sum(sum(p.quantity for p in row.lego_set.parts.all()) * row.quantity for row in sets)
         loose_piece_count = sum(row.quantity for row in loose_parts)
+        set_value = sum(
+            (row.lego_set.catalog_item.bricklink_reference_price or Decimal("0")) * row.quantity
+            for row in sets if row.lego_set.catalog_item
+        )
+        loose_parts_value = sum(
+            (row.part_color.catalog_item.bricklink_reference_price or Decimal("0")) * row.quantity
+            for row in loose_parts if row.part_color.catalog_item
+        )
         minifig_value = Decimal("0")
         for row in minifigs:
             item = row.minifig.catalog_item
             if not item:
                 continue
-            price = (
-                item.current_price if item.current_price is not None
-                else item.bricklink_reference_price if item.bricklink_reference_price is not None
-                else item.lego_reference_price
-            )
+            price = item.bricklink_reference_price
             minifig_value += (price or Decimal("0")) * row.quantity
         return Response({
             "set_count": sum(row.quantity for row in sets),
@@ -187,4 +191,7 @@ class CollectionSummaryView(APIView):
             "loose_piece_count": loose_piece_count,
             "minifig_count": sum(row.quantity for row in minifigs),
             "minifig_value": minifig_value,
+            "set_value": set_value,
+            "loose_parts_value": loose_parts_value,
+            "total_value": set_value + loose_parts_value + minifig_value,
         })

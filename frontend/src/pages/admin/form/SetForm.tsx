@@ -148,6 +148,7 @@ export function SetForm({
   const [name, setName] = useState(initialValues?.name ?? "");
   const [imageUrl, setImageUrl] = useState(initialValues?.image_url ?? "");
   const [pieceCount, setPieceCount] = useState(initialValues?.official_piece_count ?? 0);
+  const [yearReleased, setYearReleased] = useState<number | "">(initialValues?.year_released ?? "");
 
   const [themeId, setThemeId] = useState<number | "">(initialValues?.theme?.id ?? "");
   const [catalogId, setCatalogId] = useState<number | "">(initialValues?.catalog_item?.id ?? "");
@@ -461,6 +462,7 @@ export function SetForm({
       name: name.trim(),
       image_url: imageUrl.trim() || undefined,
       official_piece_count: Number(pieceCount) || 0,
+      year_released: yearReleased === "" ? null : Number(yearReleased),
       theme_id: themeId || null,
       catalog_item_id: catalogId || null,
       parts: orderedParts.map(({ _rowId, _label, _subtitle, _unitCost, _unitSellPrice, _imageUrl, _partColorDetail, ...p }, i) => ({
@@ -525,6 +527,15 @@ export function SetForm({
                   value={pieceCount}
                   onChange={(e) => setPieceCount(Number(e.target.value) || 0)}
                   placeholder="6785"
+                />
+              </Field>
+
+              <Field label="Release Year" className="lg:col-span-2">
+                <TextInput
+                  type="number"
+                  value={yearReleased}
+                  onChange={(e) => setYearReleased(e.target.value ? Number(e.target.value) : "")}
+                  placeholder="2024"
                 />
               </Field>
 
