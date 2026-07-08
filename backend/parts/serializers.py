@@ -8,6 +8,16 @@ class PartColorCatalogItemSerializer(serializers.ModelSerializer):
     current_price = serializers.DecimalField(
         max_digits=10, decimal_places=4, read_only=True, allow_null=True
     )
+    current_cost = serializers.DecimalField(
+        max_digits=12, decimal_places=4, read_only=True, allow_null=True
+    )
+    margin_amount = serializers.DecimalField(
+        max_digits=12, decimal_places=4, read_only=True, allow_null=True
+    )
+    margin_percent = serializers.DecimalField(
+        max_digits=12, decimal_places=4, read_only=True, allow_null=True
+    )
+    pricing_source = serializers.CharField(read_only=True)
 
     class Meta:
         model = CatalogItem
@@ -20,6 +30,10 @@ class PartColorCatalogItemSerializer(serializers.ModelSerializer):
             "lego_reference_price",
             "bricklink_reference_price",
             "current_price",
+            "pricing_source",
+            "current_cost",
+            "margin_amount",
+            "margin_percent",
             "notes",
         ]
 
@@ -54,6 +68,9 @@ class PartSerializer(serializers.ModelSerializer):
 class PartColorSerializer(serializers.ModelSerializer):
     part = PartSerializer(read_only=True)
     color = ColorSerializer(read_only=True)
+    root_part_color = serializers.SerializerMethodField()
+    effective_catalog_item = serializers.SerializerMethodField()
+    effective_part_color_id = serializers.IntegerField(read_only=True)
 
     part_id = serializers.PrimaryKeyRelatedField(
         queryset=Part.objects.all(),
@@ -75,6 +92,13 @@ class PartColorSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True,
     )
+    root_part_color_id = serializers.PrimaryKeyRelatedField(
+        queryset=PartColor.objects.all(),
+        source="root_part_color",
+        write_only=True,
+        required=False,
+        allow_null=True,
+    )
 
     variant = serializers.CharField(
         required=False,
@@ -88,14 +112,18 @@ class PartColorSerializer(serializers.ModelSerializer):
             "id",
             "part",
             "color",
+            "root_part_color",
             "part_id",
             "color_id",
+            "root_part_color_id",
+            "effective_part_color_id",
             "variant",
             "part_color_code",
             "description",
             "image_url_1",
             "image_url_2",
             "catalog_item",
+            "effective_catalog_item",
             "catalog_item_id",
         ]
 
@@ -104,3 +132,41 @@ class PartColorSerializer(serializers.ModelSerializer):
         if not v:
             raise serializers.ValidationError("part_color_code cannot be blank.")
         return v
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        root = attrs.get("root_part_color", getattr(self.instance, "root_part_color", None))
+        color = attrs.get("color", getattr(self.instance, "color", None))
+
+        if root is not None:
+            if self.instance and root.id == self.instance.id:
+                raise serializers.ValidationError({
+                    "root_part_color_id": "A PartColor cannot be its own root variant group."
+                })
+            if root.root_part_color_id:
+                raise serializers.ValidationError({
+                    "root_part_color_id": "Choose the top-level/root PartColor, not another variant."
+                })
+            if color is not None and root.color_id != color.id:
+                raise serializers.ValidationError({
+                    "root_part_color_id": "Variant groups must use the same color as the root PartColor."
+                })
+        return attrs
+
+    def get_root_part_color(self, obj):
+        root = obj.root_part_color
+        if not root:
+            return None
+        return {
+            "id": root.id,
+            "part_color_code": root.part_color_code,
+            "variant": root.variant,
+            "description": root.description,
+            "part": PartSerializer(root.part).data if root.part_id else None,
+            "color": ColorSerializer(root.color).data if root.color_id else None,
+            "catalog_item": PartColorCatalogItemSerializer(root.catalog_item).data if root.catalog_item_id else None,
+        }
+
+    def get_effective_catalog_item(self, obj):
+        item = obj.effective_catalog_item
+        return PartColorCatalogItemSerializer(item).data if item else None

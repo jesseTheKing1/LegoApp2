@@ -21,6 +21,8 @@ class SetViewSet(viewsets.ModelViewSet):
             "parts__part_color__part",
             "parts__part_color__color",
             "parts__part_color__catalog_item",
+            "parts__part_color__root_part_color",
+            "parts__part_color__root_part_color__catalog_item",
             "minifigs",
             "minifigs__minifig",
         )
@@ -72,7 +74,15 @@ class SetViewSet(viewsets.ModelViewSet):
 class SetPartViewSet(viewsets.ModelViewSet):
     queryset = (
         SetPart.objects
-        .select_related("set", "part_color", "part_color__part", "part_color__color")
+        .select_related(
+            "set",
+            "part_color",
+            "part_color__part",
+            "part_color__color",
+            "part_color__catalog_item",
+            "part_color__root_part_color",
+            "part_color__root_part_color__catalog_item",
+        )
     )
     serializer_class = SetPartReadSerializer
 

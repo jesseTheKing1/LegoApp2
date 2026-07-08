@@ -50,6 +50,7 @@ export function PartColorForm({
   parts,
   colors,
   catalogItems,
+  partColors,
   initialValues,
   submitting,
   onSubmit,
@@ -57,11 +58,13 @@ export function PartColorForm({
   parts: Part[];
   colors: Color[];
   catalogItems?: CatalogItemMini[];
+  partColors?: PartColorRow[];
   initialValues?: Partial<PartColorRow>;
   submitting?: boolean;
   onSubmit: (payload: {
     part_id: number;
     color_id: number;
+    root_part_color_id?: number | null;
     part_color_code: string;
     variant?: string;
     description?: string;
@@ -74,11 +77,16 @@ export function PartColorForm({
   const initialPartId = (initialValues as any)?.part_id ?? initialValues?.part?.id ?? "";
   const initialColorId = (initialValues as any)?.color_id ?? initialValues?.color?.id ?? "";
   const initialCatalogId = (initialValues as any)?.catalog_item_id ?? (initialValues as any)?.catalog_item?.id ?? "";
+  const initialRootId =
+    (initialValues as any)?.root_part_color_id ??
+    (initialValues as any)?.root_part_color?.id ??
+    "";
 
   // ---- form state ----
   const [partId, setPartId] = useState<number | "">(initialPartId || "");
   const [colorId, setColorId] = useState<number | "">(initialColorId || "");
   const [catalogId, setCatalogId] = useState<number | "">(initialCatalogId || "");
+  const [rootId, setRootId] = useState<number | "">(initialRootId || "");
 
   const [code, setCode] = useState(normalize(initialValues?.part_color_code ?? ""));
   const [variant, setVariant] = useState(normalize((initialValues as any)?.variant ?? ""));
@@ -100,6 +108,20 @@ export function PartColorForm({
   const part = useMemo(() => parts.find((p) => p.id === Number(partId)) ?? null, [parts, partId]);
   const color = useMemo(() => colors.find((c) => c.id === Number(colorId)) ?? null, [colors, colorId]);
   const swatchHex = safeHex((color as any)?.hex ?? null) ?? "#e5e7eb";
+  const rootCandidates = useMemo(() => {
+    const currentId = Number((initialValues as any)?.id || 0);
+    const selectedColorId = Number(colorId || 0);
+
+    return (partColors ?? [])
+      .filter((pc) => pc.id !== currentId)
+      .filter((pc) => !pc.root_part_color)
+      .filter((pc) => !selectedColorId || pc.color?.id === selectedColorId)
+      .sort((a, b) => {
+        const ac = `${a.part?.part_id ?? ""} ${a.color?.name ?? ""} ${a.part_color_code ?? ""}`.toLowerCase();
+        const bc = `${b.part?.part_id ?? ""} ${b.color?.name ?? ""} ${b.part_color_code ?? ""}`.toLowerCase();
+        return ac.localeCompare(bc);
+      });
+  }, [partColors, initialValues, colorId]);
 
   // ---- validations ----
   const canSave = useMemo(() => {
@@ -165,6 +187,7 @@ export function PartColorForm({
     await onSubmit({
       part_id: Number(partId),
       color_id: Number(colorId),
+      root_part_color_id: rootId === "" ? null : Number(rootId),
       part_color_code: code.trim(),
       variant: variant.trim() || undefined,
       description: description.trim() || undefined,
@@ -229,6 +252,33 @@ export function PartColorForm({
               </select>
               <div className="text-[11px] text-slate-500 font-semibold">
                 Attach an existing pricing record here, or create one from the detail drawer.
+              </div>
+            </label>
+          ) : null}
+
+          {partColors ? (
+            <label className="space-y-1">
+              <div className={labelText}>Root PartColor / Variant Group</div>
+              <select
+                className={selectBase}
+                value={rootId}
+                onChange={(e) => setRootId(e.target.value ? Number(e.target.value) : "")}
+                disabled={!!submitting}
+              >
+                <option value="">This is the root / standalone PartColor</option>
+                {rootCandidates.map((pc) => (
+                  <option key={pc.id} value={pc.id}>
+                    {pc.part?.part_id || "Part"} · {pc.color?.name || "Color"} · {pc.part_color_code}
+                    {pc.variant ? ` · ${pc.variant}` : ""}
+                    {pc.effective_catalog_item?.sku || pc.catalog_item?.sku
+                      ? ` · SKU ${pc.effective_catalog_item?.sku || pc.catalog_item?.sku}`
+                      : ""}
+                  </option>
+                ))}
+              </select>
+              <div className="text-[11px] text-slate-500 font-semibold">
+                Pick a root when this row is an older/alternate ID for the same usable part-color.
+                It will inherit the root price and count together in user inventory/build matching.
               </div>
             </label>
           ) : null}

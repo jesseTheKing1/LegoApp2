@@ -48,7 +48,7 @@ class SetPartReadSerializer(serializers.ModelSerializer):
     collection_sources = serializers.SerializerMethodField()
 
     def get_unit_price(self, obj):
-        item = getattr(obj.part_color, "catalog_item", None)
+        item = getattr(obj.part_color, "effective_catalog_item", None)
         return catalog_storefront_price(item)
 
     def get_line_total(self, obj):
@@ -67,7 +67,7 @@ class SetPartReadSerializer(serializers.ModelSerializer):
         return root._owned_catalog_quantities
 
     def get_owned_quantity(self, obj):
-        return min(self._owned_map().get(obj.part_color_id, 0), obj.quantity)
+        return min(self._owned_map().get(obj.part_color.effective_part_color_id, 0), obj.quantity)
 
     def get_missing_quantity(self, obj):
         return max(obj.quantity - self.get_owned_quantity(obj), 0)
@@ -90,7 +90,7 @@ class SetPartReadSerializer(serializers.ModelSerializer):
     def get_collection_sources(self, obj):
         needed = obj.quantity
         allocated = []
-        for source in self._source_map().get(obj.part_color_id, []):
+        for source in self._source_map().get(obj.part_color.effective_part_color_id, []):
             quantity = min(source["available"], needed)
             if quantity:
                 allocated.append({**source, "quantity": quantity})
@@ -160,19 +160,32 @@ class SetReadSerializer(serializers.ModelSerializer):
     def get_parts_total_price(self, obj):
         total = Decimal("0")
         for part in obj.parts.all():
-            item = getattr(part.part_color, "catalog_item", None)
+            item = getattr(part.part_color, "effective_catalog_item", None)
             price = catalog_storefront_price(item)
             if price is not None:
                 total += price * part.quantity
         return total
 
     def get_missing_parts_price(self, obj):
-        serializer = self._part_rows(obj)
         total = Decimal("0")
+        request = self.context.get("request")
+        owned_map = (
+            owned_part_color_quantities(request.user)
+            if request and request.user.is_authenticated else {}
+        )
+        remaining_owned = {}
         for part in obj.parts.all():
-            amount = serializer.child.get_missing_line_total(part)
-            if amount is not None:
-                total += amount
+            price = catalog_storefront_price(getattr(part.part_color, "effective_catalog_item", None))
+            if price is None:
+                continue
+            effective_part_color_id = part.part_color.effective_part_color_id
+            available_owned = remaining_owned.setdefault(
+                effective_part_color_id,
+                owned_map.get(effective_part_color_id, 0),
+            )
+            owned_quantity = min(available_owned, part.quantity)
+            remaining_owned[effective_part_color_id] -= owned_quantity
+            total += price * max(part.quantity - owned_quantity, 0)
         return total
 
     def get_inventory_savings(self, obj):
@@ -181,7 +194,7 @@ class SetReadSerializer(serializers.ModelSerializer):
     def get_priced_part_quantity(self, obj):
         return sum(
             part.quantity for part in obj.parts.all()
-            if catalog_storefront_price(getattr(part.part_color, "catalog_item", None)) is not None
+            if catalog_storefront_price(getattr(part.part_color, "effective_catalog_item", None)) is not None
         )
 
     def _direct_collection_set(self, obj):
@@ -212,9 +225,10 @@ class SetReadSerializer(serializers.ModelSerializer):
 
         for part in obj.parts.all():
             needed = part.quantity
-            for source in inventory.get(part.part_color_id, []):
+            effective_part_color_id = part.part_color.effective_part_color_id
+            for source in inventory.get(effective_part_color_id, []):
                 source_key = f"{source['type']}-{source['id']}"
-                remaining_key = f"{part.part_color_id}-{source_key}"
+                remaining_key = f"{effective_part_color_id}-{source_key}"
                 available = remaining.setdefault(remaining_key, source["available"])
                 quantity = min(available, needed)
                 if quantity <= 0:

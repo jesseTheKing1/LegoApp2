@@ -134,13 +134,30 @@ class CollectionSet(models.Model):
         default=False,
         help_text="Keep this set assembled and do not use its pieces for build matching.",
     )
+    locked_quantity = models.PositiveIntegerField(
+        default=0,
+        help_text="Number of owned copies kept assembled and excluded from build matching.",
+    )
     added_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(fields=["user", "lego_set"], name="unique_user_collection_set")
+            models.UniqueConstraint(fields=["user", "lego_set"], name="unique_user_collection_set"),
+            models.CheckConstraint(
+                check=models.Q(locked_quantity__lte=models.F("quantity")),
+                name="collection_locked_quantity_lte_quantity",
+            ),
         ]
         ordering = ["-added_at"]
+
+    @property
+    def available_quantity(self):
+        return max(self.quantity - self.locked_quantity, 0)
+
+    def save(self, *args, **kwargs):
+        self.locked_quantity = min(self.locked_quantity, self.quantity)
+        self.is_locked = self.quantity > 0 and self.locked_quantity >= self.quantity
+        super().save(*args, **kwargs)
 
 
 class CollectionPart(models.Model):

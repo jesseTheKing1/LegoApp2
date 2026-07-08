@@ -130,11 +130,19 @@ class CollectionSetSerializer(serializers.ModelSerializer):
     set_id = serializers.PrimaryKeyRelatedField(source="lego_set", queryset=Set.objects.all(), write_only=True)
     set = serializers.SerializerMethodField()
     contributed_piece_count = serializers.SerializerMethodField()
+    available_quantity = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = CollectionSet
-        fields = ["id", "set_id", "set", "quantity", "is_locked", "contributed_piece_count", "added_at"]
+        fields = ["id", "set_id", "set", "quantity", "locked_quantity", "available_quantity", "is_locked", "contributed_piece_count", "added_at"]
         validators = []
+
+    def validate(self, attrs):
+        quantity = attrs.get("quantity", getattr(self.instance, "quantity", 1))
+        locked = attrs.get("locked_quantity", getattr(self.instance, "locked_quantity", 0))
+        if locked > quantity:
+            raise serializers.ValidationError({"locked_quantity": "Locked copies cannot exceed owned copies."})
+        return attrs
 
     def get_set(self, obj):
         row = obj.lego_set
@@ -147,7 +155,7 @@ class CollectionSetSerializer(serializers.ModelSerializer):
         }
 
     def get_contributed_piece_count(self, obj):
-        return 0 if obj.is_locked else sum(row.quantity for row in obj.lego_set.parts.all()) * obj.quantity
+        return sum(row.quantity for row in obj.lego_set.parts.all()) * obj.available_quantity
 
     def create(self, validated_data):
         obj, created = CollectionSet.objects.get_or_create(
@@ -157,7 +165,7 @@ class CollectionSetSerializer(serializers.ModelSerializer):
         )
         if not created:
             obj.quantity += validated_data.get("quantity", 1)
-            obj.save(update_fields=["quantity"])
+            obj.save()
         return obj
 
 
@@ -174,6 +182,8 @@ class CollectionPartSerializer(serializers.ModelSerializer):
         pc = obj.part_color
         return {
             "id": pc.id, "part_color_code": pc.part_color_code,
+            "effective_part_color_id": pc.effective_part_color_id,
+            "root_part_color_code": pc.root_part_color.part_color_code if pc.root_part_color_id else "",
             "name": pc.part.name, "part_id": pc.part.part_id,
             "color_name": pc.color.name,
             "image_url": pc.image_url_1 or pc.image_url_2 or pc.part.image_url,

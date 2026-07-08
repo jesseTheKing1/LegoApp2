@@ -6,7 +6,7 @@ import type { LibraryPickerResult, LibraryPickerMode } from "../types/libraryPic
 
 type Tab = "overview" | "sets" | "parts" | "minifigs";
 type Summary = { set_count:number; unique_sets:number; piece_count:number; loose_piece_count:number; minifig_count:number; minifig_value:string; set_value:string; loose_parts_value:string; total_value:string };
-type OwnedSet = { id:number; quantity:number; is_locked:boolean; contributed_piece_count:number; set:{ id:number; set_num:string; name:string; image_url?:string; official_piece_count:number; theme_name:string; year_released?:number|null; bricklink_value?:string|null } };
+type OwnedSet = { id:number; quantity:number; locked_quantity:number; available_quantity:number; is_locked:boolean; contributed_piece_count:number; set:{ id:number; set_num:string; name:string; image_url?:string; official_piece_count:number; theme_name:string; year_released?:number|null; bricklink_value?:string|null } };
 type OwnedPart = { id:number; quantity:number; part_color:{ id:number; part_color_code:string; name:string; part_id:string; color_name:string; image_url?:string } };
 type OwnedFig = { id:number; quantity:number; minifig:{ id:number; bricklink_id:string; name:string; image_url?:string; theme_name:string; market_value:string|null; rarity:string } };
 
@@ -28,6 +28,7 @@ function AddPanel({ tab, onAdded }:{ tab:Exclude<Tab,"overview">; onAdded:()=>vo
   const [theme,setTheme] = useState("");
   const [year,setYear] = useState("");
   const [hasSearched,setHasSearched] = useState(false);
+  const [copies,setCopies] = useState(1);
   const mode:LibraryPickerMode = tab === "sets" ? "set" : tab === "parts" ? "part_color" : "minifig";
   useEffect(()=>{
     if(tab!=="sets") return;
@@ -45,16 +46,16 @@ function AddPanel({ tab, onAdded }:{ tab:Exclude<Tab,"overview">; onAdded:()=>vo
   async function add(item:LibraryPickerResult) {
     const endpoint = tab === "sets" ? ENDPOINTS.collectionSets : tab === "parts" ? ENDPOINTS.collectionParts : ENDPOINTS.collectionMinifigs;
     const key = tab === "sets" ? "set_id" : tab === "parts" ? "part_color_id" : "minifig_id";
-    await api.post(endpoint,{[key]:item.id,quantity:1});
+    await api.post(endpoint,{[key]:item.id,quantity:tab==="sets"?copies:1});
     onAdded();
   }
   return <div className="collection-add">
     <div><p>ADD TO YOUR COLLECTION</p><h3>{tab === "sets" ? "Add a complete set" : tab === "parts" ? "Add individual pieces" : "Find a minifigure"}</h3>
       <small>{tab === "sets" ? "Every included piece is added to your build inventory automatically." : "Search by name, ID, theme, or color."}</small></div>
     <form onSubmit={(e)=>{e.preventDefault();search();}}><input value={q} onChange={e=>setQ(e.target.value)} placeholder={tab === "sets" ? "Search—or leave blank to browse…" : tab === "parts" ? "Search piece, color or ID…" : "Search minifigure or theme…"}/><button>{searching?"Searching…":tab==="sets"?"Browse sets":"Search"}</button></form>
-    {tab==="sets"&&<div className="collection-browse-filters"><label>Theme<select value={theme} onChange={e=>setTheme(e.target.value)}><option value="">All themes</option>{themes.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label><label>Release year<select value={year} onChange={e=>setYear(e.target.value)}><option value="">Any year</option>{Array.from({length:27},(_,i)=>new Date().getFullYear()-i).map(y=><option key={y}>{y}</option>)}</select></label><button onClick={search}>Show matching sets</button></div>}
+    {tab==="sets"&&<div className="collection-browse-filters"><label>Theme<select value={theme} onChange={e=>setTheme(e.target.value)}><option value="">All themes</option>{themes.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label><label>Release year<select value={year} onChange={e=>setYear(e.target.value)}><option value="">Any year</option>{Array.from({length:27},(_,i)=>new Date().getFullYear()-i).map(y=><option key={y}>{y}</option>)}</select></label><label>Copies to add<select value={copies} onChange={e=>setCopies(Number(e.target.value))}>{Array.from({length:10},(_,i)=>i+1).map(n=><option key={n}>{n}</option>)}</select></label><button onClick={search}>Show matching sets</button></div>}
     {results.length>0 && <div className="collection-search-results">{results.map(item=><button key={`${item.type}-${item.id}`} onClick={()=>add(item)}>
-      <span>{item.image_url?<img src={item.image_url} alt=""/>:"◇"}</span><div><strong>{item.title}</strong><small>{item.subtitle}{item.meta?.year_released?` · ${item.meta.year_released}`:""}</small></div><b>+ Add</b>
+      <span>{item.image_url?<img src={item.image_url} alt=""/>:"◇"}</span><div><strong>{item.title}</strong><small>{item.subtitle}{item.meta?.year_released?` · ${item.meta.year_released}`:""}</small></div><b>+ Add{tab==="sets"&&copies>1?` ×${copies}`:""}</b>
     </button>)}</div>}
     {hasSearched&&!searching&&results.length===0&&<div className="collection-no-results"><strong>{tab==="sets"?"No sets match those filters.":"No matching items found."}</strong><span>{tab==="sets"?"Try another year, choose “Any year,” or browse a different theme.":"Try a broader name, ID, theme, or color."}</span></div>}
   </div>;
@@ -81,8 +82,10 @@ export function AccountPage({ me }: { me: Me }) {
   useEffect(()=>{load();},[]);
 
   async function remove(endpoint:string,id:number) { await api.delete(`${endpoint}${id}/`); await load(); }
-  async function toggleSetLock(row:OwnedSet) {
-    await api.patch(`${ENDPOINTS.collectionSets}${row.id}/`,{is_locked:!row.is_locked,quantity:row.quantity});
+  async function updateOwnedSet(row:OwnedSet, patch:{quantity?:number;locked_quantity?:number}) {
+    const quantity = Math.max(1, patch.quantity ?? row.quantity);
+    const locked_quantity = Math.min(quantity, Math.max(0, patch.locked_quantity ?? row.locked_quantity));
+    await api.patch(`${ENDPOINTS.collectionSets}${row.id}/`,{quantity,locked_quantity});
     await load();
   }
   const rareFigs = useMemo(()=>figs.filter(x=>["rare","epic","legendary"].includes(x.minifig.rarity)).length,[figs]);
@@ -112,7 +115,7 @@ export function AccountPage({ me }: { me: Me }) {
         <div className="collection-recent"><div><p className="collection-eyebrow">RECENTLY COLLECTED</p><h2>Your latest finds</h2></div>{recent.length?<div className="recent-grid">{recent.map((r,i)=><article key={i}><div>{r.image?<img src={r.image} alt=""/>:"◇"}</div><small>{r.kind}</small><strong>{r.name}</strong></article>)}</div>:<p className="empty-copy">Your display shelf is waiting. Add a set or minifigure to get started.</p>}</div>
       </div>}
 
-      {tab==="sets" && <><AddPanel tab="sets" onAdded={load}/><div className="collection-section-head"><div><p>COMPLETE SETS</p><h2>My build library</h2></div><span>{money(summary?.set_value||0)} estimated value</span></div><div className="collection-lock-guide"><span>🔒</span><div><strong>What does locking a set do?</strong><p>You still own it and it stays in your collection and estimated value. Locking simply tells Brickwise that you want to keep it assembled, so its pieces will not count toward progress on new builds. Unlock it whenever you are willing to reuse those pieces.</p></div></div><div className="owned-set-grid">{sets.map(row=><article className={row.is_locked?"locked-set":""} key={row.id}><div>{row.set.image_url?<img src={row.set.image_url} alt={row.set.name}/>:"◇"}<b>×{row.quantity}</b>{row.is_locked&&<span className="set-lock-badge">🔒 Kept assembled</span>}</div><small>{row.set.theme_name} · {row.set.year_released||"Year unknown"} · {row.set.set_num}</small><h3>{row.set.name}</h3><p>{row.is_locked?"Pieces excluded from new-build progress":<><strong>{row.contributed_piece_count.toLocaleString()}</strong> pieces available for new builds</>} · Estimated value <strong>{money(row.set.bricklink_value)}</strong></p><div className="owned-set-actions"><button className="lock-action" title={row.is_locked?"Allow this set's pieces to count toward new builds":"Keep this set assembled and exclude its pieces from new builds"} onClick={()=>toggleSetLock(row)}>{row.is_locked?"Unlock pieces":"🔒 Keep assembled"}</button><button onClick={()=>remove(ENDPOINTS.collectionSets,row.id)}>Remove</button></div></article>)}</div>{!sets.length&&<p className="empty-copy">No sets yet. Browse by theme or year above to find your first build.</p>}</>}
+      {tab==="sets" && <><AddPanel tab="sets" onAdded={load}/><div className="collection-section-head"><div><p>COMPLETE SETS</p><h2>My build library</h2></div><span>{money(summary?.set_value||0)} estimated value</span></div><div className="collection-lock-guide"><span>🔒</span><div><strong>What does locking copies do?</strong><p>You still own every copy and they stay in your collection value. Locked copies stay assembled and do not count toward progress on new builds. If you own three copies, you can lock two and leave one available for parts.</p></div></div><div className="owned-set-grid">{sets.map(row=><article className={row.is_locked?"locked-set":""} key={row.id}><div>{row.set.image_url?<img src={row.set.image_url} alt={row.set.name}/>:"◇"}<b>×{row.quantity}</b>{row.locked_quantity>0&&<span className="set-lock-badge">🔒 {row.locked_quantity} of {row.quantity} assembled</span>}</div><small>{row.set.theme_name} · {row.set.year_released||"Year unknown"} · {row.set.set_num}</small><h3>{row.set.name}</h3><p><strong>{row.available_quantity}</strong> copies available for parts · <strong>{row.locked_quantity}</strong> kept assembled</p><div className="set-copy-controls"><label>Copies owned<div><button onClick={()=>updateOwnedSet(row,{quantity:row.quantity-1})} disabled={row.quantity<=1}>−</button><strong>{row.quantity}</strong><button onClick={()=>updateOwnedSet(row,{quantity:row.quantity+1})}>+</button></div></label><label>Copies locked<select value={row.locked_quantity} onChange={e=>updateOwnedSet(row,{locked_quantity:Number(e.target.value)})}>{Array.from({length:row.quantity+1},(_,i)=>i).map(n=><option key={n} value={n}>{n===row.quantity&&row.quantity>0?`${n} (all)`:n}</option>)}</select></label></div><div className="owned-set-actions"><button className="lock-action" onClick={()=>updateOwnedSet(row,{locked_quantity:row.locked_quantity===row.quantity?0:row.quantity})}>{row.locked_quantity===row.quantity?"Unlock all pieces":"🔒 Lock all copies"}</button><button onClick={()=>remove(ENDPOINTS.collectionSets,row.id)}>Remove</button></div></article>)}</div>{!sets.length&&<p className="empty-copy">No sets yet. Browse by theme or year above to find your first build.</p>}</>}
 
       {tab==="parts" && <><AddPanel tab="parts" onAdded={load}/><div className="collection-section-head"><div><p>LOOSE PIECES</p><h2>Individual inventory</h2></div><span>{summary?.loose_piece_count||0} pieces · {money(summary?.loose_parts_value||0)} estimated value</span></div><div className="owned-parts-list">{parts.map(row=><article key={row.id}><div>{row.part_color.image_url?<img src={row.part_color.image_url} alt=""/>:"◇"}</div><p><strong>{row.part_color.name}</strong><small>{row.part_color.part_id} · {row.part_color.color_name}</small></p><b>×{row.quantity}</b><button onClick={()=>remove(ENDPOINTS.collectionParts,row.id)}>Remove</button></article>)}</div>{!parts.length&&<p className="empty-copy">No loose pieces yet. Add individual finds with the search above.</p>}</>}
 

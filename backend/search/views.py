@@ -113,7 +113,13 @@ class LibraryPickerLookupView(APIView):
         if include_part_colors:
             pc_qs = (
                 PartColor.objects
-                .select_related("part", "color")
+                .select_related(
+                    "part",
+                    "color",
+                    "catalog_item",
+                    "root_part_color",
+                    "root_part_color__catalog_item",
+                )
                 .all()
                 .order_by("part__general_category", "part__part_id", "color__name", "variant")
             )
@@ -123,6 +129,8 @@ class LibraryPickerLookupView(APIView):
                     Q(part_color_code__icontains=q)
                     | Q(description__icontains=q)
                     | Q(variant__icontains=q)
+                    | Q(root_part_color__part_color_code__icontains=q)
+                    | Q(root_part_color__description__icontains=q)
                     | Q(part__part_id__icontains=q)
                     | Q(part__name__icontains=q)
                     | Q(part__general_category__icontains=q)
@@ -155,6 +163,8 @@ class LibraryPickerLookupView(APIView):
                         row.part_color_code or "",
                         row.description or "",
                         row.variant or "",
+                        row.root_part_color.part_color_code if row.root_part_color_id else "",
+                        row.root_part_color.description if row.root_part_color_id else "",
                         getattr(part, "part_id", "") if part else "",
                         getattr(part, "name", "") if part else "",
                         getattr(part, "general_category", "") if part else "",
@@ -164,6 +174,9 @@ class LibraryPickerLookupView(APIView):
                     ]).strip(),
                     "meta": {
                         "part_color_code": row.part_color_code or "",
+                        "root_part_color_id": row.effective_part_color_id,
+                        "root_part_color_code": row.root_part_color.part_color_code if row.root_part_color_id else "",
+                        "root_part_color_description": row.root_part_color.description if row.root_part_color_id else "",
                         "part_id": getattr(part, "part_id", "") if part else "",
                         "part_name": getattr(part, "name", "") if part else "",
                         "general_category": getattr(part, "general_category", "") if part else "",
@@ -220,7 +233,11 @@ class LibraryPickerLookupView(APIView):
             set_qs = (
                 Set.objects
                 .select_related("theme", "catalog_item")
-                .prefetch_related("parts__part_color__catalog_item")
+                .prefetch_related(
+                    "parts__part_color__catalog_item",
+                    "parts__part_color__root_part_color",
+                    "parts__part_color__root_part_color__catalog_item",
+                )
                 .all()
                 .order_by("set_num", "name")
             )
@@ -244,14 +261,21 @@ class LibraryPickerLookupView(APIView):
                 priced_quantity = 0
                 required_quantity = 0
                 owned_quantity = 0
+                remaining_owned_quantities = {}
                 for set_part in row.parts.all():
                     required_quantity += set_part.quantity
+                    effective_part_color_id = set_part.part_color.effective_part_color_id
+                    available_owned = remaining_owned_quantities.setdefault(
+                        effective_part_color_id,
+                        owned_quantities.get(effective_part_color_id, 0),
+                    )
                     owned_for_part = min(
-                        owned_quantities.get(set_part.part_color_id, 0),
+                        available_owned,
                         set_part.quantity,
                     )
+                    remaining_owned_quantities[effective_part_color_id] -= owned_for_part
                     owned_quantity += owned_for_part
-                    item = getattr(set_part.part_color, "catalog_item", None)
+                    item = getattr(set_part.part_color, "effective_catalog_item", None)
                     price = catalog_storefront_price(item)
                     if price is not None:
                         parts_total += price * set_part.quantity

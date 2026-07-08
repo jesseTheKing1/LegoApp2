@@ -35,6 +35,19 @@ class PartColor(models.Model):
     color = models.ForeignKey(Color, on_delete=models.PROTECT, related_name="part_colors")
     variant = models.CharField(max_length=80, blank=True, default="")
 
+    root_part_color = models.ForeignKey(
+        "self",
+        on_delete=models.PROTECT,
+        related_name="variant_part_colors",
+        null=True,
+        blank=True,
+        help_text=(
+            "Optional canonical/root PartColor. Use this when older LEGO/BrickLink "
+            "IDs represent the same usable part-color. Variants inherit the root "
+            "catalog pricing and count together for build matching."
+        ),
+    )
+
     part_color_code = models.CharField(max_length=64, unique=True)
     description = models.CharField(max_length=300, blank=True)
     image_url_1 = models.URLField(blank=True)
@@ -57,3 +70,17 @@ class PartColor(models.Model):
     def __str__(self):
         v = f" ({self.variant})" if self.variant else ""
         return f"{self.part.part_id} - {self.color.name}{v}"
+
+    @property
+    def effective_part_color(self):
+        return self.root_part_color or self
+
+    @property
+    def effective_part_color_id(self):
+        return self.root_part_color_id or self.id
+
+    @property
+    def effective_catalog_item(self):
+        if self.root_part_color_id and self.root_part_color:
+            return self.root_part_color.catalog_item or self.catalog_item
+        return self.catalog_item

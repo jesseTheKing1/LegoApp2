@@ -27,12 +27,25 @@ class PartViewSet(viewsets.ModelViewSet):
 class PartColorViewSet(viewsets.ModelViewSet):
     # Part, color, and catalog are all rendered in the list. Joining them here
     # prevents one additional database query per row.
-    queryset = PartColor.objects.select_related("part", "color", "catalog_item").all()
+    queryset = (
+        PartColor.objects
+        .select_related(
+            "part",
+            "color",
+            "catalog_item",
+            "root_part_color",
+            "root_part_color__part",
+            "root_part_color__color",
+            "root_part_color__catalog_item",
+        )
+        .all()
+    )
     serializer_class = PartColorSerializer
     permission_classes = [IsAdminOrReadOnly]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = [
         "part_color_code", "variant", "description",
+        "root_part_color__part_color_code", "root_part_color__description",
         "part__part_id", "part__name", "part__actual_category",
         "color__name", "color__hex",
     ]

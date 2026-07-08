@@ -105,24 +105,26 @@ function getLowestPrice(...values: unknown[]) {
 }
 
 function getPartUnitCost(part: PartColorRow | null | undefined) {
+  const catalog = part?.effective_catalog_item ?? part?.catalog_item;
   return (
     getLowestPrice(
-      readLooseField(part?.catalog_item, "lego_reference_price"),
-      readLooseField(part?.catalog_item, "bricklink_reference_price")
+      readLooseField(catalog, "lego_reference_price"),
+      readLooseField(catalog, "bricklink_reference_price")
     ) ??
     getFirstPrice(
-      readLooseField(part?.catalog_item, "current_cost"),
-      readLooseField(part?.catalog_item, "base_price_override")
+      readLooseField(catalog, "current_cost"),
+      readLooseField(catalog, "base_price_override")
     ) ??
     0
   );
 }
 
 function getPartUnitSellPrice(part: PartColorRow | null | undefined) {
+  const catalog = part?.effective_catalog_item ?? part?.catalog_item;
   return (
     getFirstPrice(
-      readLooseField(part?.catalog_item, "current_price"),
-      readLooseField(part?.catalog_item, "base_price_override")
+      readLooseField(catalog, "current_price"),
+      readLooseField(catalog, "base_price_override")
     ) ?? 0
   );
 }
@@ -200,19 +202,19 @@ export function SetForm({
         _unitCost:
           getPartUnitCost(detail) ||
           (getLowestPrice(
-            readLooseField(row.part_color_detail?.catalog_item, "lego_reference_price"),
-            readLooseField(row.part_color_detail?.catalog_item, "bricklink_reference_price")
+            readLooseField(row.part_color_detail?.effective_catalog_item ?? row.part_color_detail?.catalog_item, "lego_reference_price"),
+            readLooseField(row.part_color_detail?.effective_catalog_item ?? row.part_color_detail?.catalog_item, "bricklink_reference_price")
           ) ??
             getFirstPrice(
-              readLooseField(row.part_color_detail?.catalog_item, "current_cost"),
-              readLooseField(row.part_color_detail?.catalog_item, "base_price_override")
+              readLooseField(row.part_color_detail?.effective_catalog_item ?? row.part_color_detail?.catalog_item, "current_cost"),
+              readLooseField(row.part_color_detail?.effective_catalog_item ?? row.part_color_detail?.catalog_item, "base_price_override")
             ) ??
             0),
         _unitSellPrice:
           getPartUnitSellPrice(detail) ||
           (getFirstPrice(
-            readLooseField(row.part_color_detail?.catalog_item, "current_price"),
-            readLooseField(row.part_color_detail?.catalog_item, "base_price_override")
+            readLooseField(row.part_color_detail?.effective_catalog_item ?? row.part_color_detail?.catalog_item, "current_price"),
+            readLooseField(row.part_color_detail?.effective_catalog_item ?? row.part_color_detail?.catalog_item, "base_price_override")
           ) ??
             0),
         _imageUrl: getPartImage(detail) || row.part_color_detail?.image_url_1 || row.part_color_detail?.image_url_2 || null,

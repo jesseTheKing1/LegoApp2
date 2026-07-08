@@ -20,8 +20,13 @@ import { integer, money } from "../utils/number";
 import CatalogCostEntryForm from "../form/CatalogCostEntryForm";
 
 type TabKey = "overview" | "inventory" | "costs";
+
+function getEffectiveCatalog(row: PartColorRow | null | undefined) {
+  return row?.effective_catalog_item ?? row?.catalog_item ?? null;
+}
+
 function getBrickLinkRef(row: PartColorRow): number | null {
-  const v = row.catalog_item?.bricklink_reference_price;
+  const v = getEffectiveCatalog(row)?.bricklink_reference_price;
   if (v == null || v === "") return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
@@ -107,10 +112,11 @@ function moneyText(v: unknown) {
 }
 
 function getDisplayPrice(row: PartColorRow | null) {
-  if (!row?.catalog_item) return null;
+  const catalog = getEffectiveCatalog(row);
+  if (!catalog) return null;
   return (
-    asMoneyNumber(row.catalog_item.current_price) ??
-    asMoneyNumber(row.catalog_item.base_price_override) ??
+    asMoneyNumber(catalog.current_price) ??
+    asMoneyNumber(catalog.base_price_override) ??
     null
   );
 }
@@ -213,13 +219,14 @@ function CatalogEditor({
   const [notes, setNotes] = useState("");
 
   useEffect(() => {
-    setSku(row.catalog_item?.sku ?? "");
-    setIsActive(row.catalog_item?.is_active ?? true);
-    setBasePriceOverride(row.catalog_item?.base_price_override ?? "");
-    setForceOverride(row.catalog_item?.force_override ?? false);
-    setLegoReferencePrice(row.catalog_item?.lego_reference_price ?? "");
-    setBricklinkReferencePrice(row.catalog_item?.bricklink_reference_price ?? "");
-    setNotes(row.catalog_item?.notes ?? "");
+    const catalog = getEffectiveCatalog(row);
+    setSku(catalog?.sku ?? "");
+    setIsActive(catalog?.is_active ?? true);
+    setBasePriceOverride(catalog?.base_price_override ?? "");
+    setForceOverride(catalog?.force_override ?? false);
+    setLegoReferencePrice(catalog?.lego_reference_price ?? "");
+    setBricklinkReferencePrice(catalog?.bricklink_reference_price ?? "");
+    setNotes(catalog?.notes ?? "");
   }, [row]);
 
   function cleanNullable(v: string) {
@@ -318,7 +325,7 @@ function CatalogEditor({
 
       <div className="flex flex-wrap gap-2 pt-1">
         <button type="submit" className={btnPrimary} disabled={submitting}>
-          {submitting ? "Saving..." : row.catalog_item ? "Save Catalog Item" : "Create Catalog Item"}
+          {submitting ? "Saving..." : getEffectiveCatalog(row) ? "Save Catalog Item" : "Create Catalog Item"}
         </button>
         <button type="button" className={btnBase} onClick={onCancel}>
           Cancel
@@ -361,7 +368,8 @@ export function PartColorDetailDrawer({
   const [savingCost, setSavingCost] = useState(false);
   const [savingCatalog, setSavingCatalog] = useState(false);
 
-  const catalogItemId = row?.catalog_item?.id ?? null;
+  const effectiveCatalog = getEffectiveCatalog(row);
+  const catalogItemId = effectiveCatalog?.id ?? null;
 
   useEffect(() => {
     setTab("overview");
@@ -425,8 +433,9 @@ export function PartColorDetailDrawer({
   let available = 0;
   let totalCost = 0;
 
-  const sellingPrice = Number(row?.catalog_item?.current_price ?? row?.catalog_item?.base_price_override ?? 0);
-  const bricklinkFallback = Number(row?.catalog_item?.bricklink_reference_price ?? 0);
+  const catalog = getEffectiveCatalog(row);
+  const sellingPrice = Number(catalog?.current_price ?? catalog?.base_price_override ?? 0);
+  const bricklinkFallback = Number(catalog?.bricklink_reference_price ?? 0);
 
   let estimatedRetailValue = 0;
   let estimatedInvestedCost = 0;
@@ -517,7 +526,7 @@ export function PartColorDetailDrawer({
     setSavingCatalog(true);
     setError("");
     try {
-      let catalogId = row.catalog_item?.id ?? null;
+      let catalogId = getEffectiveCatalog(row)?.id ?? null;
 
       if (catalogId) {
         await api.patch(`${ENDPOINTS.catalog}${catalogId}/`, payload);
@@ -530,7 +539,8 @@ export function PartColorDetailDrawer({
           throw new Error("Catalog item was created, but no catalog item ID was returned.");
         }
 
-        await api.patch(`${ENDPOINTS.partColors}${row.id}/`, {
+        const targetPartColorId = row.root_part_color?.id ?? row.id;
+        await api.patch(`${ENDPOINTS.partColors}${targetPartColorId}/`, {
           catalog_item_id: catalogId,
         });
       }
@@ -599,6 +609,8 @@ export function PartColorDetailDrawer({
   }
 
   const imageUrl = getDisplayImage(row);
+  const catalog = getEffectiveCatalog(row);
+  const isInheritedCatalog = !row.catalog_item && !!catalog;
 
   return (
     <div className="space-y-3">
@@ -635,20 +647,25 @@ export function PartColorDetailDrawer({
                 <span
                   className={cx(
                     "rounded-full px-2.5 py-1 text-[11px] font-bold",
-                    row.catalog_item
+                    catalog
                       ? "border border-slate-200 bg-white text-slate-700"
                       : "border border-amber-200 bg-amber-50 text-amber-700"
                   )}
                 >
-                  {row.catalog_item ? `SKU ${row.catalog_item.sku}` : "No SKU linked"}
+                  {catalog ? `${isInheritedCatalog ? "Inherited " : ""}SKU ${catalog.sku}` : "No SKU linked"}
                 </span>
+                {row.root_part_color ? (
+                  <span className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-bold text-violet-700">
+                    Variant of {row.root_part_color.part_color_code}
+                  </span>
+                ) : null}
               </div>
 
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <CompactStat label="Code" value={metaValue(row.part_color_code)} />
                 <CompactStat label="Price" value={moneyText(getDisplayPrice(row))} />
-                <CompactStat label="Current Cost" value={money(row.catalog_item?.current_cost)} />
-                <CompactStat label="Margin" value={money(row.catalog_item?.margin_amount)} />
+                <CompactStat label="Current Cost" value={money(catalog?.current_cost)} />
+                <CompactStat label="Margin" value={money(catalog?.margin_amount)} />
               </div>
             </div>
           </div>
@@ -679,13 +696,9 @@ export function PartColorDetailDrawer({
             <div className="grid grid-cols-1 divide-y divide-slate-200">
               {siblingRows.map((sib) => {
                 const rarity = getRarityTier(sib, siblingRows);
-                const bricklinkRef = sib.catalog_item?.bricklink_reference_price || "—";
+                const sibCatalog = getEffectiveCatalog(sib);
+                const bricklinkRef = sibCatalog?.bricklink_reference_price || "—";
                 const selected = sib.id === row.id;
-                const sku = sib.catalog_item?.sku || "—";
-                const price =
-                  sib.catalog_item?.current_price ||
-                  sib.catalog_item?.base_price_override ||
-                  "—";
 
                 return (
                 <button
@@ -773,8 +786,8 @@ export function PartColorDetailDrawer({
               >
                 {showCatalogEditor
                   ? "Close Catalog"
-                  : row.catalog_item
-                  ? "Edit Catalog"
+                  : catalog
+                  ? isInheritedCatalog ? "Edit Root Catalog" : "Edit Catalog"
                   : "Add Catalog"}
               </button>
             </div>
@@ -787,26 +800,27 @@ export function PartColorDetailDrawer({
             <MiniMeta label="Part Color Code" value={metaValue(row.part_color_code)} />
             <MiniMeta label="Color" value={metaValue(row.color?.name)} />
             <MiniMeta label="Variant" value={metaValue(row.variant)} />
-            <MiniMeta label="SKU" value={metaValue(row.catalog_item?.sku)} />
-            <MiniMeta label="Pricing Source" value={metaValue(row.catalog_item?.pricing_source)} />
+            <MiniMeta label="Root Group" value={row.root_part_color ? metaValue(row.root_part_color.part_color_code) : "Root / standalone"} />
+            <MiniMeta label="SKU" value={metaValue(catalog?.sku)} />
+            <MiniMeta label="Pricing Source" value={metaValue(catalog?.pricing_source)} />
             <MiniMeta
               label="LEGO Reference"
-              value={money(row.catalog_item?.lego_reference_price)}
+              value={money(catalog?.lego_reference_price)}
             />
             <MiniMeta
               label="BrickLink Reference"
-              value={money(row.catalog_item?.bricklink_reference_price)}
+              value={money(catalog?.bricklink_reference_price)}
             />
           </div>
 
           {showCatalogEditor ? (
             <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
               <div className="mb-3 text-xs font-black uppercase tracking-[0.16em] text-slate-500">
-                {row.catalog_item ? "Edit Catalog Item" : "Create Catalog Item"}
+                {catalog ? (isInheritedCatalog ? "Edit Root Catalog Item" : "Edit Catalog Item") : "Create Catalog Item"}
               </div>
 
               <CatalogEditor
-                key={`${row.id}-${row.catalog_item?.id ?? "none"}`}
+                key={`${row.id}-${catalog?.id ?? "none"}`}
                 row={row}
                 submitting={savingCatalog}
                 onSubmit={handleSaveCatalog}
@@ -815,9 +829,14 @@ export function PartColorDetailDrawer({
             </div>
           ) : null}
 
-          {!row.catalog_item && !showCatalogEditor ? (
+          {!catalog && !showCatalogEditor ? (
             <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
               No catalog item linked yet.
+            </div>
+          ) : null}
+          {isInheritedCatalog && !showCatalogEditor ? (
+            <div className="mt-3 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
+              This variant is using the root PartColor catalog item. Pricing, inventory, and cost history are shared with the group.
             </div>
           ) : null}
         </div>
@@ -825,7 +844,7 @@ export function PartColorDetailDrawer({
         <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="text-sm font-black text-slate-900">Operations</div>
-            {row.catalog_item ? (
+            {catalog ? (
               <div className="flex flex-wrap gap-2">
                 <TabButton active={tab === "overview"} onClick={() => setTab("overview")}>
                   Overview
@@ -846,7 +865,7 @@ export function PartColorDetailDrawer({
             </div>
           ) : null}
 
-          {!row.catalog_item ? (
+          {!catalog ? (
             <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-600">
               Add or link a catalog item to enable inventory and cost history.
             </div>
@@ -879,44 +898,44 @@ export function PartColorDetailDrawer({
                       <div className="flex items-center justify-between gap-3">
                         <span className="text-slate-500">Current price</span>
                         <span className="font-semibold text-slate-900">
-                          {money(row.catalog_item.current_price)}
+                          {money(catalog.current_price)}
                         </span>
                       </div>
 
                       <div className="flex items-center justify-between gap-3">
                         <span className="text-slate-500">Base override</span>
                         <span className="font-semibold text-slate-900">
-                          {money(row.catalog_item.base_price_override)}
+                          {money(catalog.base_price_override)}
                         </span>
                       </div>
 
                       <div className="flex items-center justify-between gap-3">
                         <span className="text-slate-500">LEGO reference</span>
                         <span className="font-semibold text-slate-900">
-                          {money(row.catalog_item.lego_reference_price)}
+                          {money(catalog.lego_reference_price)}
                         </span>
                       </div>
 
                       <div className="flex items-center justify-between gap-3">
                         <span className="text-slate-500">BrickLink reference</span>
                         <span className="font-semibold text-slate-900">
-                          {money(row.catalog_item.bricklink_reference_price)}
+                          {money(catalog.bricklink_reference_price)}
                         </span>
                       </div>
 
                       <div className="flex items-center justify-between gap-3">
                         <span className="text-slate-500">Current cost</span>
                         <span className="font-semibold text-slate-900">
-                          {money(row.catalog_item.current_cost)}
+                          {money(catalog.current_cost)}
                         </span>
                       </div>
 
                       <div className="flex items-center justify-between gap-3">
                         <span className="text-slate-500">Margin</span>
                         <span className="font-semibold text-slate-900">
-                          {money(row.catalog_item.margin_amount)}
-                          {row.catalog_item.margin_percent
-                            ? ` (${Number(row.catalog_item.margin_percent).toFixed(2)}%)`
+                          {money(catalog.margin_amount)}
+                          {catalog.margin_percent
+                            ? ` (${Number(catalog.margin_percent).toFixed(2)}%)`
                             : ""}
                         </span>
                       </div>
@@ -954,9 +973,9 @@ export function PartColorDetailDrawer({
                       </button>
                     </div>
 
-                    {row.catalog_item.notes ? (
+                    {catalog.notes ? (
                       <div className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
-                        {row.catalog_item.notes}
+                        {catalog.notes}
                       </div>
                     ) : null}
                   </div>
@@ -983,7 +1002,7 @@ export function PartColorDetailDrawer({
                     {showInventoryForm ? (
                       <div className="mt-3">
                         <InventoryRecordForm
-                          catalogItemId={row.catalog_item.id}
+                          catalogItemId={catalog.id}
                           initialValues={editingInventory}
                           submitting={savingInventory}
                           onSubmit={handleSaveInventory}
@@ -1060,7 +1079,7 @@ export function PartColorDetailDrawer({
                     {showCostForm ? (
                       <div className="mt-3">
                         <CatalogCostEntryForm
-                          catalogItemId={row.catalog_item.id}
+                          catalogItemId={catalog.id}
                           initialValues={editingCost ?? undefined}
                           submitting={savingCost}
                           onSubmit={handleSaveCost}

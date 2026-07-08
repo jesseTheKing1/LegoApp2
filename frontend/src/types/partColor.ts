@@ -13,6 +13,9 @@ export interface PartColor {
   // ✅ variant is optional/nullable in practice (backend default is "")
   variant?: string | null;
 
+  root_part_color?: PartColor | null;
+  effective_part_color_id?: number | null;
+
   part_color_code: string;
 
   description?: string | null;
@@ -21,6 +24,7 @@ export interface PartColor {
 
   // read-only nested catalog info (nullable)
   catalog_item?: CatalogItemMini | null;
+  effective_catalog_item?: CatalogItemMini | null;
 }
 
 /**
@@ -31,6 +35,7 @@ export interface PartColorPayload {
   part_id: number; // maps to Part via source="part"
   color_id: number; // maps to Color via source="color"
   variant?: string; // optional; backend default ""
+  root_part_color_id?: number | null;
   part_color_code: string;
   description?: string | null;
   image_url_1?: string | null;

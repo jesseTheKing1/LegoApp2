@@ -151,7 +151,14 @@ class CollectionSetViewSet(OwnedCollectionMixin, viewsets.ModelViewSet):
 
 
 class CollectionPartViewSet(OwnedCollectionMixin, viewsets.ModelViewSet):
-    queryset = CollectionPart.objects.select_related("part_color", "part_color__part", "part_color__color")
+    queryset = CollectionPart.objects.select_related(
+        "part_color",
+        "part_color__part",
+        "part_color__color",
+        "part_color__catalog_item",
+        "part_color__root_part_color",
+        "part_color__root_part_color__catalog_item",
+    )
     serializer_class = CollectionPartSerializer
 
 
@@ -165,7 +172,10 @@ class CollectionSummaryView(APIView):
 
     def get(self, request):
         sets = CollectionSet.objects.filter(user=request.user).select_related("lego_set__catalog_item").prefetch_related("lego_set__parts")
-        loose_parts = CollectionPart.objects.filter(user=request.user).select_related("part_color__catalog_item")
+        loose_parts = CollectionPart.objects.filter(user=request.user).select_related(
+            "part_color__catalog_item",
+            "part_color__root_part_color__catalog_item",
+        )
         minifigs = CollectionMinifig.objects.filter(user=request.user).select_related("minifig__catalog_item")
         set_pieces = sum(sum(p.quantity for p in row.lego_set.parts.all()) * row.quantity for row in sets)
         loose_piece_count = sum(row.quantity for row in loose_parts)
@@ -174,8 +184,8 @@ class CollectionSummaryView(APIView):
             for row in sets if row.lego_set.catalog_item
         )
         loose_parts_value = sum(
-            (row.part_color.catalog_item.bricklink_reference_price or Decimal("0")) * row.quantity
-            for row in loose_parts if row.part_color.catalog_item
+            (row.part_color.effective_catalog_item.bricklink_reference_price or Decimal("0")) * row.quantity
+            for row in loose_parts if row.part_color.effective_catalog_item
         )
         minifig_value = Decimal("0")
         for row in minifigs:

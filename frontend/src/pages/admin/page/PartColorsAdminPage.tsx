@@ -68,7 +68,7 @@ function makeSpecificKey(general: string, specific: string) {
 }
 
 function getRowPrice(row: PartColorRow): number | null {
-  const ci = row.catalog_item;
+  const ci = row.effective_catalog_item ?? row.catalog_item;
   if (!ci) return null;
 
   return (
@@ -111,6 +111,16 @@ function getShapeStats(rows: PartColorRow[]) {
     minPrice,
     maxPrice,
   };
+}
+
+function getRootLabel(row: PartColorRow) {
+  const root = row.root_part_color;
+  if (!root) return "";
+  return root.part_color_code || root.part?.part_id || `Root ${root.id}`;
+}
+
+function hasVariantRows(row: PartColorRow, rows: PartColorRow[]) {
+  return rows.some((candidate) => candidate.root_part_color?.id === row.id);
 }
 
 function groupRowsByColorThenVariant(rows: PartColorRow[]): ColorGroup[] {
@@ -720,11 +730,25 @@ async function updatePartColor(payload: any) {
                                                             <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-bold text-slate-500">
                                                               {pc.catalog_item.sku}
                                                             </span>
+                                                          ) : pc.effective_catalog_item?.sku ? (
+                                                            <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] font-bold text-blue-700">
+                                                              inherited {pc.effective_catalog_item.sku}
+                                                            </span>
                                                           ) : (
                                                             <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-700">
                                                               no sku
                                                             </span>
                                                           )}
+
+                                                          {pc.root_part_color ? (
+                                                            <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[11px] font-bold text-violet-700">
+                                                              variant of {getRootLabel(pc)}
+                                                            </span>
+                                                          ) : hasVariantRows(pc, items) ? (
+                                                            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700">
+                                                              root group
+                                                            </span>
+                                                          ) : null}
                                                         </div>
 
                                                         <div className="mt-1 truncate text-xs font-semibold text-slate-500">
@@ -768,6 +792,7 @@ async function updatePartColor(payload: any) {
           parts={parts}
           colors={colors}
           catalogItems={catalogItems}
+          partColors={items}
           submitting={saving}
           onSubmit={create}
         />
@@ -809,6 +834,7 @@ async function updatePartColor(payload: any) {
             parts={parts}
             colors={colors}
             catalogItems={catalogItems}
+            partColors={items}
             initialValues={editingRow}
             submitting={saving}
             onSubmit={updatePartColor}
