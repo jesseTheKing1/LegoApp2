@@ -162,9 +162,20 @@ class PartColorSerializer(serializers.ModelSerializer):
             "part_color_code": root.part_color_code,
             "variant": root.variant,
             "description": root.description,
-            "part": PartSerializer(root.part).data if root.part_id else None,
-            "color": ColorSerializer(root.color).data if root.color_id else None,
-            "catalog_item": PartColorCatalogItemSerializer(root.catalog_item).data if root.catalog_item_id else None,
+            "part": {
+                "id": root.part_id,
+                "part_id": root.part.part_id,
+                "name": root.part.name,
+            } if root.part_id else None,
+            "color": {
+                "id": root.color_id,
+                "name": root.color.name,
+                "hex": root.color.hex,
+            } if root.color_id else None,
+            "catalog_item": {
+                "id": root.catalog_item_id,
+                "sku": root.catalog_item.sku,
+            } if root.catalog_item_id else None,
         }
 
     def get_effective_catalog_item(self, obj):

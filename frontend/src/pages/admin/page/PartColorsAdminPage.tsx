@@ -208,47 +208,54 @@ export default function PartColorsPage() {
   const [selected, setSelected] = useState<PartColorRow | null>(null);
 
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
   async function loadAll() {
+    setLoading(true);
     setErr(null);
 
-    // Render the expensive main list as soon as it arrives. The three lookup
-    // collections are only needed by edit/create controls and can follow.
-    const pcRes = await api.get(ENDPOINTS.partColors);
-    const nextItems = getListData<PartColorRow>(pcRes.data);
-    setItems(nextItems);
+    try {
+      // Render the expensive main list as soon as it arrives. The three lookup
+      // collections are only needed by edit/create controls and can follow.
+      const pcRes = await api.get(ENDPOINTS.partColors);
+      const nextItems = getListData<PartColorRow>(pcRes.data);
+      setItems(nextItems);
 
-    const nestedParts = Array.from(
-      new Map(nextItems.filter((row) => row.part).map((row) => [row.part.id, row.part])).values()
-    );
-    const nestedColors = Array.from(
-      new Map(nextItems.filter((row) => row.color).map((row) => [row.color.id, row.color])).values()
-    );
-    setParts(nestedParts);
-    setColors(nestedColors);
+      const nestedParts = Array.from(
+        new Map(nextItems.filter((row) => row.part).map((row) => [row.part.id, row.part])).values()
+      );
+      const nestedColors = Array.from(
+        new Map(nextItems.filter((row) => row.color).map((row) => [row.color.id, row.color])).values()
+      );
+      setParts(nestedParts);
+      setColors(nestedColors);
+      setLoading(false);
 
-    const [pRes, cRes, catRes] = await Promise.all([
-      api.get(ENDPOINTS.parts),
-      api.get(ENDPOINTS.colors),
-      api.get(ENDPOINTS.catalog, { params: { compact: 1 } }),
-    ]);
+      const [pRes, cRes, catRes] = await Promise.all([
+        api.get(ENDPOINTS.parts),
+        api.get(ENDPOINTS.colors),
+        api.get(ENDPOINTS.catalog, { params: { compact: 1 } }),
+      ]);
 
-    const nextParts = getListData<Part>(pRes.data);
-    const nextColors = getListData<Color>(cRes.data);
-    const nextCatalogItems = getListData<CatalogItemMini>(catRes.data);
+      const nextParts = getListData<Part>(pRes.data);
+      const nextColors = getListData<Color>(cRes.data);
+      const nextCatalogItems = getListData<CatalogItemMini>(catRes.data);
 
-    setItems(nextItems);
-    setParts(nextParts);
-    setColors(nextColors);
-    setCatalogItems(nextCatalogItems);
+      setItems(nextItems);
+      setParts(nextParts);
+      setColors(nextColors);
+      setCatalogItems(nextCatalogItems);
 
-    return {
-      items: nextItems,
-      parts: nextParts,
-      colors: nextColors,
-      catalogItems: nextCatalogItems,
-    };
+      return {
+        items: nextItems,
+        parts: nextParts,
+        colors: nextColors,
+        catalogItems: nextCatalogItems,
+      };
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -524,7 +531,20 @@ async function updatePartColor(payload: any) {
       ) : null}
 
       <div className={cx(card, "overflow-hidden rounded-[28px] p-0")}>
-        {groupedByCategory.length === 0 ? (
+        {loading ? (
+          <div className="grid gap-3 p-5">
+            <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+              <div className="h-9 w-9 animate-pulse rounded-full bg-slate-200" />
+              <div className="min-w-0 flex-1">
+                <div className="h-3 w-44 animate-pulse rounded-full bg-slate-200" />
+                <div className="mt-2 h-2 w-72 max-w-full animate-pulse rounded-full bg-slate-200" />
+              </div>
+            </div>
+            <div className="px-4 pb-4 text-sm font-semibold text-slate-500">
+              Loading part colors and variant groups…
+            </div>
+          </div>
+        ) : groupedByCategory.length === 0 ? (
           <div className="p-6 text-sm text-slate-600">No results.</div>
         ) : (
           groupedByCategory.map((cg, catIdx) => {
