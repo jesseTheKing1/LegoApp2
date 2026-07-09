@@ -3,6 +3,7 @@ import logging
 from django.db import connection
 from django.db.utils import OperationalError, ProgrammingError
 from rest_framework import viewsets, filters
+from rest_framework import status
 from rest_framework.response import Response
 from .models import Color, Part, PartColor
 from .serializers import ColorSerializer, PartSerializer, PartColorSerializer
@@ -70,99 +71,116 @@ class PartColorViewSet(viewsets.ModelViewSet):
     ordering = ["part__part_id", "color__name", "variant"]
 
     def legacy_list_response(self, request):
-        rows = (
-            PartColor.objects
-            .select_related("part", "color", "catalog_item")
-            .only(
-                "id",
-                "part_id",
-                "color_id",
-                "catalog_item_id",
-                "variant",
-                "part_color_code",
-                "description",
-                "image_url_1",
-                "image_url_2",
-                "part__id",
-                "part__part_id",
-                "part__name",
-                "part__general_category",
-                "part__specific_category",
-                "part__actual_category",
-                "part__image_url",
-                "color__id",
-                "color__lego_id",
-                "color__name",
-                "color__hex",
-                "color__is_transparent",
-                "color__is_metallic",
-                "catalog_item__id",
-                "catalog_item__sku",
-                "catalog_item__is_active",
-                "catalog_item__base_price_override",
-                "catalog_item__force_override",
-                "catalog_item__lego_reference_price",
-                "catalog_item__bricklink_reference_price",
-                "catalog_item__notes",
-            )
-            .order_by("part__part_id", "color__name", "variant")
-        )
+        sql = """
+            SELECT
+                pc.id,
+                pc.variant,
+                pc.part_color_code,
+                pc.description,
+                pc.image_url_1,
+                pc.image_url_2,
+                p.id AS part_id_pk,
+                p.part_id,
+                p.name AS part_name,
+                p.general_category,
+                p.specific_category,
+                p.actual_category,
+                p.image_url AS part_image_url,
+                c.id AS color_id_pk,
+                c.lego_id,
+                c.name AS color_name,
+                c.hex,
+                c.is_transparent,
+                c.is_metallic,
+                ci.id AS catalog_item_id,
+                ci.sku,
+                ci.is_active,
+                ci.base_price_override,
+                ci.force_override,
+                ci.lego_reference_price,
+                ci.bricklink_reference_price,
+                ci.notes
+            FROM parts_partcolor pc
+            INNER JOIN parts_part p ON p.id = pc.part_id
+            INNER JOIN parts_color c ON c.id = pc.color_id
+            LEFT JOIN catalog_catalogitem ci ON ci.id = pc.catalog_item_id
+            ORDER BY p.part_id, c.name, pc.variant
+        """
         q = (request.query_params.get("search") or "").strip().lower()
         payload = []
+
+        with connection.cursor() as cursor:
+            cursor.execute(sql)
+            columns = [col[0] for col in cursor.description]
+            rows = [dict(zip(columns, values)) for values in cursor.fetchall()]
+
         for row in rows:
-            part = row.part
-            color = row.color
-            catalog_item = row.catalog_item
             haystack = " ".join([
-                row.part_color_code or "",
-                row.description or "",
-                row.variant or "",
-                part.part_id or "",
-                part.name or "",
-                part.general_category or "",
-                part.specific_category or "",
-                part.actual_category or "",
-                color.name or "",
-                color.hex or "",
-                catalog_item.sku if catalog_item else "",
+                row.get("part_color_code") or "",
+                row.get("description") or "",
+                row.get("variant") or "",
+                row.get("part_id") or "",
+                row.get("part_name") or "",
+                row.get("general_category") or "",
+                row.get("specific_category") or "",
+                row.get("actual_category") or "",
+                row.get("color_name") or "",
+                row.get("hex") or "",
+                row.get("sku") or "",
             ]).lower()
             if q and q not in haystack:
                 continue
 
             catalog_payload = None
-            if catalog_item:
+            if row.get("catalog_item_id"):
+                base_price_override = row.get("base_price_override")
                 current_price = (
-                    catalog_item.base_price_override
-                    if catalog_item.force_override or catalog_item.base_price_override is not None
+                    base_price_override
+                    if row.get("force_override") or base_price_override is not None
                     else None
                 )
                 catalog_payload = {
-                    "id": catalog_item.id,
-                    "sku": catalog_item.sku,
-                    "is_active": catalog_item.is_active,
-                    "base_price_override": catalog_item.base_price_override,
-                    "force_override": catalog_item.force_override,
-                    "lego_reference_price": catalog_item.lego_reference_price,
-                    "bricklink_reference_price": catalog_item.bricklink_reference_price,
+                    "id": row.get("catalog_item_id"),
+                    "sku": row.get("sku"),
+                    "is_active": row.get("is_active"),
+                    "base_price_override": base_price_override,
+                    "force_override": row.get("force_override"),
+                    "lego_reference_price": row.get("lego_reference_price"),
+                    "bricklink_reference_price": row.get("bricklink_reference_price"),
                     "current_price": current_price,
-                    "pricing_source": "manual_override" if catalog_item.base_price_override is not None else "none",
+                    "pricing_source": "manual_override" if base_price_override is not None else "none",
                     "current_cost": None,
                     "margin_amount": None,
                     "margin_percent": None,
-                    "notes": catalog_item.notes,
+                    "notes": row.get("notes") or "",
                 }
 
             payload.append({
-                "id": row.id,
-                "part": PartSerializer(part).data,
-                "color": ColorSerializer(color).data,
+                "id": row.get("id"),
+                "part": {
+                    "id": row.get("part_id_pk"),
+                    "part_id": row.get("part_id"),
+                    "name": row.get("part_name"),
+                    "general_category": row.get("general_category") or "",
+                    "specific_category": row.get("specific_category") or "",
+                    "actual_category": row.get("actual_category") or "",
+                    "image_url": row.get("part_image_url") or "",
+                },
+                "color": {
+                    "id": row.get("color_id_pk"),
+                    "lego_id": row.get("lego_id"),
+                    "name": row.get("color_name"),
+                    "hex": row.get("hex") or "",
+                    "is_transparent": row.get("is_transparent"),
+                    "is_metallic": row.get("is_metallic"),
+                },
                 "root_part_color": None,
-                "effective_part_color_id": row.id,
-                "variant": row.variant,
-                "part_color_code": row.part_color_code,
-                "description": row.description,
-                "image_url_1": row.image_url_1,
-                "image_url_2": row.image_url_2,
+                "effective_part_color_id": row.get("id"),
+                "variant": row.get("variant") or "",
+                "part_color_code": row.get("part_color_code") or "",
+                "description": row.get("description") or "",
+                "image_url_1": row.get("image_url_1") or "",
+                "image_url_2": row.get("image_url_2") or "",
                 "catalog_item": catalog_payload,
                 "effective_catalog_item": catalog_payload,
             })
@@ -182,7 +200,21 @@ class PartColorViewSet(viewsets.ModelViewSet):
             return super().list(request, *args, **kwargs)
         except (OperationalError, ProgrammingError):
             logger.exception("PartColor variant-aware list failed; returning legacy payload.")
-            return self.legacy_list_response(request)
+            try:
+                return self.legacy_list_response(request)
+            except Exception as fallback_error:
+                logger.exception("PartColor legacy fallback failed.")
+                return Response(
+                    {"detail": f"PartColor list failed and fallback failed: {fallback_error}"},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
         except Exception:
             logger.exception("PartColor list failed unexpectedly; returning legacy payload.")
-            return self.legacy_list_response(request)
+            try:
+                return self.legacy_list_response(request)
+            except Exception as fallback_error:
+                logger.exception("PartColor legacy fallback failed.")
+                return Response(
+                    {"detail": f"PartColor list failed and fallback failed: {fallback_error}"},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
