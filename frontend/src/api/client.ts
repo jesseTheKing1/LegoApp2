@@ -2,7 +2,24 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
 import { ENDPOINTS } from "./endpoints";
 
-const baseURL = import.meta.env.VITE_API_BASE_URL || "";
+function resolveBaseURL() {
+  const configured = import.meta.env.VITE_API_BASE_URL;
+  if (configured) return configured.replace(/\/$/, "");
+
+  // Production safety net: the frontend and backend are separate Render
+  // services. If the frontend build ever misses VITE_API_BASE_URL, relative
+  // /api requests hit the static frontend host and return 404.
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+    if (host === "legoapp2-1.onrender.com") {
+      return "https://legoapp2.onrender.com";
+    }
+  }
+
+  return "";
+}
+
+const baseURL = resolveBaseURL();
 
 const api = axios.create({ baseURL });
 const bare = axios.create({ baseURL });
