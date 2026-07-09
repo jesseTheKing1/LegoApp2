@@ -4,18 +4,14 @@ from catalog.models import CatalogItem
 
 
 class PartColorCatalogItemSerializer(serializers.ModelSerializer):
-    """Small pricing payload for list-heavy part-color screens."""
+    """Small pricing payload for list-heavy part-color screens.
+
+    Keep this intentionally cheap. Expensive cost/margin properties walk
+    catalog cost_entries and can turn the PartColor list into thousands of
+    repeated queries on production data.
+    """
     current_price = serializers.DecimalField(
         max_digits=10, decimal_places=4, read_only=True, allow_null=True
-    )
-    current_cost = serializers.DecimalField(
-        max_digits=12, decimal_places=4, read_only=True, allow_null=True
-    )
-    margin_amount = serializers.DecimalField(
-        max_digits=12, decimal_places=4, read_only=True, allow_null=True
-    )
-    margin_percent = serializers.DecimalField(
-        max_digits=12, decimal_places=4, read_only=True, allow_null=True
     )
     pricing_source = serializers.CharField(read_only=True)
 
@@ -31,9 +27,6 @@ class PartColorCatalogItemSerializer(serializers.ModelSerializer):
             "bricklink_reference_price",
             "current_price",
             "pricing_source",
-            "current_cost",
-            "margin_amount",
-            "margin_percent",
             "notes",
         ]
 

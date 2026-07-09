@@ -70,6 +70,59 @@ class PartColorViewSet(viewsets.ModelViewSet):
     ordering_fields = ["id", "part_color_code", "variant", "part__part_id", "color__name"]
     ordering = ["part__part_id", "color__name", "variant"]
 
+    def bare_minimum_list_response(self, request):
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT id, part_color_code, variant, description, image_url_1, image_url_2
+                FROM parts_partcolor
+                ORDER BY part_color_code
+                """
+            )
+            columns = [col[0] for col in cursor.description]
+            rows = [dict(zip(columns, values)) for values in cursor.fetchall()]
+
+        q = (request.query_params.get("search") or "").strip().lower()
+        payload = []
+        for row in rows:
+            haystack = " ".join([
+                row.get("part_color_code") or "",
+                row.get("variant") or "",
+                row.get("description") or "",
+            ]).lower()
+            if q and q not in haystack:
+                continue
+            payload.append({
+                "id": row.get("id"),
+                "part": {
+                    "id": None,
+                    "part_id": "",
+                    "name": row.get("part_color_code") or "PartColor",
+                    "general_category": "",
+                    "specific_category": "",
+                    "actual_category": "",
+                    "image_url": "",
+                },
+                "color": {
+                    "id": None,
+                    "lego_id": None,
+                    "name": "",
+                    "hex": "",
+                    "is_transparent": False,
+                    "is_metallic": False,
+                },
+                "root_part_color": None,
+                "effective_part_color_id": row.get("id"),
+                "variant": row.get("variant") or "",
+                "part_color_code": row.get("part_color_code") or "",
+                "description": row.get("description") or "",
+                "image_url_1": row.get("image_url_1") or "",
+                "image_url_2": row.get("image_url_2") or "",
+                "catalog_item": None,
+                "effective_catalog_item": None,
+            })
+        return Response(payload)
+
     def legacy_list_response(self, request):
         sql = """
             SELECT
@@ -194,7 +247,11 @@ class PartColorViewSet(viewsets.ModelViewSet):
         # columns. Once migrations run, the normal variant-aware serializer is
         # used automatically.
         if not table_has_column(PartColor._meta.db_table, "root_part_color_id"):
-            return self.legacy_list_response(request)
+            try:
+                return self.legacy_list_response(request)
+            except Exception:
+                logger.exception("PartColor legacy fallback failed; returning bare minimum payload.")
+                return self.bare_minimum_list_response(request)
 
         try:
             return super().list(request, *args, **kwargs)
@@ -204,17 +261,25 @@ class PartColorViewSet(viewsets.ModelViewSet):
                 return self.legacy_list_response(request)
             except Exception as fallback_error:
                 logger.exception("PartColor legacy fallback failed.")
-                return Response(
-                    {"detail": f"PartColor list failed and fallback failed: {fallback_error}"},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                )
+                try:
+                    return self.bare_minimum_list_response(request)
+                except Exception:
+                    logger.exception("PartColor bare minimum fallback failed.")
+                    return Response(
+                        {"detail": f"PartColor list failed and fallback failed: {fallback_error}"},
+                        status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    )
         except Exception:
             logger.exception("PartColor list failed unexpectedly; returning legacy payload.")
             try:
                 return self.legacy_list_response(request)
             except Exception as fallback_error:
                 logger.exception("PartColor legacy fallback failed.")
-                return Response(
-                    {"detail": f"PartColor list failed and fallback failed: {fallback_error}"},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                )
+                try:
+                    return self.bare_minimum_list_response(request)
+                except Exception:
+                    logger.exception("PartColor bare minimum fallback failed.")
+                    return Response(
+                        {"detail": f"PartColor list failed and fallback failed: {fallback_error}"},
+                        status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    )
