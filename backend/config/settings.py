@@ -143,11 +143,24 @@ SIMPLE_JWT = {
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "https://legoapp2-1.onrender.com",
 ]
 
 if FRONTEND_URL.startswith("http"):
     # Ensure no trailing slash is required; Django expects scheme+host
     CORS_ALLOWED_ORIGINS.append(FRONTEND_URL.rstrip("/"))
+
+for extra_frontend_url in os.getenv("FRONTEND_URLS", "").split(","):
+    extra_frontend_url = extra_frontend_url.strip().rstrip("/")
+    if extra_frontend_url.startswith("http"):
+        CORS_ALLOWED_ORIGINS.append(extra_frontend_url)
+
+# Render preview/static sites often get sibling *.onrender.com hostnames. This
+# keeps deployed frontend/backend pairs talking even when the exact preview host
+# changes. Keep explicit production domains in CORS_ALLOWED_ORIGINS above.
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https://[a-zA-Z0-9-]+\.onrender\.com$",
+]
 
 # If you're using JWT in headers (Authorization: Bearer ...), credentials are not needed.
 CORS_ALLOW_CREDENTIALS = False
@@ -158,6 +171,10 @@ if FRONTEND_URL.startswith("https://"):
     CSRF_TRUSTED_ORIGINS.append(FRONTEND_URL.rstrip("/"))
 if BACKEND_URL.startswith("https://"):
     CSRF_TRUSTED_ORIGINS.append(BACKEND_URL.rstrip("/"))
+CSRF_TRUSTED_ORIGINS.extend([
+    "https://legoapp2-1.onrender.com",
+    "https://*.onrender.com",
+])
 
 
 STATIC_URL = "static/"
