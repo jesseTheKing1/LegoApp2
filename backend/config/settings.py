@@ -19,7 +19,12 @@ DEBUG = env_bool("DJANGO_DEBUG", "1")
 BACKEND_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:8000")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 
-ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
+ALLOWED_HOSTS = [
+    "localhost",
+    "127.0.0.1",
+    "legoapp2.onrender.com",
+    ".onrender.com",
+]
 
 RENDER_HOST = os.getenv("RENDER_EXTERNAL_HOSTNAME")
 if RENDER_HOST:
