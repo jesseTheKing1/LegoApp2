@@ -1,5 +1,6 @@
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
+from django.db import transaction
 from django.db.models import Count, Sum, F, ExpressionWrapper, DecimalField
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
@@ -67,6 +68,66 @@ class InventoryRecordViewSet(viewsets.ModelViewSet):
 class InventoryDashboardView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @staticmethod
+    def _pricing_rows(qs):
+        grouped = (
+            qs.filter(is_sellable=True, catalog_item__is_active=True)
+            .values("catalog_item_id")
+            .annotate(
+                quantity=Sum(F("quantity_on_hand") - F("quantity_reserved")),
+            )
+            .filter(quantity__gt=0)
+            .order_by("catalog_item__sku")
+        )
+        catalog_ids = [row["catalog_item_id"] for row in grouped]
+        from catalog.models import CatalogItem
+
+        items = {
+            item.id: item
+            for item in CatalogItem.objects.filter(id__in=catalog_ids)
+            .select_related("set", "set__theme", "minifig", "part_color__part", "part_color__color")
+        }
+        rows = []
+        for group in grouped:
+            item = items[group["catalog_item_id"]]
+            product_type = "catalog"
+            name = item.sku
+            subtitle = ""
+            image_url = ""
+            if hasattr(item, "set") and item.set:
+                product_type = "set"
+                name = item.set.name
+                subtitle = item.set.set_num
+                image_url = item.set.image_url
+            elif hasattr(item, "minifig") and item.minifig:
+                product_type = "minifig"
+                name = item.minifig.name
+                subtitle = item.minifig.bricklink_id
+                image_url = item.minifig.image_url
+            elif hasattr(item, "part_color") and item.part_color:
+                product_type = "part"
+                name = item.part_color.part.name
+                subtitle = f"{item.part_color.part.part_id} · {item.part_color.color.name}"
+                image_url = item.part_color.image_url_1 or item.part_color.image_url_2 or item.part_color.part.image_url
+
+            quantity = group["quantity"] or 0
+            reference = item.bricklink_reference_price
+            current = item.current_price
+            rows.append({
+                "catalog_item_id": item.id,
+                "sku": item.sku,
+                "product_type": product_type,
+                "name": name,
+                "subtitle": subtitle,
+                "image_url": image_url,
+                "quantity_available": quantity,
+                "bricklink_reference_price": reference,
+                "current_price": current,
+                "reference_total": reference * quantity if reference is not None else None,
+                "current_total": current * quantity if current is not None else None,
+            })
+        return sorted(rows, key=lambda row: ({"set": 0, "minifig": 1, "part": 2}.get(row["product_type"], 3), row["name"]))
+
     def get(self, request):
         qs = (
             InventoryRecord.objects
@@ -123,6 +184,15 @@ class InventoryDashboardView(APIView):
             "part_colors": qs.filter(catalog_item__part_color__isnull=False).count(),
         }
 
+        pricing_items = self._pricing_rows(qs)
+        sellable_available_units = sum(row["quantity_available"] for row in pricing_items)
+        bricklink_reference_value = sum(
+            (row["reference_total"] or Decimal("0")) for row in pricing_items
+        )
+        current_sell_value = sum(
+            (row["current_total"] or Decimal("0")) for row in pricing_items
+        )
+
         return Response({
             "summary": {
                 "total_units": total_units,
@@ -131,11 +201,44 @@ class InventoryDashboardView(APIView):
                 "active_skus": active_skus,
                 "total_cost": total_cost,
                 "total_available_cost": total_available_cost,
+                "bricklink_reference_value": bricklink_reference_value,
+                "current_sell_value": current_sell_value,
+                "sellable_available_units": sellable_available_units,
             },
             "by_condition": by_condition,
             "by_location": by_location,
             "product_type_counts": product_type_counts,
+            "pricing_items": pricing_items,
         })
+
+    def post(self, request):
+        try:
+            markup = Decimal(str(request.data.get("markup_percent", "")))
+        except (InvalidOperation, TypeError):
+            return Response({"detail": "Enter a valid markup percentage."}, status=400)
+        if markup < Decimal("-100") or markup > Decimal("1000"):
+            return Response({"detail": "Markup must be between -100% and 1000%."}, status=400)
+
+        qs = InventoryRecord.objects.filter(is_active=True)
+        rows = self._pricing_rows(qs)
+        multiplier = Decimal("1") + (markup / Decimal("100"))
+        from catalog.models import CatalogItem
+
+        updated = 0
+        skipped = 0
+        with transaction.atomic():
+            for row in rows:
+                if row["bricklink_reference_price"] is None:
+                    skipped += 1
+                    continue
+                price = (row["bricklink_reference_price"] * multiplier).quantize(
+                    Decimal("0.0001"), rounding=ROUND_HALF_UP
+                )
+                CatalogItem.objects.filter(pk=row["catalog_item_id"]).update(
+                    base_price_override=price
+                )
+                updated += 1
+        return Response({"updated": updated, "skipped": skipped, "markup_percent": markup})
 
 
 class OwnedCollectionMixin:

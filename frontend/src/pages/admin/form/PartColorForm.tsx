@@ -87,6 +87,7 @@ export function PartColorForm({
   const [colorId, setColorId] = useState<number | "">(initialColorId || "");
   const [catalogId, setCatalogId] = useState<number | "">(initialCatalogId || "");
   const [rootId, setRootId] = useState<number | "">(initialRootId || "");
+  const [rootSearch, setRootSearch] = useState("");
 
   const [code, setCode] = useState(normalize(initialValues?.part_color_code ?? ""));
   const [variant, setVariant] = useState(normalize((initialValues as any)?.variant ?? ""));
@@ -122,6 +123,35 @@ export function PartColorForm({
         return ac.localeCompare(bc);
       });
   }, [partColors, initialValues, colorId]);
+  const selectedRoot = useMemo(
+    () => rootCandidates.find((pc) => pc.id === Number(rootId)) ?? null,
+    [rootCandidates, rootId]
+  );
+  const filteredRootCandidates = useMemo(() => {
+    const q = rootSearch.trim().toLowerCase();
+    const source = rootCandidates.filter((pc) => pc.id !== Number(rootId));
+    if (!q) return source.slice(0, 12);
+
+    return source
+      .filter((pc) => {
+        const blob = [
+          pc.part_color_code,
+          pc.description,
+          pc.variant,
+          pc.part?.part_id,
+          pc.part?.name,
+          pc.part?.actual_category,
+          pc.color?.name,
+          pc.catalog_item?.sku,
+          pc.effective_catalog_item?.sku,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return blob.includes(q);
+      })
+      .slice(0, 12);
+  }, [rootCandidates, rootId, rootSearch]);
 
   // ---- validations ----
   const canSave = useMemo(() => {
@@ -219,7 +249,15 @@ export function PartColorForm({
               <select
                 className={selectBase}
                 value={colorId}
-                onChange={(e) => setColorId(e.target.value ? Number(e.target.value) : "")}
+                onChange={(e) => {
+                  const nextColorId = e.target.value ? Number(e.target.value) : "";
+                  setColorId(nextColorId);
+                  const chosenRoot = (partColors ?? []).find((pc) => pc.id === Number(rootId));
+                  if (chosenRoot && nextColorId && chosenRoot.color?.id !== Number(nextColorId)) {
+                    setRootId("");
+                    setRootSearch("");
+                  }
+                }}
                 disabled={!!submitting}
               >
                 <option value="">Select color…</option>
@@ -257,30 +295,107 @@ export function PartColorForm({
           ) : null}
 
           {partColors ? (
-            <label className="space-y-1">
+            <div className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50 p-3">
               <div className={labelText}>Root PartColor / Variant Group</div>
-              <select
-                className={selectBase}
-                value={rootId}
-                onChange={(e) => setRootId(e.target.value ? Number(e.target.value) : "")}
+
+              {selectedRoot ? (
+                <div className="flex items-start justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-black uppercase tracking-[0.14em] text-emerald-700">
+                      Selected root
+                    </div>
+                    <div className="mt-1 truncate text-sm font-extrabold text-slate-900">
+                      {selectedRoot.part?.part_id || "Part"} · {selectedRoot.color?.name || "Color"} · {selectedRoot.part_color_code}
+                    </div>
+                    <div className="mt-0.5 truncate text-xs font-semibold text-slate-600">
+                      {[selectedRoot.part?.name, selectedRoot.variant, selectedRoot.effective_catalog_item?.sku || selectedRoot.catalog_item?.sku ? `SKU ${selectedRoot.effective_catalog_item?.sku || selectedRoot.catalog_item?.sku}` : ""].filter(Boolean).join(" · ") || "Root PartColor"}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className={cx(btnBase, "shrink-0")}
+                    disabled={!!submitting}
+                    onClick={() => {
+                      setRootId("");
+                      setRootSearch("");
+                    }}
+                  >
+                    Clear
+                  </button>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600">
+                  This is currently a root / standalone PartColor.
+                </div>
+              )}
+
+              <input
+                className={inputBase}
+                value={rootSearch}
+                onChange={(e) => setRootSearch(e.target.value)}
+                placeholder="Search root by part ID, name, color, code, variant, SKU…"
+                autoComplete="off"
                 disabled={!!submitting}
-              >
-                <option value="">This is the root / standalone PartColor</option>
-                {rootCandidates.map((pc) => (
-                  <option key={pc.id} value={pc.id}>
-                    {pc.part?.part_id || "Part"} · {pc.color?.name || "Color"} · {pc.part_color_code}
-                    {pc.variant ? ` · ${pc.variant}` : ""}
-                    {pc.effective_catalog_item?.sku || pc.catalog_item?.sku
-                      ? ` · SKU ${pc.effective_catalog_item?.sku || pc.catalog_item?.sku}`
-                      : ""}
-                  </option>
-                ))}
-              </select>
+              />
+
+              <div className="max-h-72 overflow-auto rounded-xl border border-slate-200 bg-white">
+                {filteredRootCandidates.length ? (
+                  <div className="divide-y divide-slate-100">
+                    {filteredRootCandidates.map((pc) => {
+                      const sku = pc.effective_catalog_item?.sku || pc.catalog_item?.sku || "";
+                      const img = pc.image_url_1 || pc.image_url_2 || pc.part?.image_url || "";
+
+                      return (
+                        <button
+                          key={pc.id}
+                          type="button"
+                          className="flex w-full items-center gap-3 px-3 py-2 text-left transition hover:bg-slate-50"
+                          disabled={!!submitting}
+                          onClick={() => {
+                            setRootId(pc.id);
+                            setRootSearch("");
+                          }}
+                        >
+                          <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 text-xs font-black text-slate-400">
+                            {img ? <img src={img} alt="" className="h-full w-full object-contain" /> : "◇"}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="truncate text-sm font-extrabold text-slate-900">
+                                {pc.part?.part_id || "Part"} · {pc.part_color_code}
+                              </span>
+                              <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-bold text-slate-600">
+                                {pc.color?.name || "Color"}
+                              </span>
+                              {pc.variant ? (
+                                <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[11px] font-bold text-violet-700">
+                                  {pc.variant}
+                                </span>
+                              ) : null}
+                            </div>
+                            <div className="mt-0.5 truncate text-xs font-semibold text-slate-500">
+                              {[pc.part?.name, pc.description, sku ? `SKU ${sku}` : ""].filter(Boolean).join(" · ") || "No extra details"}
+                            </div>
+                          </div>
+                          <span className="shrink-0 rounded-full bg-slate-900 px-3 py-1 text-[11px] font-black text-white">
+                            Use root
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="px-3 py-4 text-sm font-semibold text-slate-500">
+                    No root matches. Try a part number, color, SKU, or code.
+                  </div>
+                )}
+              </div>
+
               <div className="text-[11px] text-slate-500 font-semibold">
                 Pick a root when this row is an older/alternate ID for the same usable part-color.
                 It will inherit the root price and count together in user inventory/build matching.
               </div>
-            </label>
+            </div>
           ) : null}
 
           {/* Preview */}

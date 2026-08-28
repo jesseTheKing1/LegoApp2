@@ -121,6 +121,9 @@ export interface InventoryDashboard {
     active_skus: number;
     total_cost: string | number;
     total_available_cost: string | number;
+    bricklink_reference_value: string | number;
+    current_sell_value: string | number;
+    sellable_available_units: number;
   };
   by_condition: InventoryDashboardConditionRow[];
   by_location: InventoryDashboardLocationRow[];
@@ -129,6 +132,21 @@ export interface InventoryDashboard {
     minifigs: number;
     part_colors: number;
   };
+  pricing_items: InventoryPricingItem[];
+}
+
+export interface InventoryPricingItem {
+  catalog_item_id: number;
+  sku: string;
+  product_type: "set" | "minifig" | "part" | "catalog";
+  name: string;
+  subtitle: string;
+  image_url: string;
+  quantity_available: number;
+  bricklink_reference_price: string | null;
+  current_price: string | null;
+  reference_total: string | null;
+  current_total: string | null;
 }
 
 /* ------------------------------------------------------------------ */
