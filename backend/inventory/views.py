@@ -1,6 +1,5 @@
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from decimal import Decimal, InvalidOperation
 
-from django.db import transaction
 from django.db.models import Count, Sum, F, ExpressionWrapper, DecimalField
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
@@ -12,6 +11,7 @@ from .serializers import (
     LocationSerializer, InventoryRecordSerializer, CollectionSetSerializer,
     CollectionPartSerializer, CollectionMinifigSerializer,
 )
+from catalog.models import CatalogPricingSettings
 
 
 class LocationViewSet(viewsets.ModelViewSet):
@@ -204,6 +204,7 @@ class InventoryDashboardView(APIView):
                 "bricklink_reference_value": bricklink_reference_value,
                 "current_sell_value": current_sell_value,
                 "sellable_available_units": sellable_available_units,
+                "overall_markup_percent": CatalogPricingSettings.get_markup_percent(),
             },
             "by_condition": by_condition,
             "by_location": by_location,
@@ -219,26 +220,10 @@ class InventoryDashboardView(APIView):
         if markup < Decimal("-100") or markup > Decimal("1000"):
             return Response({"detail": "Markup must be between -100% and 1000%."}, status=400)
 
-        qs = InventoryRecord.objects.filter(is_active=True)
-        rows = self._pricing_rows(qs)
-        multiplier = Decimal("1") + (markup / Decimal("100"))
-        from catalog.models import CatalogItem
-
-        updated = 0
-        skipped = 0
-        with transaction.atomic():
-            for row in rows:
-                if row["bricklink_reference_price"] is None:
-                    skipped += 1
-                    continue
-                price = (row["bricklink_reference_price"] * multiplier).quantize(
-                    Decimal("0.0001"), rounding=ROUND_HALF_UP
-                )
-                CatalogItem.objects.filter(pk=row["catalog_item_id"]).update(
-                    base_price_override=price
-                )
-                updated += 1
-        return Response({"updated": updated, "skipped": skipped, "markup_percent": markup})
+        settings, _ = CatalogPricingSettings.objects.get_or_create(pk=1)
+        settings.overall_markup_percent = markup
+        settings.save(update_fields=["overall_markup_percent", "updated_at"])
+        return Response({"overall_markup_percent": settings.overall_markup_percent})
 
 
 class OwnedCollectionMixin:

@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from rest_framework.test import APIRequestFactory, force_authenticate
 
-from catalog.models import CatalogItem
+from catalog.models import CatalogItem, CatalogPricingSettings
 from .models import InventoryRecord, Location
 from .views import InventoryDashboardView
 
@@ -15,6 +15,9 @@ class InventoryPricingDashboardTests(TestCase):
             username="pricing-admin", email="pricing@example.com", password="test-password"
         )
         self.location = Location.objects.create(name="Sales shelf", code="SALE")
+        CatalogPricingSettings.objects.update_or_create(
+            pk=1, defaults={"overall_markup_percent": Decimal("25.00")}
+        )
         self.priced = CatalogItem.objects.create(
             sku="priced-part", bricklink_reference_price=Decimal("2.0000")
         )
@@ -51,12 +54,10 @@ class InventoryPricingDashboardTests(TestCase):
         self.assertEqual(priced["reference_total"], Decimal("24.0000"))
         self.assertEqual(response.data["summary"]["sellable_available_units"], 15)
 
-    def test_apply_markup_updates_prices_and_skips_missing_references(self):
+    def test_saving_markup_changes_all_computed_selling_prices(self):
         response = self.request("post", {"markup_percent": "25"})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["updated"], 1)
-        self.assertEqual(response.data["skipped"], 1)
-        self.priced.refresh_from_db()
-        self.missing.refresh_from_db()
-        self.assertEqual(self.priced.base_price_override, Decimal("2.5000"))
+        self.assertEqual(response.data["overall_markup_percent"], Decimal("25"))
+        self.assertEqual(self.priced.current_price, Decimal("2.5000"))
+        self.assertIsNone(self.priced.base_price_override)
         self.assertIsNone(self.missing.base_price_override)

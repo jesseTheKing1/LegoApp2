@@ -1,4 +1,5 @@
 import logging
+from decimal import Decimal
 
 from django.db import connection
 from django.db.utils import OperationalError, ProgrammingError
@@ -8,6 +9,7 @@ from rest_framework.response import Response
 from .models import Color, Part, PartColor
 from .serializers import ColorSerializer, PartSerializer, PartColorSerializer
 from .permissions import IsAdminOrReadOnly
+from catalog.models import CatalogPricingSettings
 
 
 logger = logging.getLogger(__name__)
@@ -84,6 +86,9 @@ class PartColorViewSet(viewsets.ModelViewSet):
 
         q = (request.query_params.get("search") or "").strip().lower()
         payload = []
+        markup_multiplier = Decimal("1") + (
+            CatalogPricingSettings.get_markup_percent() / Decimal("100")
+        )
         for row in rows:
             haystack = " ".join([
                 row.get("part_color_code") or "",
@@ -187,11 +192,16 @@ class PartColorViewSet(viewsets.ModelViewSet):
             catalog_payload = None
             if row.get("catalog_item_id"):
                 base_price_override = row.get("base_price_override")
-                current_price = (
-                    base_price_override
-                    if row.get("force_override") or base_price_override is not None
-                    else None
-                )
+                bricklink_reference_price = row.get("bricklink_reference_price")
+                if row.get("force_override") and base_price_override is not None:
+                    current_price = base_price_override
+                    pricing_source = "forced_override"
+                elif bricklink_reference_price is not None:
+                    current_price = bricklink_reference_price * markup_multiplier
+                    pricing_source = "bricklink_markup"
+                else:
+                    current_price = base_price_override
+                    pricing_source = "manual_override" if base_price_override is not None else "none"
                 catalog_payload = {
                     "id": row.get("catalog_item_id"),
                     "sku": row.get("sku"),
@@ -201,7 +211,7 @@ class PartColorViewSet(viewsets.ModelViewSet):
                     "lego_reference_price": row.get("lego_reference_price"),
                     "bricklink_reference_price": row.get("bricklink_reference_price"),
                     "current_price": current_price,
-                    "pricing_source": "manual_override" if base_price_override is not None else "none",
+                    "pricing_source": pricing_source,
                     "current_cost": None,
                     "margin_amount": None,
                     "margin_percent": None,

@@ -24,6 +24,7 @@ export default function InventoryDashboardPage() {
     setErr(null);
     const res = await api.get(ENDPOINTS.inventoryDashboard);
     setData(res.data);
+    setMarkup(String(res.data.summary.overall_markup_percent));
   }
   useEffect(() => { load().catch((e) => setErr(formatApiError(e))); }, []);
 
@@ -44,11 +45,11 @@ export default function InventoryDashboardPage() {
   }, [items, filter, query]);
 
   async function applyMarkup() {
-    if (!validMarkup || !window.confirm(`Apply a ${markupNumber}% markup to ${pricedItems.length} sell prices?`)) return;
+    if (!validMarkup || !window.confirm(`Set the overall markup to ${markupNumber}% for every BrickLink-priced product?`)) return;
     setSaving(true); setErr(null); setNotice(null);
     try {
       const res = await api.post(ENDPOINTS.inventoryDashboard, { markup_percent: markupNumber });
-      setNotice(`Updated ${res.data.updated} sell prices. ${res.data.skipped} without a BrickLink reference were skipped.`);
+      setNotice(`Overall markup saved at ${res.data.overall_markup_percent}%. All BrickLink-priced Part Colors now use it automatically.`);
       await load();
     } catch (e: any) { setErr(formatApiError(e)); }
     finally { setSaving(false); }
@@ -67,9 +68,9 @@ export default function InventoryDashboardPage() {
             <label className="text-xs font-black uppercase tracking-wider text-slate-300">Markup preview</label>
             <div className="mt-2 flex items-center gap-2">
               <div className="relative flex-1"><input type="number" min="-100" max="1000" value={markup} onChange={(e) => setMarkup(e.target.value)} className="h-12 w-full rounded-xl bg-white px-4 pr-10 text-lg font-black text-slate-950 outline-none focus:ring-2 focus:ring-emerald-400"/><span className="absolute right-4 top-3 text-lg font-black text-slate-500">%</span></div>
-              <button type="button" onClick={applyMarkup} disabled={!validMarkup || saving || !pricedItems.length} className="h-12 rounded-xl bg-emerald-400 px-4 text-sm font-black text-slate-950 hover:bg-emerald-300 disabled:opacity-50">{saving ? "Applying…" : "Apply prices"}</button>
+              <button type="button" onClick={applyMarkup} disabled={!validMarkup || saving} className="h-12 rounded-xl bg-emerald-400 px-4 text-sm font-black text-slate-950 hover:bg-emerald-300 disabled:opacity-50">{saving ? "Saving…" : "Save markup"}</button>
             </div>
-            <p className="mt-2 text-xs text-slate-400">Previewing is safe. Prices change only when you apply them.</p>
+            <p className="mt-2 text-xs text-slate-400">Saving changes every BrickLink-based selling price automatically.</p>
           </div>
         </div>
       </div>

@@ -124,6 +124,7 @@ export interface InventoryDashboard {
     bricklink_reference_value: string | number;
     current_sell_value: string | number;
     sellable_available_units: number;
+    overall_markup_percent: string | number;
   };
   by_condition: InventoryDashboardConditionRow[];
   by_location: InventoryDashboardLocationRow[];

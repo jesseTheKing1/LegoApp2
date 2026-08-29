@@ -1,6 +1,38 @@
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
+from django.core.cache import cache
 from django.db import models
 from django.db.models import Sum, F, DecimalField, ExpressionWrapper
+
+
+class CatalogPricingSettings(models.Model):
+    overall_markup_percent = models.DecimalField(
+        max_digits=7,
+        decimal_places=2,
+        default=Decimal("25.00"),
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    @classmethod
+    def get_markup_percent(cls):
+        cache_key = "catalog_overall_markup_percent"
+        value = cache.get(cache_key)
+        if value is None:
+            settings, _ = cls.objects.get_or_create(pk=1)
+            value = settings.overall_markup_percent
+            cache.set(cache_key, value, 300)
+        return Decimal(str(value))
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+        cache.delete("catalog_overall_markup_percent")
+
+    def delete(self, *args, **kwargs):
+        cache.delete("catalog_overall_markup_percent")
+        return super().delete(*args, **kwargs)
+
+    def __str__(self):
+        return f"Overall markup: {self.overall_markup_percent}%"
 
 
 class CatalogItem(models.Model):
@@ -48,9 +80,13 @@ class CatalogItem(models.Model):
         if self.force_override and self.base_price_override is not None:
             return self.base_price_override
 
-        computed = self.get_computed_price_from_logs()
-        if computed is not None:
-            return computed
+        if self.bricklink_reference_price is not None:
+            multiplier = Decimal("1") + (
+                CatalogPricingSettings.get_markup_percent() / Decimal("100")
+            )
+            return (self.bricklink_reference_price * multiplier).quantize(
+                Decimal("0.0001"), rounding=ROUND_HALF_UP
+            )
 
         return self.base_price_override
 
@@ -58,8 +94,8 @@ class CatalogItem(models.Model):
     def pricing_source(self):
         if self.force_override and self.base_price_override is not None:
             return "forced_override"
-        if self.get_computed_price_from_logs() is not None:
-            return "computed_average"
+        if self.bricklink_reference_price is not None:
+            return "bricklink_markup"
         if self.base_price_override is not None:
             return "manual_override"
         return "none"
